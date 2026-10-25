@@ -403,6 +403,8 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     return PopScope(
       canPop: !_full,
       onPopInvokedWithResult: (didPop, _) {
+        // lagres med en gang du går ut, så siden du kommer tilbake til («Fortsett fra …») er oppdatert
+        if (didPop) _save();
         if (!didPop && _full) _toggleFull();
       },
       child: Scaffold(

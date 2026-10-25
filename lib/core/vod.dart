@@ -174,7 +174,7 @@ class ContinueItem {
         at: j['at'] is int ? j['at'] as int : 0,
       );
 
-  /// «film:<id>» (samme som for «fortsett der du slapp») eller «serie:<id>»
+  /// `film:123` (samme som for «fortsett der du slapp») eller `serie:456`
   final String key;
   final VodKind kind;
 
