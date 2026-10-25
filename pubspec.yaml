@@ -17,6 +17,8 @@ dependencies:
   media_kit_libs_video: ^1.0.7
   # fullskjerm på PC
   window_manager: ^0.5.1
+  # kall til Windows (vindusanimasjonene av mens Fyrlys går inn og ut av fullskjerm)
+  ffi: ^2.1.3
 
 dev_dependencies:
   flutter_test:

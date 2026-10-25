@@ -57,7 +57,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
 - `ui/player_page.dart` – som spilleren på nettsiden (alltid mørk): bildet med kontroller og programinfo under,
   kanallista (`ui/side_list.dart`: lista du kom fra / ★ Favoritter, søk) til høyre fra 860 px, ellers under.
   Fullskjerm = bare bildet (window_manager på PC, immersive på Android; et maksimert vindu gjøres vanlig først,
-  ellers lar window_manager 0.5.x tittellinja stå og bunnen havner bak oppgavelinja), kanallista over bildet med C; telefon på
+  ellers lar window_manager 0.5.x tittellinja stå og bunnen havner bak oppgavelinja; vindusanimasjonene er av
+  mens det skjer, via `DwmSetWindowAttribute` i `ui/window_effects.dart` (FFI, bare Windows)), kanallista over bildet med C; telefon på
   tvers = fullskjerm. Bildet ligger under en GlobalKey, så det flyttes mellom oppsettene uten å starte på nytt.
   Volum (glidebryter på PC, musehjulet over bildet, lagres i Session), ⇄/Backspace, tastatur og fjernkontroll
   (OK = fullskjerm/kanalliste, → inn i lista, ← ut). Infoen viser oppløsning, kodek/hwdec/lyd (mpv-egenskaper)

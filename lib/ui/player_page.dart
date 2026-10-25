@@ -14,6 +14,7 @@ import '../platform.dart';
 import '../theme.dart';
 import 'playback.dart';
 import 'side_list.dart';
+import 'window_effects.dart';
 
 /// Spilleren er alltid mørk, som på nettsiden.
 final ThemeData _playerTheme = fyrlysTheme(Brightness.dark);
@@ -463,7 +464,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       }
     }
 
-    return _windowQueue = _windowQueue.then((_) => step());
+    return _windowQueue = _windowQueue.then((_) => withoutWindowAnimations(step));
   }
 
   /// Kanallista: over bildet i fullskjerm, ellers flyttes fokus dit (den står alltid ved siden av).
