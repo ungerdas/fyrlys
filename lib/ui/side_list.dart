@@ -351,7 +351,7 @@ class _SideRowState extends State<_SideRow> {
     // hentes først når kortet har vært framme litt, så rask rulling ikke fyller køen med det du rullet forbi
     _epg = null;
     _wait = Timer(const Duration(milliseconds: 150), () {
-      if (mounted) setState(() => _epg = s.epg(ch.id));
+      if (mounted) setState(() { _epg = s.epg(ch.id); });
     });
   }
 
