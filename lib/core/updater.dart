@@ -32,7 +32,7 @@ class UpdateInfo {
 }
 
 /// Leser releasen (fra GitHub eller Fyrlys-serveren, samme form): byggnummeret står i navnet, og fila for denne
-/// plattformen blant vedleggene. Relative adresser (serveren svarer «download/<fil>») løses mot [base].
+/// plattformen blant vedleggene. Relative adresser (serveren svarer `download/fil.zip`) løses mot [base].
 UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
   if (json is! Map) return null;
   final title = '${json['name'] ?? ''}';

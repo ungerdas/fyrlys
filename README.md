@@ -83,3 +83,19 @@ flutter run
 ```
 
 `flutter create` lager det som mangler av plattformmappene, og skriver ikke over det som ligger i repoet.
+
+### Fast signeringsnøkkel for Android
+
+Uten egen nøkkel signeres hvert bygg med en ny, tilfeldig nøkkel, og Android nekter da å legge et nytt bygg oppå
+det gamle (appen må avinstalleres først). Lag en nøkkel én gang, f.eks. på Linux:
+
+```bash
+keytool -genkeypair -v -keystore fyrlys.jks -storetype PKCS12 -alias fyrlys \
+  -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=Fyrlys"
+base64 -w0 fyrlys.jks > fyrlys.jks.b64
+```
+
+Legg inn tre hemmeligheter under *Settings → Secrets and variables → Actions* i repoet:
+`ANDROID_KEYSTORE_B64` (innholdet i `fyrlys.jks.b64`), `ANDROID_KEYSTORE_PASSWORD` (passordet du valgte) og
+`ANDROID_KEY_ALIAS` (`fyrlys`). Ta vare på `fyrlys.jks` og passordet: uten dem kan ikke nye bygg legges oppå de
+gamle. Første bygg med nøkkelen må installeres etter at den gamle appen er avinstallert; etter det går det rett.

@@ -68,13 +68,13 @@ class ChannelSideListState extends State<ChannelSideList> {
   }
 
   @override
-  void didUpdateWidget(ChannelSideList old) {
-    super.didUpdateWidget(old);
-    if (old.tab != widget.tab) {
+  void didUpdateWidget(ChannelSideList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tab != widget.tab) {
       _search.clear();
       _query = '';
       WidgetsBinding.instance.addPostFrameCallback((_) => _reveal(center: true));
-    } else if (old.currentId != widget.currentId) {
+    } else if (oldWidget.currentId != widget.currentId) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reveal(center: false));
     }
   }

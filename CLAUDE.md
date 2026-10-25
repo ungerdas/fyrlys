@@ -39,6 +39,12 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   GitHub-release med `Fyrlys-vX.Y.Z-windows.zip` og APK-er per ABI (v0.x som forhåndsutgivelse). Tagger kan
   ikke pushes fra Claude-økta, og git/refs-API-et er stengt, men workflowen kan startes. En tag `v*` som
   Pål-Erik lager selv, gir samme resultat. Bruk `[skip ci]` i commit-meldingen når et bygg bare er bortkastet.
+  Teksten i releasen er avsnittet `## vX.Y.Z` i `CHANGELOG.md` (skriv det før releasen). Byggnummeret
+  (`--build-number`, også versionCode på Android) er `github.run_number`.
+- Android-signering: med hemmelighetene `ANDROID_KEYSTORE_B64`/`ANDROID_KEYSTORE_PASSWORD`/`ANDROID_KEY_ALIAS`
+  signeres APK-ene på nytt med `apksigner` etter bygget (README forklarer hvordan nøkkelen lages); uten dem har
+  hvert bygg en tilfeldig debug-nøkkel. Hemmeligheter kan ikke leses eller settes fra Claude-økta (Actions-API-et
+  er stengt i proxyen), så Pål-Erik må legge dem inn selv.
 
 ## Arkitektur (`lib/`)
 - `core/source.dart` – `TvSource`: kilde til kanaler, EPG, strømadresser og favoritter.

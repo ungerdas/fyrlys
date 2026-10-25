@@ -3,8 +3,9 @@
 # ser etter nye bygg der og oppdaterer seg selv.
 # Plattformmappene lages av «flutter create» her; i repoet ligger bare det vi har tilpasset
 # (AndroidManifest, ikoner, TV-banner og Windows-ikonet), og det skrives ikke over.
-# En release (Windows-zip og Android-APK-er, v0.x som forhåndsutgivelse) lages av en tag som v0.1.0, eller med
-#   gh workflow run build.yml --repo ungerdas/fyrlys -f release=v0.1.0
+# En release (Windows-zip og Android-APK-er, v0.x som forhåndsutgivelse) lages av en tag som v2.0.0, eller med
+#   gh workflow run build.yml --repo ungerdas/fyrlys -f release=v2.0.0
+# Teksten i releasen er avsnittet for versjonen i CHANGELOG.md.
 # (tagger kan ikke pushes fra Claude-økta, men den kan starte workflowen).
 # Feiler et steg, legges slutten av loggen som merknad på kjøringen (kan leses med
 # «gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations»).
@@ -18,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: "Lag en release med denne versjonen, f.eks. v0.1.0 (tomt: bare bygg)"
+        description: "Lag en release med denne versjonen, f.eks. v2.0.0 (tomt: bare bygg)"
         required: false
         default: ""
 
@@ -71,7 +72,7 @@ jobs:
       - name: Versjon og byggnummer til appen (vises i menyen)
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
-          echo "DEFINES=--dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
+          echo "DEFINES=--build-number=${{ github.run_number }} --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
       - run: flutter build windows --release $DEFINES 2>&1 | tee build.log
       - uses: actions/upload-artifact@v5
         with:
@@ -105,8 +106,29 @@ jobs:
       - name: Versjon og byggnummer til appen (vises i menyen)
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
-          echo "DEFINES=--dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
+          echo "DEFINES=--build-number=${{ github.run_number }} --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
       - run: flutter build apk --release --split-per-abi $DEFINES 2>&1 | tee build.log
+      # Med Fyrlys-nøkkelen (hemmelighetene ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD og ANDROID_KEY_ALIAS,
+      # se README) kan nye APK-er installeres oppå de gamle. Uten den signeres hvert bygg med en ny, tilfeldig
+      # debug-nøkkel, og appen må avinstalleres før et nytt bygg kan legges inn.
+      - name: Signer med Fyrlys-nøkkelen
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning title=Android::Ingen Fyrlys-nøkkel (ANDROID_KEYSTORE_B64): APK-ene har en tilfeldig debug-nøkkel"
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fyrlys.jks"
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          for f in build/app/outputs/flutter-apk/*-release.apk; do
+            "$bt/apksigner" sign --ks "$RUNNER_TEMP/fyrlys.jks" --ks-pass env:KS_PASS --key-pass env:KS_PASS \
+              --ks-key-alias "${KEY_ALIAS:-fyrlys}" "$f"
+            "$bt/apksigner" verify --print-certs "$f" | head -2
+          done 2>&1 | tee sign.log
+          rm -f "$RUNNER_TEMP/fyrlys.jks"
       - uses: actions/upload-artifact@v5
         with:
           name: Fyrlys-android
@@ -180,9 +202,16 @@ jobs:
     env:
       VERSION: ${{ inputs.release || github.ref_name }}
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
         with:
           path: dist
+      - name: Teksten fra CHANGELOG.md
+        run: |
+          # avsnittet «## v2.0.0 …» fram til neste «## »
+          awk -v v="## ${VERSION}" 'index($0, v) == 1 {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md || true
+          [ -s notes.md ] || echo "Fyrlys ${VERSION}" > notes.md
+          cat notes.md
       - name: Pakk filene
         run: |
           cd dist
@@ -201,4 +230,5 @@ jobs:
             dist/Fyrlys-*-windows.zip
             dist/Fyrlys-*-android-*.apk
           prerelease: ${{ startsWith(env.VERSION, 'v0.') }}
-          generate_release_notes: true
+          body_path: notes.md
+          make_latest: true
