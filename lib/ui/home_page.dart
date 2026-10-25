@@ -6,8 +6,10 @@ import '../build_info.dart';
 import '../core/models.dart';
 import '../core/session.dart';
 import '../core/updater.dart';
+import '../core/vod.dart';
 import 'channel_card.dart';
 import 'player_page.dart';
+import 'vod_browser.dart';
 
 /// TV-siden: kategorier (sidemeny på PC og TV, nedtrekksliste på telefon), søk og kanalkort.
 class HomePage extends StatefulWidget {
@@ -22,8 +24,12 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+/// TV, Filmer og Serier: valget i toppen (PC og TV) eller nederst (telefon).
+enum _Section { tv, movies, series }
+
 class _HomePageState extends State<HomePage> {
   final _search = TextEditingController();
+  _Section _section = _Section.tv;
   String _filter = 'all';
   String _query = '';
   bool _searching = false;
@@ -85,6 +91,34 @@ class _HomePageState extends State<HomePage> {
 
   void _select(String filter) => setState(() => _filter = filter);
 
+  /// Bytter mellom TV, Filmer og Serier. Søket gjelder siden du er på, så det tømmes.
+  void _setSection(_Section section) {
+    if (section == _section) return;
+    setState(() {
+      _section = section;
+      _search.clear();
+      _query = '';
+      _searching = false;
+    });
+  }
+
+  String get _searchHint => switch (_section) {
+        _Section.tv => 'Søk etter kanal',
+        _Section.movies => 'Søk i filmer',
+        _Section.series => 'Søk i serier',
+      };
+
+  Widget _sections() => SegmentedButton<_Section>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(value: _Section.tv, icon: Icon(Icons.live_tv), label: Text('TV')),
+          ButtonSegment(value: _Section.movies, icon: Icon(Icons.movie_outlined), label: Text('Filmer')),
+          ButtonSegment(value: _Section.series, icon: Icon(Icons.video_library_outlined), label: Text('Serier')),
+        ],
+        selected: {_section},
+        onSelectionChanged: (v) => _setSection(v.first),
+      );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -105,7 +139,9 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(width: 10),
                   const Text('Fyrlys', style: TextStyle(fontWeight: FontWeight.w700)),
                   if (wide) ...[
-                    const SizedBox(width: 32),
+                    const SizedBox(width: 24),
+                    _sections(),
+                    const SizedBox(width: 24),
                     Expanded(
                       child: Align(
                         alignment: Alignment.centerLeft,
@@ -161,27 +197,42 @@ class _HomePageState extends State<HomePage> {
         children: [
           if (widget.updater case final u?) ListenableBuilder(listenable: u, builder: (context, _) => _updateBanner(u)),
           Expanded(
-            child: wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(width: 280, child: _sidebar()),
-                      VerticalDivider(width: 1, color: theme.colorScheme.outline),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [_header(list), Expanded(child: content)],
+            child: switch (_section) {
+              _Section.movies => VodBrowser(key: const ValueKey('filmer'), session: s, kind: VodKind.movies, query: _query),
+              _Section.series => VodBrowser(key: const ValueKey('serier'), session: s, kind: VodKind.series, query: _query),
+              _Section.tv => wide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(width: 280, child: _sidebar()),
+                        VerticalDivider(width: 1, color: theme.colorScheme.outline),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [_header(list), Expanded(child: content)],
+                          ),
                         ),
-                      ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [_picker(), Expanded(child: content)],
-                  ),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [_picker(), Expanded(child: content)],
+                    ),
+            },
           ),
         ],
       ),
+      bottomNavigationBar: wide
+          ? null
+          : NavigationBar(
+              selectedIndex: _section.index,
+              onDestinationSelected: (i) => _setSection(_Section.values[i]),
+              destinations: const [
+                NavigationDestination(icon: Icon(Icons.live_tv), label: 'TV'),
+                NavigationDestination(icon: Icon(Icons.movie_outlined), label: 'Filmer'),
+                NavigationDestination(icon: Icon(Icons.video_library_outlined), label: 'Serier'),
+              ],
+            ),
     );
   }
 
@@ -280,7 +331,7 @@ class _HomePageState extends State<HomePage> {
         controller: _search,
         autofocus: autofocus,
         textInputAction: TextInputAction.search,
-        decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search), hintText: 'Søk etter kanal'),
+        decoration: InputDecoration(isDense: true, prefixIcon: const Icon(Icons.search), hintText: _searchHint),
         onChanged: (v) => setState(() => _query = v.trim()),
       );
 

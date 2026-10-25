@@ -50,10 +50,26 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
     først (409 `busy` → «Ta over»; `&force=1` **bare** i den spørringen), så spiller mpv samme adresse uten
     force. `POST /api/live/<id>/stop?c=` ved kanalbytte/lukking. Favoritter som endringer
     (`PUT /api/streams/favs` med `op`), delt med nettsiden.
+  - Filmer og serier (`core/vod.dart`: modellene, `pageOf`/`catalogOf` for filtrering, sortering og sider à 120,
+    `episodeCode`, `ratingText`): Fyrlys-serveren gjør det selv (`/api/xtream/categories?kind=vod|series`,
+    `/api/xtream/streams?kind=&cat=&q=&sort=&start=`, `/api/xtream/vod?id=`, `/api/xtream/series?id=`, filen via
+    `/api/xtream/file/vod|series/<id>.<ext>` med Range), uavhengig av `FYRLYS_VOD` (som bare gjelder nettsiden).
+    Rett mot leverandøren hentes hele lista (`get_vod_streams`/`get_series`, 30 min) og filtreres i appen;
+    filene er `/movie/` og `/series/<bruker>/<passord>/<id>.<ext>`. Filmer og serier går utenom «Ta over» og
+    seertellingen på serveren.
 - `core/session.dart` – tilstanden (ChangeNotifier): innlogging (lagres i shared_preferences, også
   Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
-  favoritter (lokalt for Xtream, på serveren for Fyrlys-server, i kø), «sist sett», lys/mørk.
-- `ui/login_page.dart`, `ui/home_page.dart` (sidemeny ≥ 900 px, ellers nedtrekksliste), `ui/channel_card.dart`.
+  favoritter (lokalt for Xtream, på serveren for Fyrlys-server, i kø), «sist sett», lys/mørk, og «fortsett der du
+  slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
+  `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken).
+- `ui/login_page.dart`, `ui/home_page.dart` (TV/Filmer/Serier: SegmentedButton i toppen ≥ 900 px, ellers
+  NavigationBar nederst; TV har sidemeny ≥ 900 px, ellers nedtrekksliste; søket gjelder fanen du er på),
+  `ui/channel_card.dart`.
+- `ui/vod_browser.dart` (plakater i rutenett, kategori, sortering, sider hentes når du er 30 fra slutten, søk
+  med 350 ms pause), `ui/vod_detail_page.dart` (film: spill av / fortsett / fra begynnelsen; serie: sesonger
+  og episoder med sett-strek; `Poster`), `ui/vod_player_page.dart` (egen spiller for filer: tidslinje, ±10 s,
+  neste/forrige episode, volum, spor, fullskjerm; lagrer hvor du er hvert 10. s og når du går ut, starter med
+  `Media(start:)`, går til neste episode 1,5 s etter slutten).
 - `ui/player_page.dart` – som spilleren på nettsiden (alltid mørk): bildet med kontroller og programinfo under,
   kanallista (`ui/side_list.dart`: lista du kom fra / ★ Favoritter, søk) til høyre fra 860 px, ellers under.
   Fullskjerm = bare bildet (window_manager på PC, immersive på Android; et maksimert vindu gjøres vanlig først,
@@ -64,7 +80,9 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   (OK = fullskjerm/kanalliste, → inn i lista, ← ut). Infoen viser oppløsning, kodek/hwdec/lyd (mpv-egenskaper)
   og hvor strømmen kommer fra. Nye forsøk ved brudd/fast bilde, tre per minutt. Telefon/TV: kanalen stoppes når
   appen legges bort (`paused`) og startes igjen ved `resumed`.
-- `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene.
+- `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene (`playbackFactory`
+  byttes ut i testene for sider som lager avspilleren selv). Fullskjerm for begge spillerne:
+  `WindowFullscreen` i `ui/window_effects.dart`.
 - `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer). Repoet er
   privat, så når appen er logget inn på en Fyrlys-server spør den `<server>/api/app/release` (serveren har en
   lesenøkkel i `data/github.json` og svarer i GitHubs form, med relative adresser `download/<fil>` som løses
@@ -80,7 +98,9 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   installasjon av APK).
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
 - Tester i `test/`: navn, Xtream-kilden, Fyrlys-kilden (med MockClient), oppdateringen (`updater_test.dart`),
-  widget-tester for TV-siden og spilleren (`player_test.dart`) med falsk kilde og avspiller (`fakes.dart`).
+  widget-tester for TV-siden og spilleren (`player_test.dart`) med falsk kilde og avspiller (`fakes.dart`),
+  filmer og serier (`vod_source_test.dart`: kildene og lister; `vod_test.dart`: fanene, detaljsiden, spilleren,
+  fortsett og neste episode).
 
 ## Status
 - 25.10.2026: v0.1 skrevet. Pål-Erik prøvde Windows-versjonen og savnet volumkontroll og spilleren slik den er
@@ -93,6 +113,10 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   startet aldri (tom logg). `ProcessStartMode.detached` gir `DETACHED_PROCESS` (ingen konsoll) på Windows, og
   da kommer ikke Windows PowerShell i gang. Bygg 8 starter det i vanlig modus (Dart bruker da `CREATE_NO_WINDOW`:
   skjult konsoll), skriptet skriver `i-gang.txt` selv, og appen logger oppstarten i `oppdatering.log`.
-  Bygg 7 → 8 må derfor også legges inn for hånd; 8 → 9 er første ekte prøve.
-- Ideer senere: tilbakespoling i mpv-bufferet, TV-guide, bilde-i-bilde på Android, filmer/serier,
+  Bygg 7 → 8 måtte derfor også legges inn for hånd. Bygg 9 → 10 kom av seg selv (bekreftet av Pål-Erik 25.10):
+  oppdateringen virker fra start til slutt. Fullskjerm fra maksimert vindu virker (bygg 9), animasjonen er
+  fjernet i bygg 10 (ikke bekreftet ennå).
+- 25.10.2026: Filmer og Serier i appen (ett bygg). Testet med kilde- og widget-tester, ikke med ekte avspilling:
+  spoling, fortsett og neste episode i mpv, store lister fra leverandøren og fjernkontroll på Android TV er uprøvd.
+- Ideer senere: tilbakespoling i mpv-bufferet, TV-guide, bilde-i-bilde på Android, «fortsett å se» på forsiden,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.

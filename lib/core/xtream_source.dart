@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'models.dart';
 import 'source.dart';
+import 'vod.dart';
 
 /// Mange IPTV-leverandører avviser ukjente klienter, så appen presenterer seg som VLC, slik nettversjonen gjør.
 const xtreamUserAgent = 'VLC/3.0.21 LibVLC/3.0.21';
@@ -53,6 +54,87 @@ double? _number(Object? v) => v is num ? v.toDouble() : double.tryParse('${v ?? 
 
 DateTime _time(double seconds) => DateTime.fromMillisecondsSinceEpoch((seconds * 1000).round());
 
+String _text(Object? v) => v == null ? '' : '$v'.trim();
+
+String? _url(Object? v) => v is String && (v.startsWith('http://') || v.startsWith('https://')) ? v : null;
+
+final _extRe = RegExp(r'^[a-z0-9]{2,5}$');
+
+String _ext(Object? v) {
+  final e = _text(v).toLowerCase();
+  return _extRe.hasMatch(e) ? e : 'mp4';
+}
+
+/// Filmer og serier fra player_api.php, i samme form som Fyrlys-serveren lager dem.
+List<VodItem> parseVodItems(VodKind kind, Object? raw) => [
+      for (final s in raw is List ? raw : const [])
+        if (s is Map && (kind == VodKind.series ? s['series_id'] : s['stream_id']) != null)
+          kind == VodKind.series
+              ? VodItem(
+                  id: '${s['series_id']}',
+                  name: _text(s['name']),
+                  categoryId: _text(s['category_id']),
+                  icon: _url(s['cover']),
+                  rating: _number(s['rating']),
+                  year: () {
+                    final y = _text(s['releaseDate'] ?? s['release_date']);
+                    return y.length >= 4 ? y.substring(0, 4) : null;
+                  }(),
+                  plot: _text(s['plot']),
+                  added: _number(s['last_modified'])?.toInt() ?? 0,
+                )
+              : VodItem(
+                  id: '${s['stream_id']}',
+                  name: _text(s['name']),
+                  categoryId: _text(s['category_id']),
+                  icon: _url(s['stream_icon']),
+                  ext: _ext(s['container_extension']),
+                  rating: _number(s['rating']),
+                  added: _number(s['added'])?.toInt() ?? 0,
+                ),
+    ];
+
+/// get_series_info: sesongene kommer som et kart (sesong → episoder) eller, hos noen, som en liste av lister.
+SeriesInfo parseSeriesInfo(Object? d) {
+  if (d is! Map) throw const SourceException('Fant ikke serien');
+  final info = d['info'] is Map ? d['info'] as Map : const <Object?, Object?>{};
+  var raw = d['episodes'];
+  if (raw is List) raw = {for (var i = 0; i < raw.length; i++) '${i + 1}': raw[i]};
+  final seasons = <Season>[];
+  if (raw is Map) {
+    final keys = [...raw.keys]..sort((a, b) => (_number(a) ?? 0).compareTo(_number(b) ?? 0));
+    for (final k in keys) {
+      final eps = raw[k];
+      seasons.add(Season(
+        number: '$k',
+        episodes: [
+          for (final e in eps is List ? eps : const [])
+            if (e is Map)
+              Episode(
+                id: '${e['id']}',
+                title: _text(e['title']),
+                number: _number(e['episode_num'])?.toInt(),
+                ext: _ext(e['container_extension']),
+                image: e['info'] is Map ? _url((e['info'] as Map)['movie_image']) : null,
+                plot: e['info'] is Map ? _text((e['info'] as Map)['plot']) : '',
+                duration: e['info'] is Map ? _text((e['info'] as Map)['duration']) : '',
+              ),
+        ],
+      ));
+    }
+  }
+  final year = _text(info['releaseDate'] ?? info['release_date']);
+  return SeriesInfo(
+    name: _text(info['name']),
+    cover: _url(info['cover']),
+    plot: _text(info['plot']),
+    genre: _text(info['genre']),
+    year: year.length >= 4 ? year.substring(0, 4) : year,
+    rating: _number(info['rating']),
+    seasons: seasons,
+  );
+}
+
 /// IPTV-leverandøren direkte (Xtream Codes), uten Fyrlys-serveren.
 class XtreamSource implements TvSource {
   XtreamSource({required this.server, required this.user, required this.password, http.Client? client})
@@ -66,6 +148,7 @@ class XtreamSource implements TvSource {
   List<Channel>? _channels;
   DateTime? _channelsAt;
   List<Category>? _categories;
+  final Map<VodKind, ({DateTime at, List<VodCategory> categories, List<VodItem> items})> _vod = {};
 
   /// Sjekker innloggingen hos leverandøren før den lagres.
   static Future<XtreamSource> login(String serverInput, String user, String password, {http.Client? client}) async {
@@ -231,6 +314,62 @@ class XtreamSource implements TvSource {
 
   @override
   Future<Favorites?> changeFavorites(Map<String, Object?> change) async => null;
+
+  // ── filmer og serier: hele lista hentes (mellomlagret 30 min), og appen filtrerer og deler i sider ──
+
+  Future<({List<VodCategory> categories, List<VodItem> items})> _vodLists(VodKind kind, {bool force = false}) async {
+    final hit = _vod[kind];
+    if (!force && hit != null && DateTime.now().difference(hit.at) < const Duration(minutes: 30)) {
+      return (categories: hit.categories, items: hit.items);
+    }
+    final movies = kind == VodKind.movies;
+    final rawCats = await _api(movies ? 'get_vod_categories' : 'get_series_categories');
+    final rawItems = await _api(movies ? 'get_vod_streams' : 'get_series');
+    final categories = [
+      for (final c in rawCats is List ? rawCats : const [])
+        if (c is Map) VodCategory(id: '${c['category_id']}', name: _text(c['category_name'])),
+    ];
+    final items = parseVodItems(kind, rawItems);
+    _vod[kind] = (at: DateTime.now(), categories: categories, items: items);
+    return (categories: categories, items: items);
+  }
+
+  @override
+  Future<VodCatalog> vodCatalog(VodKind kind, {bool force = false}) async {
+    final l = await _vodLists(kind, force: force);
+    return catalogOf(l.categories, l.items);
+  }
+
+  @override
+  Future<VodPage> vodPage(VodKind kind,
+      {String category = '', String query = '', VodSort sort = VodSort.provider, int start = 0}) async {
+    final l = await _vodLists(kind);
+    return pageOf(l.items, category: category, query: query, sort: sort, start: start);
+  }
+
+  @override
+  Future<MovieInfo> movieInfo(String id) async {
+    final d = await _api('get_vod_info', {'vod_id': id});
+    final info = d is Map && d['info'] is Map ? d['info'] as Map : const <Object?, Object?>{};
+    final year = _text(info['releasedate'] ?? info['release_date']);
+    return MovieInfo(
+      plot: _text(info['plot'] ?? info['description']),
+      genre: _text(info['genre']),
+      year: year.length >= 4 ? year.substring(0, 4) : year,
+      duration: _text(info['duration']),
+      cast: _text(info['cast']),
+      director: _text(info['director']),
+    );
+  }
+
+  @override
+  Future<SeriesInfo> seriesInfo(String id) async => parseSeriesInfo(await _api('get_series_info', {'series_id': id}));
+
+  @override
+  String movieUrl(VodItem movie) => '$server/movie/$user/$password/${movie.id}.${movie.ext}';
+
+  @override
+  String episodeUrl(Episode episode) => '$server/series/$user/$password/${episode.id}.${episode.ext}';
 
   @override
   Map<String, String> toPrefs() => {'kind': kind, 'server': server, 'user': user, 'password': password};

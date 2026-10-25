@@ -355,6 +355,56 @@ class Session extends ChangeNotifier {
     unawaited(_prefs.setBool('muted', muted));
   }
 
+  // ── fortsett der du slapp (filmer og episoder) ──
+
+  Map<String, List<int>>? _resume;
+
+  /// nøkkel («film:123», «episode:456») → [sekunder, lengde i sekunder, når]
+  Map<String, List<int>> _resumeMap() {
+    final cached = _resume;
+    if (cached != null) return cached;
+    final out = <String, List<int>>{};
+    try {
+      final raw = jsonDecode(_prefs.getString('resume') ?? '{}');
+      if (raw is Map) {
+        for (final e in raw.entries) {
+          final v = e.value;
+          if (v is List && v.length == 3 && v.every((x) => x is int)) out['${e.key}'] = [for (final x in v) x as int];
+        }
+      }
+    } on FormatException {
+      // begynner på nytt
+    }
+    return _resume = out;
+  }
+
+  /// Hvor du slapp, når det er verdt å fortsette: mer enn et halvt minutt inn og ikke nesten ferdig.
+  Duration? resumeAt(String key) {
+    final v = _resumeMap()[key];
+    if (v == null) return null;
+    final position = v[0];
+    final length = v[1];
+    if (position < 30 || (length > 0 && position > length * 0.95)) return null;
+    return Duration(seconds: position);
+  }
+
+  /// Hvor mye du har sett, fra 0 til 1 (streken under episodene).
+  double watched(String key) {
+    final v = _resumeMap()[key];
+    if (v == null || v[1] <= 0) return 0;
+    return (v[0] / v[1]).clamp(0.0, 1.0).toDouble();
+  }
+
+  void saveResume(String key, Duration position, Duration length) {
+    final m = _resumeMap();
+    m.remove(key);
+    m[key] = [position.inSeconds, length.inSeconds, DateTime.now().millisecondsSinceEpoch ~/ 1000];
+    while (m.length > 300) {
+      m.remove(m.keys.first);
+    }
+    unawaited(_prefs.setString('resume', jsonEncode(m)));
+  }
+
   // ── utseende ──
 
   void toggleTheme(Brightness current) {

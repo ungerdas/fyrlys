@@ -1,6 +1,6 @@
 # Fyrlys
 
-TV fra IPTV-abonnementet ditt (Xtream Codes), med [mpv](https://mpv.io) som avspiller via
+TV, filmer og serier fra IPTV-abonnementet ditt (Xtream Codes), med [mpv](https://mpv.io) som avspiller via
 [media_kit](https://github.com/media-kit/media-kit). mpv spiller det meste: H.265, AC3, DTS, MKV,
 flere lydspor og undertekster, med maskinvaredekoding.
 
@@ -55,6 +55,15 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 - Under bildet står oppløsning, kodek, om bildet dekodes i maskinvare, lyden og hvor strømmen kommer fra.
 - Brytes strømmen, prøver spilleren på nytt, inntil tre ganger i minuttet. Legges appen bort på telefon
   eller TV, gir den fra seg tilkoblingen og starter kanalen igjen når du kommer tilbake.
+- **Filmer og Serier:** fanene øverst (nederst på telefon). Velg kategori og rekkefølge (leverandørens, nyeste
+  først eller A–Å), eller søk; flere plakater hentes etter hvert som du blar. En film har «Spill av», eller
+  «Fortsett fra …» og «Fra begynnelsen» når du har sett litt av den. En serie har sesongene og episodene, med
+  en strek under det du har sett.
+- **Filmspilleren:** tidslinje du kan dra i, ←/→ ti sekunder, ↑/↓ lyd, mellomrom pause, N/P neste og forrige
+  episode, F fullskjerm og Esc tilbake. Den husker hvor du slapp, og går videre til neste episode når en er
+  ferdig. Lydspor og undertekster velges i spilleren.
+- Har abonnementet bare én tilkobling, deler filmer, serier og TV den: en film på én enhet og TV på en annen
+  går ikke samtidig.
 
 ## Bygge selv
 

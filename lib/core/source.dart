@@ -1,4 +1,5 @@
 import 'models.dart';
+import 'vod.dart';
 
 class SourceException implements Exception {
   const SourceException(this.message);
@@ -58,6 +59,23 @@ abstract class TvSource {
   Future<void> close(Channel channel);
 
   Future<Favorites?> loadFavorites();
+
+  // ── filmer og serier ──
+
+  /// kategoriene (med antall) og hvor mange det er i alt
+  Future<VodCatalog> vodCatalog(VodKind kind, {bool force = false});
+
+  /// en side (vodPageSize) med filmer eller serier, filtrert på kategori og søk
+  Future<VodPage> vodPage(VodKind kind, {String category = '', String query = '', VodSort sort = VodSort.provider, int start = 0});
+
+  Future<MovieInfo> movieInfo(String id);
+
+  Future<SeriesInfo> seriesInfo(String id);
+
+  /// filen avspilleren henter (spoling med Range); plakater og bilder går via logoUrl
+  String movieUrl(VodItem movie);
+
+  String episodeUrl(Episode episode);
 
   Future<Favorites?> changeFavorites(Map<String, Object?> change);
 

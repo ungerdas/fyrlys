@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'models.dart';
 import 'source.dart';
+import 'vod.dart';
 
 String _randomId() {
   final r = Random.secure();
@@ -12,6 +13,14 @@ String _randomId() {
 }
 
 int _int(Object? v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+
+int? _intOrNull(Object? v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}');
+
+double? _double(Object? v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+
+String _text(Object? v) => v == null ? '' : '$v'.trim();
+
+String? _url(Object? v) => v is String && (v.startsWith('http://') || v.startsWith('https://')) ? v : null;
 
 /// Fyrlys-serveren (Docker-versjonen) som kilde. Innloggingen hos leverandøren, favorittene og «Ta over»
 /// deles med nettsiden, og serveren holder styr på hvem som bruker tilkoblingene.
@@ -32,6 +41,7 @@ class FyrlysSource implements TvSource {
   List<Channel>? _channels;
   DateTime? _channelsAt;
   List<Category>? _categories;
+  final Map<VodKind, VodCatalog> _catalogs = {};
 
   /// «192.168.1.10:8766» → «http://192.168.1.10:8766»
   static String normalize(String raw) {
@@ -257,6 +267,111 @@ class FyrlysSource implements TvSource {
     if (r.statusCode != 200) throw SourceException(_error(body, r.statusCode));
     return _favorites(body);
   }
+
+  // ── filmer og serier (serveren filtrerer, sorterer og deler i sider) ──
+
+  @override
+  Future<VodCatalog> vodCatalog(VodKind kind, {bool force = false}) async {
+    final cached = _catalogs[kind];
+    if (!force && cached != null) return cached;
+    final d = await _get('/api/xtream/categories?kind=${kind.api}', timeout: const Duration(minutes: 3));
+    final cats = d is Map ? d['categories'] : null;
+    final catalog = VodCatalog(
+      categories: [
+        for (final c in cats is List ? cats : const [])
+          if (c is Map) VodCategory(id: '${c['id']}', name: _text(c['name']), count: _int(c['count'])),
+      ],
+      total: d is Map ? _int(d['total']) : 0,
+    );
+    _catalogs[kind] = catalog;
+    return catalog;
+  }
+
+  static VodItem _vodItem(Map<Object?, Object?> it) => VodItem(
+        id: '${it['id']}',
+        name: _text(it['name']),
+        categoryId: _text(it['cat']),
+        icon: _url(it['icon']),
+        ext: _text(it['ext']).isEmpty ? 'mp4' : _text(it['ext']),
+        rating: _double(it['rating']),
+        year: _text(it['year']).isEmpty ? null : _text(it['year']),
+        plot: _text(it['plot']),
+        added: _int(it['added']),
+      );
+
+  @override
+  Future<VodPage> vodPage(VodKind kind,
+      {String category = '', String query = '', VodSort sort = VodSort.provider, int start = 0}) async {
+    final q = Uri(queryParameters: {
+      'kind': kind.api,
+      'cat': category,
+      'q': query,
+      'sort': sort.api,
+      'start': '$start',
+    }).query;
+    final d = await _get('/api/xtream/streams?$q', timeout: const Duration(minutes: 3));
+    if (d is! Map) throw const SourceException('Uventet svar fra Fyrlys-serveren');
+    final items = d['items'];
+    return VodPage(
+      items: [for (final it in items is List ? items : const []) if (it is Map) _vodItem(it)],
+      total: _int(d['total']),
+    );
+  }
+
+  @override
+  Future<MovieInfo> movieInfo(String id) async {
+    final d = await _get('/api/xtream/vod?id=${Uri.encodeQueryComponent(id)}');
+    final m = d is Map ? d : const <Object?, Object?>{};
+    return MovieInfo(
+      plot: _text(m['plot']),
+      genre: _text(m['genre']),
+      year: _text(m['year']),
+      duration: _text(m['duration']),
+      cast: _text(m['cast']),
+      director: _text(m['director']),
+    );
+  }
+
+  @override
+  Future<SeriesInfo> seriesInfo(String id) async {
+    final d = await _get('/api/xtream/series?id=${Uri.encodeQueryComponent(id)}');
+    if (d is! Map) throw const SourceException('Fant ikke serien');
+    final seasons = d['seasons'];
+    return SeriesInfo(
+      name: _text(d['name']),
+      cover: _url(d['cover']),
+      plot: _text(d['plot']),
+      genre: _text(d['genre']),
+      year: _text(d['year']),
+      rating: _double(d['rating']),
+      seasons: [
+        for (final s in seasons is List ? seasons : const [])
+          if (s is Map)
+            Season(
+              number: _text(s['season']),
+              episodes: [
+                for (final e in s['episodes'] is List ? s['episodes'] as List : const [])
+                  if (e is Map)
+                    Episode(
+                      id: '${e['id']}',
+                      title: _text(e['title']),
+                      number: _intOrNull(e['ep']),
+                      ext: _text(e['ext']).isEmpty ? 'mp4' : _text(e['ext']),
+                      image: _url(e['img']),
+                      plot: _text(e['plot']),
+                      duration: _text(e['duration']),
+                    ),
+              ],
+            ),
+      ],
+    );
+  }
+
+  @override
+  String movieUrl(VodItem movie) => '$base/api/xtream/file/vod/${movie.id}.${movie.ext}';
+
+  @override
+  String episodeUrl(Episode episode) => '$base/api/xtream/file/series/${episode.id}.${episode.ext}';
 
   @override
   Map<String, String> toPrefs() => {'kind': kind, 'base': base, 'client': clientId};

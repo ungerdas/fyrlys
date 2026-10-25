@@ -26,12 +26,20 @@ abstract class Playback {
   /// bildets høyde i piksler, når den er kjent
   Stream<int?> get heightStream;
 
+  /// lengden på filmen (null/0 for direktesendinger)
+  Stream<Duration> get durationStream;
+
   Duration get position;
+
+  Duration get duration;
+
+  Future<void> seek(Duration position);
 
   /// innstillinger for direktesending over nett, før første kanal åpnes
   Future<void> setup();
 
-  Future<void> open(String url, Map<String, String> headers);
+  /// [start]: hvor filmen skal begynne (fortsett der du slapp)
+  Future<void> open(String url, Map<String, String> headers, {Duration? start});
 
   Future<void> stop();
 
@@ -53,6 +61,9 @@ abstract class Playback {
 
   Future<void> dispose();
 }
+
+/// Avspilleren appen bruker. Testene setter en falsk her (mpv finnes ikke i testene).
+Playback Function() playbackFactory = MpvPlayback.new;
 
 /// mpv via media_kit.
 class MpvPlayback implements Playback {
@@ -82,7 +93,16 @@ class MpvPlayback implements Playback {
   Stream<int?> get heightStream => _player.stream.height;
 
   @override
+  Stream<Duration> get durationStream => _player.stream.duration;
+
+  @override
   Duration get position => _player.state.position;
+
+  @override
+  Duration get duration => _player.state.duration;
+
+  @override
+  Future<void> seek(Duration position) => _player.seek(position);
 
   @override
   Future<void> setup() async {
@@ -101,7 +121,8 @@ class MpvPlayback implements Playback {
   }
 
   @override
-  Future<void> open(String url, Map<String, String> headers) => _player.open(Media(url, httpHeaders: headers));
+  Future<void> open(String url, Map<String, String> headers, {Duration? start}) =>
+      _player.open(Media(url, httpHeaders: headers, start: start));
 
   @override
   Future<void> stop() => _player.stop();
