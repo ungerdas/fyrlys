@@ -87,7 +87,10 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
 - 25.10.2026: automatisk oppdatering fra releasen `testbygg`. Pål-Erik ville beholde repoet privat, så den går via
   Fyrlys-serveren (`app/appupdate.py` i peagstreams, nøkkelen i `data/github.json` på serveren). Serverdelen er
   prøvd mot ekte GitHub, appdelen bare med tester. Første bygg med den må lastes ned for hånd.
-  Nøkkelen ligger på serveren (virker, 25.10), og bygg 6 kjører på PC-en hans. Bygg 7 er laget for å prøve
-  selve oppdateringen på Windows.
+  Nøkkelen ligger på serveren (virker, 25.10), og bygg 6 kjører på PC-en hans. Bygg 6 → 7 feilet: skriptet
+  startet aldri (tom logg). `ProcessStartMode.detached` gir `DETACHED_PROCESS` (ingen konsoll) på Windows, og
+  da kommer ikke Windows PowerShell i gang. Bygg 8 starter det i vanlig modus (Dart bruker da `CREATE_NO_WINDOW`:
+  skjult konsoll), skriptet skriver `i-gang.txt` selv, og appen logger oppstarten i `oppdatering.log`.
+  Bygg 7 → 8 må derfor også legges inn for hånd; 8 → 9 er første ekte prøve.
 - Ideer senere: tilbakespoling i mpv-bufferet, TV-guide, bilde-i-bilde på Android, filmer/serier,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.

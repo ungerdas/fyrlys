@@ -290,15 +290,18 @@ class Updater extends ChangeNotifier {
       final exe = File(Platform.resolvedExecutable);
       final script = File(_path('oppdater.ps1'));
       await script.writeAsString(_script);
-      await File(_path('i-gang.txt')).writeAsString(DateTime.now().toIso8601String());
-      await Process.start(
+      await _log('Fyrlys bygg $current (prosess $pid) starter oppdateringen til bygg $build');
+      // Vanlig modus, ikke «detached»: Dart starter da prosessen helt uten konsoll (DETACHED_PROCESS), og der
+      // kommer ikke Windows PowerShell i gang. I vanlig modus får den en skjult konsoll (CREATE_NO_WINDOW), og
+      // den lever videre når Fyrlys avslutter. i-gang.txt skrives av skriptet selv, så et skript som ikke
+      // starter aldri hindrer appen i å starte.
+      final process = await Process.start(
         'powershell.exe',
         [
           '-NoProfile',
+          '-NonInteractive',
           '-ExecutionPolicy',
           'Bypass',
-          '-WindowStyle',
-          'Hidden',
           '-File',
           script.path,
           '-ProcessId',
@@ -313,18 +316,25 @@ class Updater extends ChangeNotifier {
           workDir,
           if (restart) '-Restart',
         ],
-        mode: ProcessStartMode.detached,
       );
+      unawaited(process.stdout.drain<void>());
+      unawaited(process.stderr.drain<void>());
       return true;
     } on Object catch (e) {
-      try {
-        await File(_path('i-gang.txt')).delete();
-      } on Object {
-        // fantes ikke
-      }
+      await _log('Fikk ikke startet oppdateringen: $e');
       error = 'Oppdateringen ble ikke lagt inn: ${_describe(e)}';
       _set(UpdateState.failed);
       return false;
+    }
+  }
+
+  /// En linje i oppdatering.log, sammen med det skriptet skriver.
+  Future<void> _log(String text) async {
+    try {
+      final now = DateTime.now().toIso8601String().substring(0, 19).replaceFirst('T', ' ');
+      await File(_path('oppdatering.log')).writeAsString('$now $text\r\n', mode: FileMode.append);
+    } on Object {
+      // loggen er bare til hjelp
     }
   }
 
@@ -410,8 +420,11 @@ param(
   [switch]$Restart
 )
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 $log = Join-Path $Work 'oppdatering.log'
 $result = Join-Path $Work 'resultat.txt'
+$busy = Join-Path $Work 'i-gang.txt'
+Set-Content -LiteralPath $busy -Value (Get-Date -Format o)
 function Write-Log([string]$text) {
   Add-Content -LiteralPath $log -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $text)
 }
@@ -434,7 +447,14 @@ try {
   Set-Content -LiteralPath $result -Value ('feil: ' + $_.Exception.Message) -Encoding UTF8
   Write-Log ('Feil: ' + $_.Exception.Message)
 } finally {
-  Remove-Item -LiteralPath (Join-Path $Work 'i-gang.txt') -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $busy -Force -ErrorAction SilentlyContinue
 }
-if ($Restart) { Start-Process -FilePath $Exe -WorkingDirectory $Target }
+if ($Restart) {
+  try {
+    Start-Process -FilePath $Exe -WorkingDirectory $Target
+    Write-Log 'Startet Fyrlys igjen'
+  } catch {
+    Write-Log ('Fikk ikke startet Fyrlys: ' + $_.Exception.Message)
+  }
+}
 ''';
