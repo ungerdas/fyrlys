@@ -8,6 +8,7 @@ import '../core/session.dart';
 import '../core/updater.dart';
 import '../core/vod.dart';
 import 'channel_card.dart';
+import 'guide_view.dart';
 import 'player_page.dart';
 import 'vod_browser.dart';
 
@@ -24,8 +25,8 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-/// TV, Filmer og Serier: valget i toppen (PC og TV) eller nederst (telefon).
-enum _Section { tv, movies, series }
+/// TV, TV-guide, Filmer og Serier: valget i toppen (PC og TV) eller nederst (telefon).
+enum _Section { tv, guide, movies, series }
 
 class _HomePageState extends State<HomePage> {
   final _search = TextEditingController();
@@ -75,12 +76,15 @@ class _HomePageState extends State<HomePage> {
 
   void _play(List<Channel> list, int i) {
     final title = _query.isEmpty ? _title : 'Treff i ${_title.toLowerCase()}';
-    final fromFavorites = _filter == 'fav';
+    _openPlayer(List.of(list), i, title, _filter == 'fav');
+  }
+
+  void _openPlayer(List<Channel> list, int i, String title, bool fromFavorites) {
     unawaited(Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PlayerPage(
           session: s,
-          channels: List.of(list),
+          channels: list,
           index: i,
           listTitle: title,
           fromFavorites: fromFavorites,
@@ -91,7 +95,7 @@ class _HomePageState extends State<HomePage> {
 
   void _select(String filter) => setState(() => _filter = filter);
 
-  /// Bytter mellom TV, Filmer og Serier. Søket gjelder siden du er på, så det tømmes.
+  /// Bytter mellom TV, TV-guide, Filmer og Serier. Søket gjelder siden du er på, så det tømmes.
   void _setSection(_Section section) {
     if (section == _section) return;
     setState(() {
@@ -103,17 +107,26 @@ class _HomePageState extends State<HomePage> {
   }
 
   String get _searchHint => switch (_section) {
-        _Section.tv => 'Søk etter kanal',
+        _Section.tv || _Section.guide => 'Søk etter kanal',
         _Section.movies => 'Søk i filmer',
         _Section.series => 'Søk i serier',
       };
 
-  Widget _sections() => SegmentedButton<_Section>(
+  /// Valget i toppen; ikonene bare når det er god plass.
+  Widget _sections(bool icons) => SegmentedButton<_Section>(
         showSelectedIcon: false,
-        segments: const [
-          ButtonSegment(value: _Section.tv, icon: Icon(Icons.live_tv), label: Text('TV')),
-          ButtonSegment(value: _Section.movies, icon: Icon(Icons.movie_outlined), label: Text('Filmer')),
-          ButtonSegment(value: _Section.series, icon: Icon(Icons.video_library_outlined), label: Text('Serier')),
+        segments: [
+          ButtonSegment(value: _Section.tv, icon: icons ? const Icon(Icons.live_tv) : null, label: const Text('TV')),
+          ButtonSegment(
+              value: _Section.guide,
+              icon: icons ? const Icon(Icons.view_timeline_outlined) : null,
+              label: const Text('TV-guide')),
+          ButtonSegment(
+              value: _Section.movies, icon: icons ? const Icon(Icons.movie_outlined) : null, label: const Text('Filmer')),
+          ButtonSegment(
+              value: _Section.series,
+              icon: icons ? const Icon(Icons.video_library_outlined) : null,
+              label: const Text('Serier')),
         ],
         selected: {_section},
         onSelectionChanged: (v) => _setSection(v.first),
@@ -140,7 +153,7 @@ class _HomePageState extends State<HomePage> {
                   const Text('Fyrlys', style: TextStyle(fontWeight: FontWeight.w700)),
                   if (wide) ...[
                     const SizedBox(width: 24),
-                    _sections(),
+                    _sections(MediaQuery.sizeOf(context).width >= 1200),
                     const SizedBox(width: 24),
                     Expanded(
                       child: Align(
@@ -198,6 +211,8 @@ class _HomePageState extends State<HomePage> {
           if (widget.updater case final u?) ListenableBuilder(listenable: u, builder: (context, _) => _updateBanner(u)),
           Expanded(
             child: switch (_section) {
+              _Section.guide => GuideView(
+                  key: const ValueKey('guide'), session: s, query: _query, onPlay: _openPlayer),
               _Section.movies => VodBrowser(key: const ValueKey('filmer'), session: s, kind: VodKind.movies, query: _query),
               _Section.series => VodBrowser(key: const ValueKey('serier'), session: s, kind: VodKind.series, query: _query),
               _Section.tv => wide
@@ -229,6 +244,7 @@ class _HomePageState extends State<HomePage> {
               onDestinationSelected: (i) => _setSection(_Section.values[i]),
               destinations: const [
                 NavigationDestination(icon: Icon(Icons.live_tv), label: 'TV'),
+                NavigationDestination(icon: Icon(Icons.view_timeline_outlined), label: 'TV-guide'),
                 NavigationDestination(icon: Icon(Icons.movie_outlined), label: 'Filmer'),
                 NavigationDestination(icon: Icon(Icons.video_library_outlined), label: 'Serier'),
               ],

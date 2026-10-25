@@ -59,12 +59,21 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
     seertellingen på serveren.
 - `core/session.dart` – tilstanden (ChangeNotifier): innlogging (lagres i shared_preferences, også
   Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
-  favoritter (lokalt for Xtream, på serveren for Fyrlys-server, i kø), «sist sett», lys/mørk, og «fortsett der du
+  `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene), favoritter (lokalt for Xtream, på
+  serveren for Fyrlys-server, i kø), «sist sett», lys/mørk, og «fortsett der du
   slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
   `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken).
-- `ui/login_page.dart`, `ui/home_page.dart` (TV/Filmer/Serier: SegmentedButton i toppen ≥ 900 px, ellers
+- `ui/login_page.dart`, `ui/home_page.dart` (TV/TV-guide/Filmer/Serier: SegmentedButton i toppen ≥ 900 px (ikoner ≥ 1200), ellers
   NavigationBar nederst; TV har sidemeny ≥ 900 px, ellers nedtrekksliste; søket gjelder fanen du er på),
   `ui/channel_card.dart`.
+- `ui/guide_view.dart` – TV-guiden, som på nettsiden: 6 timer fra halvtimen før denne halvtimen (`guideStart`),
+  5 px/min (4 på smale skjermer), «nå»-strek, «Til nå», kategori (★ Favorittkanaler / Alle / dine kategorier
+  først; huskes i `guide_cat`) og søket i toppen. Kanalnavnene er en egen liste til venstre som rulles sammen med
+  programmene (to ScrollControllere som følger hverandre); programmene ligger i en vannrett rulling, og titler
+  som begynte før det synlige, flyttes inn (ListenableBuilder på den vannrette). Hver rad henter
+  `session.epg(id, limit: 14)` etter 150 ms framme (`epgCached` gir det som alt er hentet uten å vente). Trykk på
+  det som går nå eller på kanalnavnet = spill; senere/tidligere program = info med «Se kanalen». På PC kan
+  guiden dras med musa, og programmene har verktøytips.
 - `ui/vod_browser.dart` (plakater i rutenett, kategori, sortering, sider hentes når du er 30 fra slutten, søk
   med 350 ms pause), `ui/vod_detail_page.dart` (film: spill av / fortsett / fra begynnelsen; serie: sesonger
   og episoder med sett-strek; `Poster`), `ui/vod_player_page.dart` (egen spiller for filer: tidslinje, ±10 s,
@@ -100,7 +109,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
 - Tester i `test/`: navn, Xtream-kilden, Fyrlys-kilden (med MockClient), oppdateringen (`updater_test.dart`),
   widget-tester for TV-siden og spilleren (`player_test.dart`) med falsk kilde og avspiller (`fakes.dart`),
   filmer og serier (`vod_source_test.dart`: kildene og lister; `vod_test.dart`: fanene, detaljsiden, spilleren,
-  fortsett og neste episode).
+  fortsett og neste episode), TV-guiden (`guide_test.dart`).
 
 ## Status
 - 25.10.2026: v0.1 skrevet. Pål-Erik prøvde Windows-versjonen og savnet volumkontroll og spilleren slik den er
@@ -118,5 +127,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   fjernet i bygg 10 (ikke bekreftet ennå).
 - 25.10.2026: Filmer og Serier i appen (ett bygg). Testet med kilde- og widget-tester, ikke med ekte avspilling:
   spoling, fortsett og neste episode i mpv, store lister fra leverandøren og fjernkontroll på Android TV er uprøvd.
-- Ideer senere: tilbakespoling i mpv-bufferet, TV-guide, bilde-i-bilde på Android, «fortsett å se» på forsiden,
+- 25.10.2026: TV-guide i appen (Pål-Erik savnet den). Testet med widget-tester; ikke prøvd med ekte EPG eller
+  fjernkontroll ennå.
+- Ideer senere: tilbakespoling i mpv-bufferet, bilde-i-bilde på Android, «fortsett å se» på forsiden,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.

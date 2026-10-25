@@ -188,8 +188,8 @@ class FyrlysSource implements TvSource {
   }
 
   @override
-  Future<List<EpgEntry>> epg(String channelId) async {
-    final d = await _get('/api/xtream/epg?id=${Uri.encodeQueryComponent(channelId)}&limit=6');
+  Future<List<EpgEntry>> epg(String channelId, {int limit = 6}) async {
+    final d = await _get('/api/xtream/epg?id=${Uri.encodeQueryComponent(channelId)}&limit=$limit');
     final list = d is Map ? d['epg'] : null;
     return [
       for (final e in list is List ? list : const [])

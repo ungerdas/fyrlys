@@ -45,7 +45,7 @@ class FakeSource implements TvSource {
       ];
 
   @override
-  Future<List<EpgEntry>> epg(String channelId) async {
+  Future<List<EpgEntry>> epg(String channelId, {int limit = 6}) async {
     if (channelId != '101') return const [];
     final now = DateTime.now();
     return [

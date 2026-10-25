@@ -44,6 +44,9 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 
 - **TV:** kategorier (☆ legger dem øverst, pilene endrer rekkefølgen), søk, favoritter og «sist sett».
   Kanalkortene viser programmet som går nå.
+- **TV-guide:** kanalene nedover og de neste seks timene bortover, med en rød strek for nå. Velg favorittene,
+  alle kanaler eller en kategori, og søk i toppen. Trykk på det som går nå (eller kanalnavnet) for å se kanalen;
+  trykk på noe som kommer senere for å lese om det. «Til nå» går tilbake til nå. På PC kan guiden dras med musa.
 - **Spilleren** er som på nettsiden: bildet med kontroller, programinfo under og kanallista ved siden av
   (under på smale skjermer), med lista du kom fra, favorittene og søk. Fullskjerm (F, dobbeltklikk eller
   knappen) viser bare bildet, og kanallista kan da legges over det (C). En telefon på tvers viser bare bildet.

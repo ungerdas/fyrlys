@@ -277,8 +277,8 @@ class XtreamSource implements TvSource {
   }
 
   @override
-  Future<List<EpgEntry>> epg(String channelId) async {
-    final d = await _api('get_short_epg', {'stream_id': channelId, 'limit': '8'});
+  Future<List<EpgEntry>> epg(String channelId, {int limit = 6}) async {
+    final d = await _api('get_short_epg', {'stream_id': channelId, 'limit': '${limit < 8 ? 8 : limit}'});
     final listings = d is Map ? d['epg_listings'] : null;
     final now = DateTime.now();
     final out = <EpgEntry>[];

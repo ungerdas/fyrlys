@@ -48,7 +48,8 @@ abstract class TvSource {
   Future<List<Channel>> channels({bool force = false});
 
   /// programmene som går nå og senere
-  Future<List<EpgEntry>> epg(String channelId);
+  /// programmene som går nå og senere; [limit] er hvor mange (TV-guiden vil ha flere enn kortene)
+  Future<List<EpgEntry>> epg(String channelId, {int limit = 6});
 
   String? logoUrl(String? icon);
 

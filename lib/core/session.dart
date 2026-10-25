@@ -42,7 +42,7 @@ class Session extends ChangeNotifier {
 
   Map<String, Channel> _byId = const {};
   final Map<String, List<Channel>> _filtered = {};
-  final Map<String, ({DateTime at, Future<List<EpgEntry>> list})> _epg = {};
+  final Map<String, _EpgHit> _epg = {};
   int _epgBusy = 0;
   final Queue<Completer<void>> _epgWaiting = Queue();
   Future<void> _favQueue = Future.value();
@@ -194,16 +194,28 @@ class Session extends ChangeNotifier {
   // ── programinfo ──
 
   /// Programmene for en kanal. Mellomlagres i fem minutter, og høyst fire forespørsler går om gangen.
-  Future<List<EpgEntry>> epg(String channelId) {
-    final hit = _epg[channelId];
-    if (hit != null && DateTime.now().difference(hit.at) < const Duration(minutes: 5)) return hit.list;
+  /// En lengre liste (TV-guiden) brukes også av kortene, men ikke omvendt.
+  Future<List<EpgEntry>> epg(String channelId, {int limit = 6}) {
+    final hit = _freshEpg(channelId, limit);
+    if (hit != null) return hit.list;
     final src = source;
     if (src == null) return Future.value(const <EpgEntry>[]);
-    final future = _limited(() => src.epg(channelId)).catchError((Object _) => const <EpgEntry>[]);
+    final future = _limited(() => src.epg(channelId, limit: limit)).catchError((Object _) => const <EpgEntry>[]);
+    final entry = _EpgHit(limit, future);
+    unawaited(future.then((list) => entry.value = list));
     _epg.remove(channelId);
-    _epg[channelId] = (at: DateTime.now(), list: future);
+    _epg[channelId] = entry;
     if (_epg.length > 600) _epg.remove(_epg.keys.first);
     return future;
+  }
+
+  /// Det som alt er hentet (og er ferskt), uten å vente, så rader som rulles inn igjen ikke blinker.
+  List<EpgEntry>? epgCached(String channelId, {int limit = 6}) => _freshEpg(channelId, limit)?.value;
+
+  _EpgHit? _freshEpg(String channelId, int limit) {
+    final hit = _epg[channelId];
+    if (hit == null || hit.limit < limit || DateTime.now().difference(hit.at) >= const Duration(minutes: 5)) return null;
+    return hit;
   }
 
   Future<T> _limited<T>(Future<T> Function() task) async {
@@ -345,6 +357,11 @@ class Session extends ChangeNotifier {
   // ── lyd ──
 
   /// Volumet i spilleren (0–100), som sist.
+  /// kanalene TV-guiden viste sist: 'fav', 'all' eller en kategori-id (null: aldri valgt)
+  String? get guideCategory => _prefs.getString('guide_cat');
+
+  void saveGuideCategory(String filter) => unawaited(_prefs.setString('guide_cat', filter));
+
   double get volume => (_prefs.getDouble('volume') ?? 100).clamp(0, 100).toDouble();
 
   bool get muted => _prefs.getBool('muted') ?? false;
@@ -419,4 +436,14 @@ class Session extends ChangeNotifier {
     unawaited(_messages.close());
     super.dispose();
   }
+}
+
+/// Programmene for én kanal i mellomlageret: når de ble hentet, hvor mange som ble bedt om, og svaret når det er kommet.
+class _EpgHit {
+  _EpgHit(this.limit, this.list);
+
+  final DateTime at = DateTime.now();
+  final int limit;
+  final Future<List<EpgEntry>> list;
+  List<EpgEntry>? value;
 }
