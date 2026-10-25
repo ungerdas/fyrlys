@@ -105,6 +105,12 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// det vinduet og systemlinjene sist ble satt til
   bool? _shownFull;
 
+  /// vinduet var maksimert før fullskjerm (PC), og maksimeres igjen etterpå
+  bool _wasMaximized = false;
+
+  /// vinduet endres ett steg om gangen, også om F trykkes raskt flere ganger
+  Future<void> _windowQueue = Future.value();
+
   /// kanallista over bildet i fullskjerm
   bool _sideOpen = false;
   bool _controls = true;
@@ -436,12 +442,28 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _windowFull(bool on) async {
-    try {
-      await windowManager.setFullScreen(on);
-    } on Object {
-      // ikke tilgjengelig her (f.eks. i testene)
+  Future<void> _windowFull(bool on) {
+    Future<void> step() async {
+      try {
+        if (on) {
+          // window_manager (0.5.x) gjør et maksimert vindu bare like stort som skjermen, med tittellinja igjen og
+          // bunnen bak oppgavelinja. Vanlig størrelse først, så fullskjerm, og maksimert igjen etterpå.
+          _wasMaximized = await windowManager.isMaximized();
+          if (_wasMaximized) await windowManager.unmaximize();
+          await windowManager.setFullScreen(true);
+        } else {
+          await windowManager.setFullScreen(false);
+          if (_wasMaximized) {
+            _wasMaximized = false;
+            await windowManager.maximize();
+          }
+        }
+      } on Object {
+        // ikke tilgjengelig her (f.eks. i testene)
+      }
     }
+
+    return _windowQueue = _windowQueue.then((_) => step());
   }
 
   /// Kanallista: over bildet i fullskjerm, ellers flyttes fokus dit (den står alltid ved siden av).
