@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'core/fyrlys_source.dart';
 import 'core/session.dart';
 import 'core/updater.dart';
 import 'platform.dart';
@@ -20,7 +21,11 @@ Future<void> main() async {
   MediaKit.ensureInitialized();
   if (isDesktop) await windowManager.ensureInitialized();
   final session = Session(await SharedPreferences.getInstance());
+  // Repoet er privat: byggene hentes via Fyrlys-serveren, som har en lesenøkkel til GitHub.
+  updater.serverBase = () {
+    final source = session.source;
+    return source is FyrlysSource ? source.base : null;
+  };
   runApp(FyrlysApp(session: session, updater: updater));
-  unawaited(session.restore());
-  updater.start();
+  unawaited(session.restore().then((_) => updater.start()));
 }

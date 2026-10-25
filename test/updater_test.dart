@@ -107,6 +107,56 @@ void main() {
       await expectLater(u.check(manual: true), throwsA(isA<UpdateException>()));
     });
 
+    test('via Fyrlys-serveren: spør serveren, og laster ned derfra', () async {
+      final urls = <String>[];
+      final client = MockClient((r) async {
+        urls.add(r.url.toString());
+        if (r.url.path == '/api/app/release') {
+          return http.Response(
+            jsonEncode({
+              'name': 'Fyrlys 0.1.0 · bygg 7 (abc1234)',
+              'body': '',
+              'assets': [
+                {
+                  'name': 'Fyrlys-testbygg-windows.zip',
+                  'size': 4,
+                  'browser_download_url': 'download/Fyrlys-testbygg-windows.zip',
+                },
+              ],
+            }),
+            200,
+            headers: _json,
+          );
+        }
+        return http.Response.bytes([1, 2, 3, 4], 200);
+      });
+      final u = updater(5, client)..serverBase = () => 'http://192.168.1.10:8766';
+      final info = await u.check();
+      expect(info?.url, 'http://192.168.1.10:8766/api/app/download/Fyrlys-testbygg-windows.zip');
+      await u.download();
+      expect(u.state, UpdateState.ready);
+      expect(urls, [
+        'http://192.168.1.10:8766/api/app/release',
+        'http://192.168.1.10:8766/api/app/download/Fyrlys-testbygg-windows.zip',
+      ]);
+    });
+
+    test('serveren uten GitHub-nøkkel: forklaringen vises ved manuell sjekk', () async {
+      final client = MockClient(
+        (r) async => http.Response(
+          jsonEncode({'error': 'Serveren har ingen GitHub-nøkkel (data/github.json)'}),
+          503,
+          headers: _json,
+        ),
+      );
+      final u = updater(5, client)..serverBase = () => 'http://192.168.1.10:8766';
+      expect(await u.check(), isNull);
+      await expectLater(
+        u.check(manual: true),
+        throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('GitHub-nøkkel'))),
+      );
+    });
+
     test('egne bygg (uten byggnummer) ser ikke etter oppdateringer', () async {
       final u = updater(null, MockClient((r) async => fail('skal ikke spørre GitHub')));
       expect(u.enabled, isFalse);

@@ -31,8 +31,9 @@ class UpdateInfo {
   final String notes;
 }
 
-/// Leser releasen fra GitHub: byggnummeret står i navnet, og fila for denne plattformen blant vedleggene.
-UpdateInfo? parseRelease(Object? json, String suffix) {
+/// Leser releasen (fra GitHub eller Fyrlys-serveren, samme form): byggnummeret står i navnet, og fila for denne
+/// plattformen blant vedleggene. Relative adresser (serveren svarer «download/<fil>») løses mot [base].
+UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
   if (json is! Map) return null;
   final title = '${json['name'] ?? ''}';
   final build = int.tryParse(RegExp(r'bygg (\d+)').firstMatch(title)?.group(1) ?? '');
@@ -47,7 +48,7 @@ UpdateInfo? parseRelease(Object? json, String suffix) {
       return UpdateInfo(
         build: build,
         title: title,
-        url: url,
+        url: base == null ? url : base.resolve(url).toString(),
         size: size is int ? size : 0,
         notes: '${json['body'] ?? ''}'.trim(),
       );
@@ -58,7 +59,9 @@ UpdateInfo? parseRelease(Object? json, String suffix) {
 
 enum UpdateState { idle, checking, available, downloading, ready, failed }
 
-/// Oppdaterer appen fra testbyggene på GitHub (releasen «testbygg», som CI lager ved hver endring på main).
+/// Oppdaterer appen fra testbyggene (releasen «testbygg», som CI lager ved hver endring på main). Repoet er
+/// privat, så byggene hentes via Fyrlys-serveren når appen er logget inn der (serveren har en lesenøkkel til
+/// GitHub); ellers spørres GitHub direkte, som bare virker om repoet er offentlig.
 /// Ser etter nye bygg ved oppstart og hver 6. time, laster ned i bakgrunnen og legger inn når appen lukkes
 /// (eller med «Start på nytt nå»). Ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
 /// starter. Bare på Windows, og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
@@ -99,6 +102,12 @@ class Updater extends ChangeNotifier {
 
   /// en kort beskjed i banneret, f.eks. at appen nettopp ble oppdatert
   String? notice;
+
+  /// adressen til Fyrlys-serveren appen er logget inn på (null: spør GitHub direkte)
+  String? Function()? serverBase;
+
+  /// hvem vi spør, til feilmeldingene
+  String _via = 'GitHub';
   Timer? _first;
   Timer? _timer;
 
@@ -118,10 +127,10 @@ class Updater extends ChangeNotifier {
     notifyListeners();
   }
 
-  static String _describe(Object e) => switch (e) {
+  String _describe(Object e) => switch (e) {
         UpdateException(:final message) => message,
-        TimeoutException() => 'GitHub svarte ikke',
-        SocketException() => 'fikk ikke kontakt med GitHub',
+        TimeoutException() => '$_via svarte ikke',
+        SocketException() => 'fikk ikke kontakt med $_via',
         FileSystemException(:final message, :final path) => path == null ? message : '$message ($path)',
         _ => '$e',
       };
@@ -135,15 +144,20 @@ class Updater extends ChangeNotifier {
     _timer = Timer.periodic(const Duration(hours: 6), (_) => unawaited(check()));
   }
 
-  /// Spør GitHub etter siste testbygg. Er det nyere, lastes det ned med en gang (Windows).
-  /// Med [manual] kastes en [UpdateException] når GitHub ikke svarer; ellers prøves det bare igjen senere.
+  /// Spør Fyrlys-serveren (eller GitHub) etter siste testbygg. Er det nyere, lastes det ned med en gang (Windows).
+  /// Med [manual] kastes en [UpdateException] med forklaringen når det ikke går; ellers prøves det igjen senere.
   Future<UpdateInfo?> check({bool manual = false}) async {
     if (!enabled || state == UpdateState.checking || state == UpdateState.downloading) return available;
     final before = state;
     _set(UpdateState.checking);
+    final server = serverBase?.call();
+    _via = server != null ? 'Fyrlys-serveren' : 'GitHub';
+    final url = Uri.parse(
+      server != null ? '$server/api/app/release' : 'https://api.github.com/repos/$repo/releases/tags/testbygg',
+    );
     try {
       final r = await _client.get(
-        Uri.parse('https://api.github.com/repos/$repo/releases/tags/testbygg'),
+        url,
         headers: const {'Accept': 'application/vnd.github+json', 'User-Agent': 'Fyrlys'},
       ).timeout(const Duration(seconds: 20));
       if (r.statusCode == 404) {
@@ -151,8 +165,8 @@ class Updater extends ChangeNotifier {
         _set(UpdateState.idle);
         return null;
       }
-      if (r.statusCode != 200) throw UpdateException('GitHub svarte ${r.statusCode}');
-      final info = parseRelease(jsonDecode(r.body), assetSuffix!);
+      if (r.statusCode != 200) throw UpdateException(_serverError(r) ?? '$_via svarte ${r.statusCode}');
+      final info = parseRelease(jsonDecode(r.body), assetSuffix!, base: url);
       if (info == null || info.build <= currentBuild!) {
         available = null;
         error = null;
@@ -173,6 +187,17 @@ class Updater extends ChangeNotifier {
       if (manual) throw UpdateException(_describe(e));
       return null;
     }
+  }
+
+  /// Fyrlys-serveren forklarer feil som {"error": …}, f.eks. at den mangler GitHub-nøkkelen.
+  static String? _serverError(http.Response r) {
+    try {
+      final j = jsonDecode(r.body);
+      if (j is Map && j['error'] is String) return j['error'] as String;
+    } on FormatException {
+      // ikke JSON
+    }
+    return null;
   }
 
   Future<bool> _isDownloaded(UpdateInfo info) async {

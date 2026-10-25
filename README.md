@@ -25,6 +25,10 @@ laster dem ned i bakgrunnen og legger dem inn når du lukker appen, eller straks
 den ikke lukket som vanlig, legges oppdateringen inn neste gang den starter. Menyen har også «Se etter
 oppdateringer».
 
+Er appen logget inn på en Fyrlys-server, hentes byggene derfra. Serveren trenger da en lesenøkkel til GitHub
+(se README-en til Docker-versjonen). Uten Fyrlys-server spør appen GitHub direkte, som bare virker når repoet
+er offentlig.
+
 Fyrlys må ligge i en mappe du kan skrive til, f.eks. under Dokumenter (ikke Programfiler). Egne bygg (uten
 byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 

@@ -3,8 +3,9 @@
 Egen app for Fyrlys, Pål-Eriks IPTV-spiller: Flutter med media_kit (mpv) som avspiller, for Windows,
 Android og Android TV (senere macOS, Linux og iOS). Den kommer **i tillegg til** Docker-versjonen
 (nettside + server med ffmpeg) i det private repoet `ungerdas/peagstreams`, som kjører på hjemmeserveren hans.
-Ikke bland inn endringer der herfra. **Dette repoet er offentlig** (fra 25.10.2026): ingen detaljer om
-hjemmenettet hans her, verken i koden, testene eller disse notatene (eksempeladresser som 192.168.1.10 er greit).
+Ikke bland inn endringer der herfra. Repoet er **privat** (Pål-Erik valgte 25.10 å beholde det slik), men hold
+det fritt for detaljer om hjemmenettet hans, verken i koden, testene eller disse notatene, i tilfelle det blir
+offentlig (eksempeladresser som 192.168.1.10 er greit).
 
 ## Arbeidsmåte
 - Svar alltid på **norsk**. Commit-meldinger på norsk med prefikset `Fyrlys:`. Push rett til `main`.
@@ -28,7 +29,9 @@ hjemmenettet hans her, verken i koden, testene eller disse notatene (eksempeladr
   `unnecessary_import` er en advarsel og stopper bygget; sjekk hva `material.dart` eksporterer.
 - **Ikke lag ny versjon for hver rettelse** (Pål-Erik 25.10): push til `main`. Hver push oppdaterer releasen
   `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, navnet «Fyrlys X · bygg N (sha)»
-  settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra. Versjon, byggnummer
+  settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra via Fyrlys-serveren.
+  Privat repo: 2000 gratis Actions-minutter i måneden på gratiskontoen, og hver push bruker rundt 25 (Windows
+  teller dobbelt). Bruk `[skip ci]` når en endring bare gjelder notater. Versjon, byggnummer
   og commit står nederst i menyen (`--dart-define` FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`).
   Ny versjon når det virker.
 - Release: oppdater `version` i pubspec.yaml, push, og start
@@ -60,9 +63,12 @@ hjemmenettet hans her, verken i koden, testene eller disse notatene (eksempeladr
   og hvor strømmen kommer fra. Nye forsøk ved brudd/fast bilde, tre per minutt. Telefon/TV: kanalen stoppes når
   appen legges bort (`paused`) og startes igjen ved `resumed`.
 - `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene.
-- `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer):
-  `GET api.github.com/repos/<repo>/releases/tags/testbygg` ved oppstart (+8 s) og hver 6. time, byggnummeret
-  fra navnet, `-windows.zip` lastes ned til `%LOCALAPPDATA%\Fyrlys\oppdatering\bygg-N` (størrelsen sjekkes),
+- `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer). Repoet er
+  privat, så når appen er logget inn på en Fyrlys-server spør den `<server>/api/app/release` (serveren har en
+  lesenøkkel i `data/github.json` og svarer i GitHubs form, med relative adresser `download/<fil>` som løses
+  mot release-adressen); ellers `api.github.com/repos/<repo>/releases/tags/testbygg` (virker bare om repoet er
+  offentlig). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
+  `-windows.zip` lastes ned til `%LOCALAPPDATA%\Fyrlys\oppdatering\bygg-N` (størrelsen sjekkes),
   så `klar.json`. Legges inn når appen lukkes (`didRequestAppExit` i `app.dart`), med «Start på nytt nå», eller
   før appen vises neste gang (`beforeStart` i `main.dart`). Et PowerShell-skript (bare ASCII) venter på prosessen,
   pakker ut og kopierer med robocopy, skriver `resultat.txt` (vises i banneret) og `oppdatering.log`.
@@ -78,8 +84,8 @@ hjemmenettet hans her, verken i koden, testene eller disse notatene (eksempeladr
 - 25.10.2026: v0.1 skrevet. Pål-Erik prøvde Windows-versjonen og savnet volumkontroll og spilleren slik den er
   på nettsiden før fullskjerm. Laget samme dag (spilleren som på nettsiden, volum, byggnummer i menyen), testet med
   widget-tester. Ikke prøvd på ekte enheter ennå; Android TV-navigasjon er helt uprøvd.
-- 25.10.2026: repoet gjort offentlig (Pål-Eriks valg) for automatisk oppdatering fra releasen `testbygg`.
-  Gamle commits nevner fortsatt LAN-IP-en til serveren (privat adresse); historikken er ikke skrevet om.
-  Oppdateringen er testet med tester, ikke på Windows ennå: første bygg med den må lastes ned for hånd.
+- 25.10.2026: automatisk oppdatering fra releasen `testbygg`. Pål-Erik ville beholde repoet privat, så den går via
+  Fyrlys-serveren (`app/appupdate.py` i peagstreams, nøkkelen i `data/github.json` på serveren). Serverdelen er
+  prøvd mot ekte GitHub, appdelen bare med tester. Første bygg med den må lastes ned for hånd.
 - Ideer senere: tilbakespoling i mpv-bufferet, TV-guide, bilde-i-bilde på Android, filmer/serier,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.
