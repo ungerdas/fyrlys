@@ -1,0 +1,102 @@
+# Analyse og tester ved hver endring, og bygg for Windows og Android.
+# Plattformmappene lages av «flutter create» her; i repoet ligger bare det vi har tilpasset
+# (AndroidManifest, ikoner, TV-banner og Windows-ikonet), og det skrives ikke over.
+# En tag som v0.1.0 lager en release med Windows-zip og Android-APK-er som alle kan laste ned.
+name: Bygg
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Analyse og tester
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+  windows:
+    name: Windows
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Lag resten av Windows-oppsettet
+        run: |
+          flutter create --org no.peag --project-name fyrlys --platforms=windows .
+          sed -i 's/L"fyrlys"/L"Fyrlys"/' windows/runner/main.cpp
+          sed -i 's/VALUE "FileDescription", "fyrlys"/VALUE "FileDescription", "Fyrlys"/; s/VALUE "ProductName", "fyrlys"/VALUE "ProductName", "Fyrlys"/; s/VALUE "CompanyName", "no.peag"/VALUE "CompanyName", "Fyrlys"/' windows/runner/Runner.rc
+          grep -n 'L"Fyrlys"' windows/runner/main.cpp
+      - run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fyrlys-windows
+          path: build/windows/x64/runner/Release/
+
+  android:
+    name: Android
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Lag resten av Android-oppsettet
+        run: flutter create --org no.peag --project-name fyrlys --platforms=android .
+      - run: flutter build apk --release --split-per-abi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fyrlys-android
+          path: build/app/outputs/flutter-apk/*-release.apk
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Pakk filene
+        run: |
+          cd dist
+          (cd Fyrlys-windows && zip -qr "../Fyrlys-${GITHUB_REF_NAME}-windows.zip" .)
+          for f in Fyrlys-android/*.apk; do
+            abi=$(basename "$f" | sed 's/^app-//; s/-release\.apk$//')
+            cp "$f" "Fyrlys-${GITHUB_REF_NAME}-android-${abi}.apk"
+          done
+          ls -la
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Fyrlys-*-windows.zip
+            dist/Fyrlys-*-android-*.apk
+          generate_release_notes: true

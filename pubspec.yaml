@@ -1,0 +1,29 @@
+name: fyrlys
+description: "Fyrlys – TV fra IPTV-abonnementet ditt, med mpv som avspiller."
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
+  # mpv som avspiller: spiller H.265, AC3, DTS, MKV, lydspor og undertekster, med maskinvaredekoding
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
+  # fullskjerm på PC
+  window_manager: ^0.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fyrlys.png
