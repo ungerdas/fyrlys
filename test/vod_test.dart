@@ -49,6 +49,7 @@ void main() {
     expect(find.text('Alle kategorier (3)'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'nord');
+    await tester.pump(); // søket når lista, og pausen på 350 ms begynner
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     expect(find.text('Nordlys'), findsOneWidget);
@@ -56,6 +57,7 @@ void main() {
     expect(source.pageRequests.last, 'vod::nord::0');
 
     await tester.enterText(find.byType(TextField), '');
+    await tester.pump(); // søket når lista, og pausen på 350 ms begynner
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Fyrlyset'));
