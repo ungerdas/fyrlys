@@ -8,10 +8,18 @@ import 'package:fyrlys/ui/playback.dart';
 
 /// En kilde uten nett, med tre kanaler i to kategorier. NRK 1 har program nå og etterpå.
 class FakeSource implements TvSource {
-  FakeSource({this.busy = const {}});
+  FakeSource({this.busy = const {}, this.timeshift = Duration.zero, this.window});
 
   /// kanaler der alle tilkoblingene er i bruk, til man tar over
   final Set<String> busy;
+
+  /// tilbakespoling i direktesendingen (som Fyrlys-serveren), og spillelista liveWindow gir
+  final Duration timeshift;
+  LiveWindow? window;
+  final windowRequests = <String>[];
+
+  /// som når noen andre tar over tilkoblingen mens du har pauset
+  bool takenOver = false;
   final opened = <String>[];
   final closed = <String>[];
 
@@ -72,7 +80,14 @@ class FakeSource implements TvSource {
       throw const BusyException('Alle tilkoblingene er i bruk.', ['NRK 1 HD']);
     }
     opened.add(channel.id);
-    return PlayTarget(['http://example/${channel.id}.ts']);
+    return PlayTarget(['http://example/${channel.id}.ts'], timeshift: timeshift);
+  }
+
+  @override
+  Future<LiveWindow?> liveWindow(String url) async {
+    windowRequests.add(url);
+    if (takenOver) throw const BusyException('Alle tilkoblingene er i bruk.', ['Stua']);
+    return window;
   }
 
   @override
@@ -167,6 +182,9 @@ class FakePlayback implements Playback {
   final starts = <Duration?>[];
   final seeks = <Duration>[];
 
+  /// hvor langt fra slutten hver direktesending ble åpnet (null: som vanlig)
+  final liveFromEnds = <int?>[];
+
   /// lengden filene får (null: direktesending)
   Duration? length;
   double volume = 100;
@@ -207,9 +225,10 @@ class FakePlayback implements Playback {
   Future<void> setup() async {}
 
   @override
-  Future<void> open(String url, Map<String, String> headers, {Duration? start}) async {
+  Future<void> open(String url, Map<String, String> headers, {Duration? start, int? liveFromEnd}) async {
     urls.add(url);
     starts.add(start);
+    liveFromEnds.add(liveFromEnd);
     final l = length;
     if (l != null) _duration.add(l);
     playing = true;

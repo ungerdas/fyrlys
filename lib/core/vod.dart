@@ -145,6 +145,83 @@ class SeriesInfo {
   final List<Season> seasons;
 }
 
+/// En film eller serie i «Fortsett å se»: nok til å spille den igjen uten å lete. For en serie er det episoden
+/// du er på (eller den neste, når du så en ferdig).
+class ContinueItem {
+  const ContinueItem({
+    required this.key,
+    required this.kind,
+    required this.id,
+    required this.title,
+    this.icon,
+    this.subtitle = '',
+    this.ext = 'mp4',
+    this.episodeId,
+    this.season,
+    this.at = 0,
+  });
+
+  factory ContinueItem.fromJson(Map<Object?, Object?> j) => ContinueItem(
+        key: '${j['key']}',
+        kind: j['kind'] == VodKind.series.api ? VodKind.series : VodKind.movies,
+        id: '${j['id']}',
+        title: '${j['title'] ?? ''}',
+        icon: j['icon'] is String ? j['icon'] as String : null,
+        subtitle: '${j['sub'] ?? ''}',
+        ext: j['ext'] is String ? j['ext'] as String : 'mp4',
+        episodeId: j['ep'] is String ? j['ep'] as String : null,
+        season: j['season'] is String ? j['season'] as String : null,
+        at: j['at'] is int ? j['at'] as int : 0,
+      );
+
+  /// «film:<id>» (samme som for «fortsett der du slapp») eller «serie:<id>»
+  final String key;
+  final VodKind kind;
+
+  /// filmen eller serien
+  final String id;
+  final String title;
+  final String? icon;
+
+  /// for en serie: «S01E02 Tittel»
+  final String subtitle;
+  final String ext;
+  final String? episodeId;
+  final String? season;
+
+  /// sist sett (sekunder)
+  final int at;
+
+  /// nøkkelen for hvor du slapp i det som skal spilles
+  String get resumeKey => episodeId == null ? key : 'episode:$episodeId';
+
+  ContinueItem seenNow(int seconds) => ContinueItem(
+        key: key,
+        kind: kind,
+        id: id,
+        title: title,
+        icon: icon,
+        subtitle: subtitle,
+        ext: ext,
+        episodeId: episodeId,
+        season: season,
+        at: seconds,
+      );
+
+  Map<String, Object?> toJson() => {
+        'key': key,
+        'kind': kind.api,
+        'id': id,
+        'title': title,
+        'icon': icon,
+        'sub': subtitle,
+        'ext': ext,
+        'ep': episodeId,
+        'season': season,
+        'at': at,
+      };
+}
+
 /// «S01E02», som på nettsiden; tomt når noe mangler.
 String episodeCode(String season, int? episode) {
   final s = int.tryParse(season);

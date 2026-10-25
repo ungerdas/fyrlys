@@ -76,7 +76,10 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   det som går nå eller på kanalnavnet = spill; senere/tidligere program = info med «Se kanalen». På PC kan
   guiden dras med musa, og programmene har verktøytips.
 - `ui/vod_browser.dart` (plakater i rutenett, kategori, sortering, sider hentes når du er 30 fra slutten, søk
-  med 350 ms pause), `ui/vod_detail_page.dart` (film: spill av / fortsett / fra begynnelsen; serie: sesonger
+  med 350 ms pause; «Fortsett å se» øverst når det ikke er søk/kategori: `Session.continueItems` (`continue` i
+  shared_preferences, `ContinueItem` i `vod.dart`, maks 50), oppdatert av filmspilleren via `VodPlayItem.continueAs`:
+  filmer til de er sett (> 95 %), serier med episoden du er på, eller den neste når en er sett ferdig;
+  `playContinue` spiller rett, serier via `seriesInfo`), `ui/vod_detail_page.dart` (film: spill av / fortsett / fra begynnelsen; serie: sesonger
   og episoder med sett-strek; `Poster`), `ui/vod_player_page.dart` (egen spiller for filer: tidslinje, ±10 s,
   neste/forrige episode, volum, spor, fullskjerm; lagrer hvor du er hvert 10. s og når du går ut, starter med
   `Media(start:)`, går til neste episode 1,5 s etter slutten).
@@ -90,6 +93,13 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   (OK = fullskjerm/kanalliste, → inn i lista, ← ut). Infoen viser oppløsning, kodek/hwdec/lyd (mpv-egenskaper)
   og hvor strømmen kommer fra. Nye forsøk ved brudd/fast bilde, tre per minutt. Telefon/TV: kanalen stoppes når
   appen legges bort (`paused`) og startes igjen ved `resumed`.
+  Pause og tilbakespoling (bare via Fyrlys-serveren med ffmpeg: `PlayTarget.timeshift` fra `timeshift_min` i
+  `/api/streams/info`): ffmpegs HLS-demuxer kan ikke spole i en direktesending, så spillelista åpnes på nytt med
+  `live_start_index=-N` (`change-list demuxer-lavf-o append`, så media_kits egne valg står). N regnes ut fra
+  `#EXTINF` i spillelista (`TvSource.liveWindow`, `LiveWindow.at`; 3 fra slutten er «direkte»). Hvor langt bak du
+  er = der du begynte + pausene (`package:clock`, så testene kan spole tida). Spillelista hentes hvert 15. s (10 s på
+  pause, så serveren ikke stopper kanalen); 409 da = tatt over. Pause over 45 s åpnes på nytt der du var. Tidslinje,
+  −10/+10 (samles i 450 ms), «DIREKTE» (trykk = direkte), ←, → (på PC og i fullskjerm; ellers inn i lista), L/End.
 - `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene (`playbackFactory`
   byttes ut i testene for sider som lager avspilleren selv). Fullskjerm for begge spillerne:
   `WindowFullscreen` i `ui/window_effects.dart`.
@@ -108,7 +118,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   installasjon av APK).
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
 - Tester i `test/`: navn, Xtream-kilden, Fyrlys-kilden (med MockClient), oppdateringen (`updater_test.dart`),
-  widget-tester for TV-siden og spilleren (`player_test.dart`) med falsk kilde og avspiller (`fakes.dart`),
+  widget-tester for TV-siden og spilleren (`player_test.dart`, tilbakespoling i `timeshift_test.dart`) med falsk
+  kilde og avspiller (`fakes.dart`),
   filmer og serier (`vod_source_test.dart`: kildene og lister; `vod_test.dart`: fanene, detaljsiden, spilleren,
   fortsett og neste episode), TV-guiden (`guide_test.dart`).
 
@@ -130,5 +141,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   spoling, fortsett og neste episode i mpv, store lister fra leverandøren og fjernkontroll på Android TV er uprøvd.
 - 25.10.2026: TV-guide i appen (Pål-Erik savnet den). Testet med widget-tester; ikke prøvd med ekte EPG eller
   fjernkontroll ennå.
-- Ideer senere: tilbakespoling i mpv-bufferet, bilde-i-bilde på Android, «fortsett å se» på forsiden,
+- 25.10.2026: pause/tilbakespoling i direktesending og «Fortsett å se» (Pål-Eriks valg). Bare testet med tester;
+  om `live_start_index` virker i mpv-en til media_kit, er ikke prøvd.
+- Ideer senere: tilbakespoling rett mot leverandøren (mpv-bufferet), bilde-i-bilde på Android,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.

@@ -32,6 +32,15 @@ NameParts nameParts(String name) {
   );
 }
 
+/// «1:02:03» eller «12:34»
+String formatDuration(Duration d) {
+  final s = d.inSeconds < 0 ? 0 : d.inSeconds;
+  final h = s ~/ 3600;
+  final m = (s ~/ 60) % 60;
+  final sec = (s % 60).toString().padLeft(2, '0');
+  return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$sec' : '$m:$sec';
+}
+
 /// «20:30»
 String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 

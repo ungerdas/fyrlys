@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,7 +26,8 @@ const _sideBg = Color(0xF20B111A);
 /// Spilleren, som på nettsiden: bildet med kontroller og programinfo under, og kanallista ved siden av
 /// (under på smale skjermer). Fullskjerm viser bare bildet, og kanallista kan da legges over det (C).
 /// mpv (via media_kit) spiller strømmen direkte. Brytes den, eller står bildet fast, prøver spilleren på nytt
-/// inntil tre ganger i minuttet.
+/// inntil tre ganger i minuttet. Via Fyrlys-serveren kan du pause og spole tilbake (serveren tar vare på de siste
+/// 30 minuttene): spillelista åpnes da på nytt så mange segmenter fra slutten som trengs.
 class PlayerPage extends StatelessWidget {
   const PlayerPage({
     super.key,
@@ -123,6 +125,27 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   Duration _lastPos = Duration.zero;
   DateTime _lastMove = DateTime.now();
 
+  // ── pause og tilbakespoling i direktesendingen (Fyrlys-serveren) ──
+
+  /// hvor langt bak direkte avspillingen begynte sist den ble åpnet
+  Duration _behind0 = Duration.zero;
+
+  /// pausene siden da (hver pause legger seg på hvor langt bak du er)
+  Duration _pausedTotal = Duration.zero;
+  DateTime? _pausedAt;
+
+  /// hvor langt tilbake det går an å spole akkurat nå (fra spillelista), og når den sist ble hentet
+  Duration _window = Duration.zero;
+  DateTime _windowAt = DateTime(2000);
+  bool _windowBusy = false;
+
+  /// der ←/→ og knappene skal, mens tastetrykkene samles (så tre trykk blir 30 sekunder)
+  Duration? _shiftTarget;
+  Timer? _shiftTimer;
+
+  /// tidslinja mens den dras: sekunder bak direkte
+  double? _shiftDrag;
+
   Channel get _channel => _list[_index];
   Session get _session => widget.page.session;
   TvSource? get _source => _session.source;
@@ -166,6 +189,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _epgTimer?.cancel();
     _probeTimer?.cancel();
     _watchdog?.cancel();
+    _shiftTimer?.cancel();
     final ch = _opened;
     final src = _source;
     if (ch != null && src != null) unawaited(src.close(ch));
@@ -237,6 +261,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     });
     _lastPos = Duration.zero;
     _lastMove = DateTime.now();
+    _resetShift();
     try {
       final t = await src.open(ch, takeOver: takeOver);
       if (my != _seq || !mounted) return;
@@ -307,9 +332,16 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     });
   }
 
-  /// Vakt: står bildet fast uten at mpv sier fra, prøves det på nytt.
+  /// Vakt: står bildet fast uten at mpv sier fra, prøves det på nytt. Henter også spillelista for tilbakespolingen
+  /// (og mens du har pauset, så serveren ser at du fortsatt er der).
   void _check() {
     if (!mounted || _suspended || _status != null || _busy != null || _target == null) return;
+    if (_canShift && (_started || _userPaused)) {
+      final age = clock.now().difference(_windowAt);
+      if (age > (_userPaused ? const Duration(seconds: 10) : const Duration(seconds: 15))) unawaited(_refreshWindow());
+      // på pause: hvor langt bak du er, telles opp
+      if (_userPaused) _set(() {});
+    }
     final now = DateTime.now();
     final pos = _pb.position;
     if (pos != _lastPos || _userPaused) {
@@ -366,9 +398,159 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   }
 
   void _togglePlay() {
-    _userPaused = _playing;
-    unawaited(_pb.playOrPause());
+    if (_playing) {
+      _userPaused = true;
+      _pausedAt = clock.now();
+      unawaited(_pb.playOrPause());
+    } else {
+      final pausedAt = _pausedAt;
+      final behind = _behind;
+      _userPaused = false;
+      _pausedAt = null;
+      if (pausedAt != null) _pausedTotal += clock.now().difference(pausedAt);
+      // Lang pause: åpne spillelista på nytt der du var, så avspilleren ikke må stole på det den hadde i minnet.
+      if (_canShift && pausedAt != null && clock.now().difference(pausedAt) >= const Duration(seconds: 45)) {
+        unawaited(_shiftTo(behind));
+      } else {
+        unawaited(_pb.playOrPause());
+      }
+    }
     _wake();
+  }
+
+  // ── pause og tilbakespoling ──
+
+  /// Strømmen går via Fyrlys-serveren, som tar vare på det siste: da går det an å spole.
+  bool get _canShift {
+    final t = _target;
+    return t != null && t.timeshift > Duration.zero && _url == 0 && _busy == null && _status == null;
+  }
+
+  /// Hvor langt bak direkte du er: der du begynte, pluss pausene.
+  Duration get _behind {
+    final t = _target;
+    if (t == null || !_canShift) return Duration.zero;
+    final paused = _pausedAt;
+    var b = _behind0 + _pausedTotal + (paused == null ? Duration.zero : clock.now().difference(paused));
+    if (b > t.timeshift) b = t.timeshift;
+    return b;
+  }
+
+  /// Direkte: under åtte sekunder bak og ikke pauset.
+  bool get _atLive => !_canShift || (_behind < const Duration(seconds: 8) && !_userPaused);
+
+  void _resetShift() {
+    _behind0 = Duration.zero;
+    _pausedTotal = Duration.zero;
+    _pausedAt = null;
+    _window = Duration.zero;
+    _windowAt = DateTime(2000);
+    _shiftTarget = null;
+    _shiftTimer?.cancel();
+    _shiftDrag = null;
+  }
+
+  Future<void> _refreshWindow() async {
+    final src = _source;
+    final t = _target;
+    if (src == null || t == null || _windowBusy) return;
+    _windowBusy = true;
+    _windowAt = clock.now();
+    final my = _seq;
+    try {
+      final w = await src.liveWindow(t.urls[_url]);
+      if (!mounted || my != _seq || w == null) return;
+      _set(() => _window = w.length);
+    } on BusyException catch (e) {
+      // noen andre har tatt over tilkoblingen mens du hadde pauset
+      if (!mounted || my != _seq) return;
+      await _pb.stop();
+      _set(() {
+        _busy = e;
+        _buffering = false;
+      });
+    } on SourceException {
+      // prøver igjen om litt
+    } finally {
+      _windowBusy = false;
+    }
+  }
+
+  /// ←/→ og knappene: flytt [seconds] (negativt er tilbake). Trykk som kommer tett, samles før spillelista åpnes.
+  void _nudgeShift(int seconds) {
+    if (!_canShift) return;
+    final t = _target!;
+    var to = (_shiftTarget ?? _behind) - Duration(seconds: seconds);
+    if (to < Duration.zero) to = Duration.zero;
+    final max = _window > Duration.zero ? _window : t.timeshift;
+    if (to > max) to = max;
+    _shiftTarget = to;
+    _showFlash(to < const Duration(seconds: 3) ? 'Direkte' : '−${formatDuration(to)}');
+    _shiftTimer?.cancel();
+    _shiftTimer = Timer(const Duration(milliseconds: 450), () {
+      final target = _shiftTarget;
+      if (mounted && target != null) unawaited(_shiftTo(target));
+    });
+    _wake();
+  }
+
+  void _goLive() {
+    if (!_canShift) return;
+    if (_atLive && _playing) {
+      _showFlash('Direkte');
+      return;
+    }
+    _shiftTimer?.cancel();
+    unawaited(_shiftTo(Duration.zero));
+    _wake();
+  }
+
+  /// Åpner direktesendingen [back] bak direkte (0 = direkte). Spillelista hentes for å finne segmentet.
+  Future<void> _shiftTo(Duration back) async {
+    final src = _source;
+    final t = _target;
+    if (src == null || t == null || !_canShift) return;
+    final my = ++_seq;
+    final url = t.urls[_url];
+    _shiftTarget = back;
+    var fromEnd = LiveWindow.liveFromEnd;
+    var behind = Duration.zero;
+    if (back >= const Duration(seconds: 3)) {
+      try {
+        final w = await src.liveWindow(url);
+        if (my != _seq || !mounted) return;
+        if (w != null) {
+          _window = w.length;
+          _windowAt = clock.now();
+          final at = w.at(back);
+          fromEnd = at.fromEnd;
+          behind = at.behind;
+        }
+      } on BusyException catch (e) {
+        if (my != _seq || !mounted) return;
+        await _pb.stop();
+        _set(() {
+          _busy = e;
+          _buffering = false;
+        });
+        return;
+      } on SourceException {
+        // fikk ikke spillelista: direkte
+        if (my != _seq || !mounted) return;
+      }
+    }
+    _set(() {
+      _behind0 = behind;
+      _pausedTotal = Duration.zero;
+      _pausedAt = null;
+      _userPaused = false;
+      _shiftTarget = null;
+      _started = false;
+      _buffering = true;
+    });
+    _lastPos = Duration.zero;
+    _lastMove = DateTime.now();
+    await _pb.open(url, src.httpHeaders, liveFromEnd: fromEnd);
   }
 
   void _applyVolume({bool save = true}) {
@@ -560,6 +742,15 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       _zap(1);
     } else if (_playKeys.contains(key)) {
       _togglePlay();
+    } else if (_canShift && (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.mediaRewind)) {
+      _nudgeShift(-10);
+    } else if (_canShift &&
+        (key == LogicalKeyboardKey.mediaFastForward ||
+            (key == LogicalKeyboardKey.arrowRight && (isDesktop || _fullNow) && _focus.hasPrimaryFocus))) {
+      // → spoler fram på PC og i fullskjerm; ellers går den inn i kanallista (fjernkontroll)
+      _nudgeShift(10);
+    } else if (_canShift && (key == LogicalKeyboardKey.keyL || key == LogicalKeyboardKey.end)) {
+      _goLive();
     } else if (key == LogicalKeyboardKey.mediaPlay) {
       if (!_playing) _togglePlay();
     } else if (key == LogicalKeyboardKey.mediaPause) {
@@ -864,6 +1055,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   Widget _bottomBar({required bool full, required bool compact, required bool canToggleFull}) {
     final volume = _muted ? 0.0 : _volume;
     final volumeIcon = volume == 0 ? Icons.volume_off : (volume < 50 ? Icons.volume_down : Icons.volume_up);
+    final shift = _canShift;
+    final timeline = shift && _window >= const Duration(seconds: 20);
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -875,28 +1068,97 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(compact ? 4 : 12, 44, compact ? 4 : 12, compact ? 4 : 10),
-          child: Row(
+          padding: EdgeInsets.fromLTRB(compact ? 4 : 12, timeline ? 30 : 44, compact ? 4 : 12, compact ? 4 : 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _ctl(_playing ? Icons.pause : Icons.play_arrow, _playing ? 'Pause (mellomrom)' : 'Spill av (mellomrom)',
-                  _togglePlay,
-                  size: 30),
-              if (!compact) _liveBadge(),
-              const Spacer(),
-              _ctl(Icons.keyboard_arrow_up, 'Forrige kanal (↑)', () => _zap(-1)),
-              _ctl(Icons.keyboard_arrow_down, 'Neste kanal (↓)', () => _zap(1)),
-              if (!compact) _ctl(Icons.swap_horiz, 'Kanalen du så sist (Backspace)', _last == null ? null : _lastChannel),
-              _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
-              if (isDesktop && !compact) _volumeSlider(volume),
-              if (full) _ctl(Icons.list, 'Kanaler (C)', _toggleSide, on: _sideOpen),
-              _tracksButton(),
-              if (canToggleFull)
-                _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen, full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
-                    _toggleFull),
+              if (timeline) _timeline(),
+              Row(
+                children: [
+                  _ctl(_playing ? Icons.pause : Icons.play_arrow,
+                      _playing ? 'Pause (mellomrom)' : 'Spill av (mellomrom)', _togglePlay,
+                      size: 30),
+                  if (shift && !compact) ...[
+                    _ctl(Icons.replay_10, '10 sekunder tilbake (←)', () => _nudgeShift(-10)),
+                    _ctl(Icons.forward_10, '10 sekunder fram (→)', _atLive ? null : () => _nudgeShift(10)),
+                  ],
+                  _liveBadge(compact: compact),
+                  const Spacer(),
+                  // smal skjerm med tidslinje: kanallista under bildet bytter kanal, så pilene får vike
+                  if (!compact || !shift) ...[
+                    _ctl(Icons.keyboard_arrow_up, 'Forrige kanal (↑)', () => _zap(-1)),
+                    _ctl(Icons.keyboard_arrow_down, 'Neste kanal (↓)', () => _zap(1)),
+                  ],
+                  if (!compact)
+                    _ctl(Icons.swap_horiz, 'Kanalen du så sist (Backspace)', _last == null ? null : _lastChannel),
+                  _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
+                  if (isDesktop && !compact) _volumeSlider(volume),
+                  if (full) _ctl(Icons.list, 'Kanaler (C)', _toggleSide, on: _sideOpen),
+                  _tracksButton(),
+                  if (canToggleFull)
+                    _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen,
+                        full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)', _toggleFull),
+                ],
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// Tidslinja for direktesendingen: fra så langt tilbake serveren har, til direkte helt til høyre.
+  Widget _timeline() {
+    final window = _window.inMilliseconds / 1000;
+    final behindSec = _shiftDrag ?? math.min(_behind.inMilliseconds / 1000, window);
+    final label = _shiftDrag != null
+        ? (behindSec < 3 ? 'Direkte' : '−${formatDuration(Duration(milliseconds: (behindSec * 1000).round()))}')
+        : '−${formatDuration(_window)}';
+    const timeStyle = TextStyle(color: Colors.white, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()]);
+    return Row(
+      children: [
+        const SizedBox(width: 8),
+        Text(label, style: timeStyle),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 4,
+              activeTrackColor: FyrlysColors.live,
+              inactiveTrackColor: Colors.white24,
+              thumbColor: Colors.white,
+              overlayColor: Colors.white24,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            ),
+            child: Slider(
+              key: const ValueKey('live-timeline'),
+              value: (window - behindSec).clamp(0.0, window).toDouble(),
+              max: window,
+              semanticFormatterCallback: (v) {
+                final back = window - v;
+                return back < 3 ? 'Direkte' : '${formatDuration(Duration(seconds: back.round()))} bak direkte';
+              },
+              onChangeStart: (v) {
+                _dragging = true;
+                setState(() => _shiftDrag = window - v);
+              },
+              onChanged: (v) {
+                setState(() => _shiftDrag = window - v);
+                _wake();
+              },
+              onChangeEnd: (v) {
+                _dragging = false;
+                setState(() => _shiftDrag = null);
+                _shiftTimer?.cancel();
+                unawaited(_shiftTo(Duration(milliseconds: ((window - v) * 1000).round())));
+                _wake();
+              },
+            ),
+          ),
+        ),
+        const Text('Direkte', style: timeStyle),
+        const SizedBox(width: 8),
+      ],
     );
   }
 
@@ -911,13 +1173,16 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     );
   }
 
-  Widget _liveBadge() {
-    return Container(
+  /// «DIREKTE»: rød når du ser direkte; ellers grå, med hvor langt bak du er, og et trykk tar deg til direkte.
+  Widget _liveBadge({required bool compact}) {
+    final shift = _canShift;
+    final at = shift ? _atLive && _playing : _playing;
+    final behind = _behind;
+    final badge = Container(
       height: 28,
-      margin: const EdgeInsets.only(left: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: _playing ? FyrlysColors.live : Colors.white24,
+        color: at ? FyrlysColors.live : Colors.white24,
         borderRadius: BorderRadius.circular(14),
       ),
       child: const Row(
@@ -932,6 +1197,31 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
             'DIREKTE',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.7),
           ),
+        ],
+      ),
+    );
+    final showBehind = shift && !_atLive && behind >= const Duration(seconds: 1);
+    if (compact && !shift) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (shift && !at)
+            Tooltip(
+              message: 'Gå til direkte (L)',
+              child: InkWell(borderRadius: BorderRadius.circular(14), onTap: _goLive, child: badge),
+            )
+          else
+            badge,
+          if (showBehind)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                '−${formatDuration(behind)}',
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()]),
+              ),
+            ),
         ],
       ),
     );

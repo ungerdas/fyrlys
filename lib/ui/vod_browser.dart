@@ -121,11 +121,24 @@ class _VodBrowserState extends State<VodBrowser> {
     });
   }
 
-  void _open(VodItem item) {
-    unawaited(Navigator.of(context).push(
+  Future<void> _open(VodItem item) async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => VodDetailPage(session: s, kind: widget.kind, item: item)),
-    ));
+    );
+    // «Fortsett å se» kan ha endret seg
+    if (mounted) setState(() {});
   }
+
+  Future<void> _continue(ContinueItem c) async {
+    await playContinue(context, s, c);
+    if (mounted) setState(() {});
+  }
+
+  /// Det du har begynt på (filmer som ikke er sett ferdig; serier med episoden du er på eller den neste).
+  List<ContinueItem> get _continueItems => [
+        for (final c in s.continueItems)
+          if (c.kind == widget.kind && (c.kind == VodKind.series || s.resumeAt(c.key) != null)) c,
+      ].take(20).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -223,25 +236,65 @@ class _VodBrowserState extends State<VodBrowser> {
             style: TextStyle(color: scheme.onSurfaceVariant)),
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 180,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 14,
-        childAspectRatio: 0.5,
-      ),
-      itemCount: _items.length,
-      itemBuilder: (context, i) {
-        if (i >= _items.length - 30) _maybeMore();
-        final it = _items[i];
-        return PosterCard(
-          key: ValueKey('${it.id}#$i'),
-          item: it,
-          imageUrl: s.source?.logoUrl(it.icon),
-          onTap: () => _open(it),
-        );
-      },
+    final continues = widget.query.isEmpty && _category.isEmpty ? _continueItems : const <ContinueItem>[];
+    return CustomScrollView(
+      slivers: [
+        if (continues.isNotEmpty) ...[
+          const SliverPadding(
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 8),
+            sliver: SliverToBoxAdapter(
+              child: Text('Fortsett å se', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 112,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: continues.length,
+                separatorBuilder: (context, i) => const SizedBox(width: 12),
+                itemBuilder: (context, i) => ContinueCard(
+                  key: ValueKey(continues[i].key),
+                  session: s,
+                  item: continues[i],
+                  onTap: () => unawaited(_continue(continues[i])),
+                  onRemove: () => setState(() => s.removeContinue(continues[i].key)),
+                ),
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+            sliver: SliverToBoxAdapter(
+              child: Text('Alle ${widget.kind.title.toLowerCase()}',
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          sliver: SliverGrid.builder(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 180,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 14,
+              childAspectRatio: 0.5,
+            ),
+            itemCount: _items.length,
+            itemBuilder: (context, i) {
+              if (i >= _items.length - 30) _maybeMore();
+              final it = _items[i];
+              return PosterCard(
+                key: ValueKey('${it.id}#$i'),
+                item: it,
+                imageUrl: s.source?.logoUrl(it.icon),
+                onTap: () => unawaited(_open(it)),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -295,6 +348,111 @@ class _PosterCardState extends State<PosterCard> {
               ),
               if (sub.isNotEmpty)
                 Text(sub, maxLines: 1, style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Et kort i «Fortsett å se»: plakat, navn, episoden og hvor mye som er igjen, med en strek for hvor langt du er.
+class ContinueCard extends StatefulWidget {
+  const ContinueCard({super.key, required this.session, required this.item, required this.onTap, required this.onRemove});
+
+  final Session session;
+  final ContinueItem item;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  @override
+  State<ContinueCard> createState() => _ContinueCardState();
+}
+
+class _ContinueCardState extends State<ContinueCard> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final s = widget.session;
+    final c = widget.item;
+    final state = s.resumeState(c.resumeKey);
+    final seen = s.watched(c.resumeKey);
+    final String status;
+    if (state != null) {
+      final left = state.length - state.position;
+      status = left.inMinutes >= 1 ? '${left.inMinutes} min igjen' : 'Snart ferdig';
+    } else if (seen >= 0.95 || seen == 0) {
+      // en serie der forrige episode er sett: denne er den neste
+      status = c.kind == VodKind.series ? 'Neste episode' : '';
+    } else {
+      status = '';
+    }
+    final lines = [
+      if (c.kind == VodKind.series && c.subtitle.isNotEmpty) c.subtitle,
+      if (status.isNotEmpty) status,
+    ];
+    return SizedBox(
+      width: 300,
+      child: Material(
+        color: scheme.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: _focused ? scheme.tertiary : scheme.outline, width: _focused ? 2 : 1),
+        ),
+        child: InkWell(
+          onTap: widget.onTap,
+          onFocusChange: (f) => setState(() => _focused = f),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: 74,
+                child: Poster(url: s.source?.logoUrl(c.icon), title: c.title, radius: 0, showTitle: false),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(c.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                      for (final l in lines)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(l,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
+                        ),
+                      if (seen > 0 && seen < 0.95)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(value: seen, minHeight: 3, backgroundColor: scheme.outline),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  tooltip: 'Fjern fra «Fortsett å se»',
+                  iconSize: 18,
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
+                  onPressed: widget.onRemove,
+                ),
+              ),
             ],
           ),
         ),

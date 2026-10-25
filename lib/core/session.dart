@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'fyrlys_source.dart';
 import 'models.dart';
 import 'source.dart';
+import 'vod.dart';
 import 'xtream_source.dart';
 
 typedef SourceFactory = Future<TvSource?> Function(Map<String, String> saved);
@@ -422,6 +423,56 @@ class Session extends ChangeNotifier {
       m.remove(m.keys.first);
     }
     unawaited(_prefs.setString('resume', jsonEncode(m)));
+  }
+
+  /// Hvor du slapp og hvor lang den er, når det er verdt å fortsette (som [resumeAt]).
+  ({Duration position, Duration length})? resumeState(String key) {
+    final at = resumeAt(key);
+    final v = _resumeMap()[key];
+    if (at == null || v == null) return null;
+    return (position: at, length: Duration(seconds: v[1]));
+  }
+
+  // ── fortsett å se (filmer og serier) ──
+
+  List<ContinueItem>? _continue;
+
+  /// sist sett først
+  List<ContinueItem> get continueItems {
+    final cached = _continue;
+    if (cached != null) return cached;
+    final out = <ContinueItem>[];
+    try {
+      final raw = jsonDecode(_prefs.getString('continue') ?? '[]');
+      if (raw is List) {
+        for (final j in raw) {
+          if (j is Map && j['key'] is String) out.add(ContinueItem.fromJson(j));
+        }
+      }
+    } on FormatException {
+      // begynner på nytt
+    }
+    out.sort((a, b) => b.at.compareTo(a.at));
+    return _continue = out;
+  }
+
+  /// Du ser på dette nå: øverst i «Fortsett å se».
+  void touchContinue(ContinueItem item) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    _continue = [item.seenNow(now), for (final c in continueItems) if (c.key != item.key) c].take(50).toList();
+    _saveContinue();
+  }
+
+  void removeContinue(String key) {
+    if (!continueItems.any((c) => c.key == key)) return;
+    _continue = [for (final c in continueItems) if (c.key != key) c];
+    _saveContinue();
+  }
+
+  /// Uten notifyListeners: dette lagres mens filmen spiller (og når spilleren lukkes), og sidene som viser lista,
+  /// tegnes på nytt når du kommer tilbake til dem.
+  void _saveContinue() {
+    unawaited(_prefs.setString('continue', jsonEncode([for (final c in _continue ?? const <ContinueItem>[]) c.toJson()])));
   }
 
   // ── utseende ──

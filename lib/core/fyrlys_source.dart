@@ -38,6 +38,9 @@ class FyrlysSource implements TvSource {
   /// serveren har ffmpeg: kanalene går via den (tilbakespoling, seere og «Ta over»)
   bool ffmpeg;
 
+  /// hvor mange minutter serveren tar vare på (PEAG_TIMESHIFT_MIN), så du kan pause og spole tilbake
+  int timeshiftMinutes = 0;
+
   List<Channel>? _channels;
   DateTime? _channelsAt;
   List<Category>? _categories;
@@ -120,6 +123,8 @@ class FyrlysSource implements TvSource {
       throw const SourceException('Fant ikke Fyrlys på den adressen');
     }
     ffmpeg = info['ffmpeg'] == true;
+    final shift = info['timeshift_min'];
+    timeshiftMinutes = shift is num ? shift.toInt() : 0;
   }
 
   @override
@@ -220,13 +225,30 @@ class FyrlysSource implements TvSource {
     } on Exception {
       throw const SourceException('Får ikke kontakt med Fyrlys-serveren');
     }
-    if (r.statusCode == 200) return PlayTarget([url]);
+    if (r.statusCode == 200) return PlayTarget([url], timeshift: Duration(minutes: timeshiftMinutes));
+    _throwFor(r);
+  }
+
+  /// 409 «busy» blir BusyException (noen har tatt over), annet en SourceException.
+  static Never _throwFor(http.Response r) {
     final body = _json(r);
     if (r.statusCode == 409 && body is Map && body['code'] == 'busy') {
       final names = body['busy'];
       throw BusyException(_error(body, 409), [for (final n in names is List ? names : const []) '$n']);
     }
     throw SourceException(_error(body, r.statusCode));
+  }
+
+  @override
+  Future<LiveWindow?> liveWindow(String url) async {
+    final http.Response r;
+    try {
+      r = await _http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+    } on Exception {
+      throw const SourceException('Får ikke kontakt med Fyrlys-serveren');
+    }
+    if (r.statusCode != 200) _throwFor(r);
+    return parseLiveWindow(utf8.decode(r.bodyBytes, allowMalformed: true));
   }
 
   @override

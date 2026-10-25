@@ -131,4 +131,26 @@ void main() {
     expect(f!.channels.map((c) => c.id), ['1', '2']);
     expect(f.categories, ['5']);
   });
+
+  test('tilbakespoling: hvor mye serveren tar vare på, spillelista, og tatt over', () async {
+    var takenOver = false;
+    final client = MockClient((req) async {
+      final p = req.url.path;
+      if (p == '/api/streams/info') return json({'name': 'Fyrlys', 'ffmpeg': true, 'timeshift_min': 30});
+      if (p == '/api/live/101/index.m3u8') {
+        if (takenOver) return json(busyBody, 409);
+        return http.Response('#EXTM3U\n#EXTINF:2.0,\na-1.ts\n#EXTINF:2.0,\na-2.ts\n#EXTINF:2.0,\na-3.ts\n#EXTINF:2.0,\na-4.ts\n', 200);
+      }
+      return json({'error': 'nei'}, 404);
+    });
+    final src = FyrlysSource(base: 'http://fyrlys:8766', client: client, clientId: 'app1');
+    await src.prepare();
+    final t = await src.open(const Channel(id: '101', name: 'NRK 1'));
+    expect(t.timeshift, const Duration(minutes: 30));
+    final w = await src.liveWindow(t.urls.first);
+    expect(w!.segments.length, 4);
+    expect(w.length, const Duration(seconds: 2));
+    takenOver = true;
+    await expectLater(src.liveWindow(t.urls.first), throwsA(isA<BusyException>()));
+  });
 }

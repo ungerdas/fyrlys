@@ -4,34 +4,33 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/names.dart';
 import '../core/session.dart';
+import '../core/vod.dart';
 import '../platform.dart';
 import '../theme.dart';
 import 'playback.dart';
 import 'window_effects.dart';
+
+export '../core/names.dart' show formatDuration;
 
 /// Spilleren er alltid mørk, som på nettsiden.
 final ThemeData _playerTheme = fyrlysTheme(Brightness.dark);
 
 /// Noe å spille: en film eller en episode.
 class VodPlayItem {
-  const VodPlayItem({required this.key, required this.title, required this.url, this.subtitle = ''});
+  const VodPlayItem({required this.key, required this.title, required this.url, this.subtitle = '', this.continueAs});
 
   /// for «fortsett der du slapp», f.eks. «film:123» eller «episode:456»
   final String key;
   final String title;
   final String subtitle;
   final String url;
+
+  /// slik den står i «Fortsett å se» mens du ser den
+  final ContinueItem? continueAs;
 }
 
-/// «1:02:03» eller «12:34»
-String formatDuration(Duration d) {
-  final s = d.inSeconds < 0 ? 0 : d.inSeconds;
-  final h = s ~/ 3600;
-  final m = (s ~/ 60) % 60;
-  final sec = (s % 60).toString().padLeft(2, '0');
-  return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$sec' : '$m:$sec';
-}
 
 /// Spilleren for filmer og episoder: tidslinje med spoling, ±10 sekunder, neste og forrige episode, lydspor og
 /// undertekster, volum og fullskjerm. Husker hvor du slapp, og går videre til neste episode når en er ferdig.
@@ -94,6 +93,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   Timer? _flashTimer;
   Timer? _hideTimer;
   Timer? _saveTimer;
+  Timer? _nextTimer;
 
   Session get _session => widget.page.session;
   List<VodPlayItem> get _items => widget.page.items;
@@ -130,6 +130,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     _flashTimer?.cancel();
     _hideTimer?.cancel();
     _saveTimer?.cancel();
+    _nextTimer?.cancel();
     unawaited(_pb.dispose());
     _focus.dispose();
     if (isDesktop) {
@@ -210,9 +211,18 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     _ending = true;
     final d = _duration > Duration.zero ? _duration : _position;
     _session.saveResume(_item.key, d, d);
+    // «Fortsett å se»: neste episode, eller borte når filmen (eller sesongen) er sett
+    final next = _hasNext ? _items[_index + 1].continueAs : null;
+    final current = _item.continueAs;
+    if (next != null) {
+      _session.touchContinue(next);
+    } else if (current != null) {
+      _session.removeContinue(current.key);
+    }
     if (_hasNext) {
       _showFlash('Neste: ${_items[_index + 1].subtitle}');
-      Timer(const Duration(milliseconds: 1500), () {
+      _nextTimer?.cancel();
+      _nextTimer = Timer(const Duration(milliseconds: 1500), () {
         if (mounted && _ending) _go(_index + 1);
       });
     } else {
@@ -225,6 +235,8 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     // ferdig: _onEnd har alt lagret den som sett
     if (_ending || !_started || _duration <= Duration.zero || _position <= Duration.zero) return;
     _session.saveResume(_item.key, _position, _duration);
+    final c = _item.continueAs;
+    if (c != null) _session.touchContinue(c);
   }
 
   void _go(int index) {

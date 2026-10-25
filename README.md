@@ -50,6 +50,9 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 - **Spilleren** er som på nettsiden: bildet med kontroller, programinfo under og kanallista ved siden av
   (under på smale skjermer), med lista du kom fra, favorittene og søk. Fullskjerm (F, dobbeltklikk eller
   knappen) viser bare bildet, og kanallista kan da legges over det (C). En telefon på tvers viser bare bildet.
+- **Pause og spol tilbake** i direktesendingen når appen er logget inn på en Fyrlys-server: serveren tar vare på
+  de siste 30 minuttene. Tidslinja over knappene, −10/+10 sekunder (← og →), og «DIREKTE» (eller L) tar deg til
+  direkte igjen. Hvor langt bak du er, står ved siden av.
 - **Taster:** ↑/↓ (eller kanal +/− på fjernkontrollen) bytter kanal, Backspace går til kanalen du så sist,
   mellomrom pauser, M slår av lyden, F fullskjerm, C kanallista, Esc går tilbake. På fjernkontrollen gir OK
   fullskjerm, og i fullskjerm kanallista; → går inn i kanallista og ← ut igjen.
@@ -62,6 +65,8 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
   først eller A–Å), eller søk; flere plakater hentes etter hvert som du blar. En film har «Spill av», eller
   «Fortsett fra …» og «Fra begynnelsen» når du har sett litt av den. En serie har sesongene og episodene, med
   en strek under det du har sett.
+- **Fortsett å se** øverst under Filmer og Serier: filmer du ikke har sett ferdig, og serier med episoden du er
+  på (eller den neste). Trykk for å fortsette med en gang; krysset tar den bort.
 - **Filmspilleren:** tidslinje du kan dra i, ←/→ ti sekunder, ↑/↓ lyd, mellomrom pause, N/P neste og forrige
   episode, F fullskjerm og Esc tilbake. Den husker hvor du slapp, og går videre til neste episode når en er
   ferdig. Lydspor og undertekster velges i spilleren.

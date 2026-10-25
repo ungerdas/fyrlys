@@ -19,6 +19,8 @@ dependencies:
   window_manager: ^0.5.1
   # kall til Windows (vindusanimasjonene av mens Fyrlys går inn og ut av fullskjerm)
   ffi: ^2.1.3
+  # klokka spilleren regner pause og tilbakespoling med (testene kan spole den)
+  clock: ^1.1.1
 
 dev_dependencies:
   flutter_test:

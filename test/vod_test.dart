@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/app.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/ui/playback.dart';
+import 'package:fyrlys/ui/vod_detail_page.dart';
 import 'package:fyrlys/ui/vod_player_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -135,6 +136,80 @@ void main() {
     await _settle(tester);
     expect(fake.urls.last, 'http://example/series/402.mp4');
     expect(find.text('S01E02 Andre'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('fortsett å se: filmen der du slapp, og neste episode i serien', (tester) async {
+    await _start(tester);
+    // en ny avspiller hver gang spilleren åpnes
+    final players = <FakePlayback>[];
+    playbackFactory = () {
+      final p = FakePlayback()..length = const Duration(minutes: 100);
+      players.add(p);
+      return p;
+    };
+    addTearDown(() => playbackFactory = MpvPlayback.new);
+
+    await tester.tap(find.text('Filmer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fortsett å se'), findsNothing);
+
+    // se to minutter av «Fyrlyset», og lukk
+    await tester.tap(find.text('Fyrlyset'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Spill av'));
+    await _settle(tester);
+    players.last.moveTo(const Duration(minutes: 2));
+    await tester.pump();
+    Navigator.of(tester.element(find.byType(VodPlayerPage))).pop();
+    await _settle(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('Fortsett fra 2:00'), findsOneWidget);
+    Navigator.of(tester.element(find.byType(VodDetailPage))).pop();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fortsett å se'), findsOneWidget);
+    expect(find.text('Alle filmer'), findsOneWidget);
+    expect(find.text('98 min igjen'), findsOneWidget);
+    // rett til filmen, der du slapp
+    await tester.tap(find.text('98 min igjen'));
+    await _settle(tester);
+    expect(players.last.urls, ['http://example/movie/201.mkv']);
+    expect(players.last.starts, [const Duration(minutes: 2)]);
+    Navigator.of(tester.element(find.byType(VodPlayerPage))).pop();
+    await _settle(tester);
+    await tester.pumpAndSettle();
+
+    // fjernes med krysset
+    await tester.tap(find.byTooltip('Fjern fra «Fortsett å se»'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fortsett å se'), findsNothing);
+
+    // serie: første episode sett ferdig, så står den neste klar
+    await tester.tap(find.text('Serier'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kystvakten'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('S01E01  Første'));
+    await _settle(tester);
+    players.last.moveTo(const Duration(seconds: 30));
+    await tester.pump();
+    players.last.finish();
+    await tester.pump();
+    Navigator.of(tester.element(find.byType(VodPlayerPage))).pop();
+    await _settle(tester);
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byType(VodDetailPage))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Fortsett å se'), findsOneWidget);
+    expect(find.text('S01E02 Andre'), findsOneWidget);
+    expect(find.text('Neste episode'), findsOneWidget);
+    await tester.tap(find.text('Neste episode'));
+    await _settle(tester);
+    expect(players.last.urls, ['http://example/series/402.mp4']);
+    expect(find.text('S01E02 Andre'), findsWidgets);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();

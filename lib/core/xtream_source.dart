@@ -313,6 +313,10 @@ class XtreamSource implements TvSource {
   @override
   Future<void> close(Channel channel) async {}
 
+  /// leverandøren har ingen tilbakespoling her
+  @override
+  Future<LiveWindow?> liveWindow(String url) async => null;
+
   @override
   Future<Favorites?> loadFavorites() async => null;
 

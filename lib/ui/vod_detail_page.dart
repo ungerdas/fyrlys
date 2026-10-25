@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/session.dart';
+import '../core/source.dart';
 import '../core/vod.dart';
 import 'vod_player_page.dart';
 
@@ -50,6 +51,90 @@ class Poster extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Filmen som noe å spille, med plass i «Fortsett å se».
+VodPlayItem? movieItem(Session s, VodItem item) {
+  final src = s.source;
+  if (src == null) return null;
+  final sub = [item.year ?? '', ratingText(item.rating)].where((t) => t.isNotEmpty).join('  ');
+  return VodPlayItem(
+    key: 'film:${item.id}',
+    title: item.name,
+    subtitle: sub,
+    url: src.movieUrl(item),
+    continueAs: ContinueItem(
+      key: 'film:${item.id}',
+      kind: VodKind.movies,
+      id: item.id,
+      title: item.name,
+      icon: item.icon,
+      subtitle: sub,
+      ext: item.ext,
+    ),
+  );
+}
+
+/// Episodene i en sesong, i rekkefølge, så spilleren kan gå videre til neste.
+List<VodPlayItem> seasonItems(Session s, SeriesInfo info, Season season, VodItem series) {
+  final src = s.source;
+  if (src == null) return const [];
+  final name = info.name.isNotEmpty ? info.name : series.name;
+  return [
+    for (final e in season.episodes)
+      () {
+        final sub = [episodeCode(season.number, e.number), e.title].where((t) => t.isNotEmpty).join(' ');
+        return VodPlayItem(
+          key: 'episode:${e.id}',
+          title: name,
+          subtitle: sub,
+          url: src.episodeUrl(e),
+          continueAs: ContinueItem(
+            key: 'serie:${series.id}',
+            kind: VodKind.series,
+            id: series.id,
+            title: name,
+            icon: info.cover ?? series.icon,
+            subtitle: sub,
+            ext: e.ext,
+            episodeId: e.id,
+            season: season.number,
+          ),
+        );
+      }(),
+  ];
+}
+
+/// Spiller det du holdt på med fra «Fortsett å se»: filmen der du slapp, eller episoden i serien (med resten av
+/// sesongen etter). Finnes ikke episoden lenger, åpnes serien.
+Future<void> playContinue(BuildContext context, Session s, ContinueItem c) async {
+  final src = s.source;
+  if (src == null) return;
+  final nav = Navigator.of(context);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final series = VodItem(id: c.id, name: c.title, icon: c.icon, ext: c.ext);
+  if (c.kind == VodKind.movies) {
+    final item = movieItem(s, series);
+    if (item == null) return;
+    await nav.push(MaterialPageRoute<void>(builder: (_) => VodPlayerPage(session: s, items: [item])));
+    return;
+  }
+  try {
+    final info = await src.seriesInfo(c.id);
+    for (final season in info.seasons) {
+      if (season.number != c.season) continue;
+      final i = season.episodes.indexWhere((e) => e.id == c.episodeId);
+      if (i < 0) break;
+      await nav.push(MaterialPageRoute<void>(
+        builder: (_) => VodPlayerPage(session: s, items: seasonItems(s, info, season, series), index: i),
+      ));
+      return;
+    }
+  } on SourceException catch (e) {
+    messenger?.showSnackBar(SnackBar(content: Text(e.message)));
+    return;
+  }
+  await nav.push(MaterialPageRoute<void>(builder: (_) => VodDetailPage(session: s, kind: VodKind.series, item: series)));
 }
 
 /// En film eller en serie: plakat, info og handling. Filmen spilles herfra (eller fortsettes der du slapp);
@@ -102,30 +187,12 @@ class _VodDetailPageState extends State<VodDetailPage> {
   }
 
   void _playMovie({required bool resume}) {
-    final src = s.source;
-    if (src == null) return;
-    final sub = [item.year ?? '', ratingText(item.rating)].where((t) => t.isNotEmpty).join('  ');
-    unawaited(_play(
-      [VodPlayItem(key: 'film:${item.id}', title: item.name, subtitle: sub, url: src.movieUrl(item))],
-      0,
-      resume: resume,
-    ));
+    final item = movieItem(s, widget.item);
+    if (item == null) return;
+    unawaited(_play([item], 0, resume: resume));
   }
 
-  List<VodPlayItem> _episodes(SeriesInfo info, Season season) {
-    final src = s.source;
-    if (src == null) return const [];
-    final name = info.name.isNotEmpty ? info.name : item.name;
-    return [
-      for (final e in season.episodes)
-        VodPlayItem(
-          key: 'episode:${e.id}',
-          title: name,
-          subtitle: [episodeCode(season.number, e.number), e.title].where((t) => t.isNotEmpty).join(' '),
-          url: src.episodeUrl(e),
-        ),
-    ];
-  }
+  List<VodPlayItem> _episodes(SeriesInfo info, Season season) => seasonItems(s, info, season, item);
 
   @override
   Widget build(BuildContext context) {
