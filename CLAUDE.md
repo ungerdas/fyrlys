@@ -59,7 +59,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
     seertellingen på serveren.
 - `core/session.dart` – tilstanden (ChangeNotifier): innlogging (lagres i shared_preferences, også
   Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
-  `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene), favoritter (lokalt for Xtream, på
+  `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene; `cleanEpg` i `models.dart` slår sammen
+  doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt for Xtream, på
   serveren for Fyrlys-server, i kø), «sist sett», lys/mørk, og «fortsett der du
   slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
   `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken).

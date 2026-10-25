@@ -200,7 +200,9 @@ class Session extends ChangeNotifier {
     if (hit != null) return hit.list;
     final src = source;
     if (src == null) return Future.value(const <EpgEntry>[]);
-    final future = _limited(() => src.epg(channelId, limit: limit)).catchError((Object _) => const <EpgEntry>[]);
+    // doble og overlappende programmer ryddes her, så det gjelder begge kildene (og eldre Fyrlys-servere)
+    final future =
+        _limited(() => src.epg(channelId, limit: limit)).then(cleanEpg).catchError((Object _) => const <EpgEntry>[]);
     final entry = _EpgHit(limit, future);
     unawaited(future.then((list) => entry.value = list));
     _epg.remove(channelId);
