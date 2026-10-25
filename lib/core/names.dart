@@ -34,3 +34,25 @@ NameParts nameParts(String name) {
 
 /// «20:30»
 String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+/// Kodeknavn fra mpv/ffmpeg slik de vanligvis skrives: «h264» → «H.264», «eac3» → «E-AC3».
+String codecName(String codec) => switch (codec.trim().toLowerCase()) {
+      'h264' || 'avc' => 'H.264',
+      'hevc' || 'h265' => 'H.265',
+      'mpeg2video' => 'MPEG-2',
+      'av1' => 'AV1',
+      'vp9' => 'VP9',
+      'aac' || 'aac_latm' => 'AAC',
+      'ac3' => 'AC3',
+      'eac3' => 'E-AC3',
+      'mp2' => 'MP2',
+      'mp3' || 'mp3float' => 'MP3',
+      'dts' => 'DTS',
+      'truehd' => 'TrueHD',
+      'opus' => 'Opus',
+      'flac' => 'FLAC',
+      final other => other.toUpperCase(),
+    };
+
+/// Kanaloppsettet fra mpv: «5.1(side)» → «5.1», «stereo» → «stereo».
+String channelLayout(String layout) => layout.replaceAll(RegExp(r'\(.*?\)'), '').trim();

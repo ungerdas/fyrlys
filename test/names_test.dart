@@ -21,6 +21,16 @@ void main() {
     expect(nameParts('15.00 Lag A - Lag B').time, '15:00');
   });
 
+  test('kodeker og lydkanaler fra mpv, slik de vises i spilleren', () {
+    expect(codecName('h264'), 'H.264');
+    expect(codecName('hevc'), 'H.265');
+    expect(codecName('eac3'), 'E-AC3');
+    expect(codecName('mpeg2video'), 'MPEG-2');
+    expect(codecName('noe_rart'), 'NOE_RART');
+    expect(channelLayout('5.1(side)'), '5.1');
+    expect(channelLayout('stereo'), 'stereo');
+  });
+
   test('nå og neste fra EPG-en', () {
     final t = DateTime(2026, 10, 25, 20, 0);
     final list = [

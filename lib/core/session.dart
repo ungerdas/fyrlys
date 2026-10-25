@@ -342,6 +342,19 @@ class Session extends ChangeNotifier {
     }
   }
 
+  // ── lyd ──
+
+  /// Volumet i spilleren (0–100), som sist.
+  double get volume => (_prefs.getDouble('volume') ?? 100).clamp(0, 100).toDouble();
+
+  bool get muted => _prefs.getBool('muted') ?? false;
+
+  /// Lagres uten å si fra til resten av appen (det skjer mens glidebryteren dras).
+  void saveVolume(double volume, bool muted) {
+    unawaited(_prefs.setDouble('volume', volume));
+    unawaited(_prefs.setBool('muted', muted));
+  }
+
   // ── utseende ──
 
   void toggleTheme(Brightness current) {

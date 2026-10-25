@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../build_info.dart';
 import '../core/models.dart';
 import '../core/session.dart';
 import 'channel_card.dart';
@@ -63,8 +64,18 @@ class _HomePageState extends State<HomePage> {
       };
 
   void _play(List<Channel> list, int i) {
+    final title = _query.isEmpty ? _title : 'Treff i ${_title.toLowerCase()}';
+    final fromFavorites = _filter == 'fav';
     unawaited(Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => PlayerPage(session: s, channels: List.of(list), index: i)),
+      MaterialPageRoute<void>(
+        builder: (_) => PlayerPage(
+          session: s,
+          channels: List.of(list),
+          index: i,
+          listTitle: title,
+          fromFavorites: fromFavorites,
+        ),
+      ),
     ));
   }
 
@@ -128,6 +139,11 @@ class _HomePageState extends State<HomePage> {
               PopupMenuItem<String>(enabled: false, child: Text(s.source?.label ?? '')),
               const PopupMenuItem<String>(value: 'reload', child: Text('Hent listene på nytt')),
               const PopupMenuItem<String>(value: 'logout', child: Text('Logg ut')),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                enabled: false,
+                child: Text(appBuildLabel, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+              ),
             ],
           ),
           const SizedBox(width: 8),

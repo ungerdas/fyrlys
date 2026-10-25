@@ -15,6 +15,10 @@ Under **Releases** her på GitHub ligger:
 - **Android og Android TV:** `Fyrlys-…-android-arm64-v8a.apk` passer de fleste nyere telefoner og
   TV-bokser; `armeabi-v7a` er for eldre og billigere bokser. Tillat installasjon fra ukjente kilder.
 
+**Testbygg:** hver endring bygges på GitHub Actions. Under *Actions* → nyeste «Bygg» → *Artifacts* ligger
+`Fyrlys-windows` og `Fyrlys-android` (krever innlogging på GitHub). Versjon og byggnummer står nederst i
+menyen i appen.
+
 ## Logg inn
 
 - **Fyrlys-server:** adressen til Docker-versjonen av Fyrlys på serveren din, f.eks.
@@ -27,9 +31,17 @@ Under **Releases** her på GitHub ligger:
 
 - **TV:** kategorier (☆ legger dem øverst, pilene endrer rekkefølgen), søk, favoritter og «sist sett».
   Kanalkortene viser programmet som går nå.
-- **Spilleren:** ↑/↓ (eller kanal +/− på fjernkontrollen) bytter kanal, mellomrom pauser, M slår av
-  lyden, F gir fullskjerm på PC, Esc går tilbake. Lydspor og undertekster velges i spilleren.
-  Brytes strømmen, prøver spilleren på nytt, inntil tre ganger i minuttet.
+- **Spilleren** er som på nettsiden: bildet med kontroller, programinfo under og kanallista ved siden av
+  (under på smale skjermer), med lista du kom fra, favorittene og søk. Fullskjerm (F, dobbeltklikk eller
+  knappen) viser bare bildet, og kanallista kan da legges over det (C). En telefon på tvers viser bare bildet.
+- **Taster:** ↑/↓ (eller kanal +/− på fjernkontrollen) bytter kanal, Backspace går til kanalen du så sist,
+  mellomrom pauser, M slår av lyden, F fullskjerm, C kanallista, Esc går tilbake. På fjernkontrollen gir OK
+  fullskjerm, og i fullskjerm kanallista; → går inn i kanallista og ← ut igjen.
+- **Lyd:** glidebryter ved lydknappen og musehjulet over bildet (PC). Volumet huskes. Lydspor og undertekster
+  velges i spilleren.
+- Under bildet står oppløsning, kodek, om bildet dekodes i maskinvare, lyden og hvor strømmen kommer fra.
+- Brytes strømmen, prøver spilleren på nytt, inntil tre ganger i minuttet. Legges appen bort på telefon
+  eller TV, gir den fra seg tilkoblingen og starter kanalen igjen når du kommer tilbake.
 
 ## Bygge selv
 

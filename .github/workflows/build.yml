@@ -1,4 +1,5 @@
-# Analyse og tester ved hver endring, og bygg for Windows og Android.
+# Analyse og tester ved hver endring, og bygg for Windows og Android. Hvert bygg kan lastes ned som testbygg
+# (Artifacts på kjøringen), med byggnummer og commit i appens meny.
 # Plattformmappene lages av «flutter create» her; i repoet ligger bare det vi har tilpasset
 # (AndroidManifest, ikoner, TV-banner og Windows-ikonet), og det skrives ikke over.
 # En release (Windows-zip og Android-APK-er, v0.x som forhåndsutgivelse) lages av en tag som v0.1.0, eller med
@@ -66,7 +67,11 @@ jobs:
           sed -i 's/L"fyrlys"/L"Fyrlys"/' windows/runner/main.cpp
           sed -i 's/VALUE "FileDescription", "fyrlys"/VALUE "FileDescription", "Fyrlys"/; s/VALUE "ProductName", "fyrlys"/VALUE "ProductName", "Fyrlys"/; s/VALUE "CompanyName", "no.peag"/VALUE "CompanyName", "Fyrlys"/' windows/runner/Runner.rc
           grep -n 'L"Fyrlys"' windows/runner/main.cpp
-      - run: flutter build windows --release 2>&1 | tee build.log
+      - name: Versjon og byggnummer til appen (vises i menyen)
+        run: |
+          version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+          echo "DEFINES=--dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7}" | tee -a "$GITHUB_ENV"
+      - run: flutter build windows --release $DEFINES 2>&1 | tee build.log
       - uses: actions/upload-artifact@v5
         with:
           name: Fyrlys-windows
@@ -96,7 +101,11 @@ jobs:
           cache: true
       - name: Lag resten av Android-oppsettet
         run: flutter create --org no.peag --project-name fyrlys --platforms=android . 2>&1 | tee create.log
-      - run: flutter build apk --release --split-per-abi 2>&1 | tee build.log
+      - name: Versjon og byggnummer til appen (vises i menyen)
+        run: |
+          version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+          echo "DEFINES=--dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7}" | tee -a "$GITHUB_ENV"
+      - run: flutter build apk --release --split-per-abi $DEFINES 2>&1 | tee build.log
       - uses: actions/upload-artifact@v5
         with:
           name: Fyrlys-android

@@ -1,9 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../core/models.dart';
@@ -11,28 +11,76 @@ import '../core/names.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../platform.dart';
+import '../theme.dart';
+import 'playback.dart';
+import 'side_list.dart';
 
-/// Spilleren. mpv (via media_kit) spiller strømmen direkte, med kanalbytte, lydspor, undertekster og fullskjerm.
-/// Brytes strømmen, eller står bildet fast, prøver den på nytt inntil tre ganger i minuttet.
-class PlayerPage extends StatefulWidget {
-  const PlayerPage({super.key, required this.session, required this.channels, required this.index});
+/// Spilleren er alltid mørk, som på nettsiden.
+final ThemeData _playerTheme = fyrlysTheme(Brightness.dark);
+
+const _ink2 = Color(0xFFB3C1CD);
+const _dim = Color(0xFF9FB0BB);
+const _sideBg = Color(0xF20B111A);
+
+/// Spilleren, som på nettsiden: bildet med kontroller og programinfo under, og kanallista ved siden av
+/// (under på smale skjermer). Fullskjerm viser bare bildet, og kanallista kan da legges over det (C).
+/// mpv (via media_kit) spiller strømmen direkte. Brytes den, eller står bildet fast, prøver spilleren på nytt
+/// inntil tre ganger i minuttet.
+class PlayerPage extends StatelessWidget {
+  const PlayerPage({
+    super.key,
+    required this.session,
+    required this.channels,
+    required this.index,
+    this.listTitle = 'Kanaler',
+    this.fromFavorites = false,
+    this.playback,
+  });
 
   final Session session;
+
+  /// lista du valgte fra; ▲▼ blar i den
   final List<Channel> channels;
   final int index;
 
+  /// navnet på lista, vises på fanen i kanallista
+  final String listTitle;
+
+  /// valgt fra favorittene: kanallista viser dem, og den andre fanen blir alle kanaler
+  final bool fromFavorites;
+
+  /// testene bruker en falsk avspiller
+  final Playback Function()? playback;
+
   @override
-  State<PlayerPage> createState() => _PlayerPageState();
+  Widget build(BuildContext context) => Theme(data: _playerTheme, child: _Player(page: this));
 }
 
-class _PlayerPageState extends State<PlayerPage> {
-  final Player _player = Player();
-  late final VideoController _video = VideoController(_player);
+class _Player extends StatefulWidget {
+  const _Player({required this.page});
+
+  final PlayerPage page;
+
+  @override
+  State<_Player> createState() => _PlayerState();
+}
+
+class _PlayerState extends State<_Player> with WidgetsBindingObserver {
+  late final Playback _pb = (widget.page.playback ?? MpvPlayback.new)();
   final FocusNode _focus = FocusNode(debugLabel: 'spiller');
+  final FocusNode _searchFocus = FocusNode(debugLabel: 'søk i kanallista');
+  final FocusNode _sideFocus = FocusNode(debugLabel: 'kanallista', skipTraversal: true);
+  final GlobalKey _stageKey = GlobalKey(debugLabel: 'bildet');
+  final GlobalKey<ChannelSideListState> _sideKey = GlobalKey(debugLabel: 'kanallista');
   final List<StreamSubscription<Object?>> _subs = [];
   final List<DateTime> _retries = [];
 
-  late int _index = widget.index;
+  late List<Channel> _list = widget.page.channels;
+  late int _index = widget.page.index;
+  late SideTab _tab = widget.page.fromFavorites ? SideTab.fav : SideTab.list;
+
+  /// kanalen du så før denne (⇄ / Backspace)
+  ({List<Channel> list, int index})? _last;
   Channel? _opened;
   int _seq = 0;
   PlayTarget? _target;
@@ -41,60 +89,95 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _buffering = true;
   bool _playing = false;
   bool _userPaused = false;
-  bool _muted = false;
-  bool _fullscreen = false;
+
+  /// appen er lagt bort på telefon/TV: kanalen er stoppet og startes igjen når du kommer tilbake
+  bool _suspended = false;
+  late double _volume = widget.page.session.volume;
+  late bool _muted = widget.page.session.muted;
+  bool _dragging = false;
+
+  /// du har valgt fullskjerm (bare bildet)
+  bool _full = false;
+
+  /// fullskjerm nå, også når en telefon holdes på tvers (satt i build)
+  bool _fullNow = false;
+
+  /// det vinduet og systemlinjene sist ble satt til
+  bool? _shownFull;
+
+  /// kanallista over bildet i fullskjerm
+  bool _sideOpen = false;
   bool _controls = true;
+  PointerDeviceKind _pointer = isDesktop ? PointerDeviceKind.mouse : PointerDeviceKind.touch;
   String? _status;
   BusyException? _busy;
   List<EpgEntry> _epg = const [];
+  int? _height;
+  String _tech = '';
+  String? _flash;
+  Timer? _flashTimer;
   Timer? _hideTimer;
   Timer? _epgTimer;
+  Timer? _probeTimer;
   Timer? _watchdog;
   Duration _lastPos = Duration.zero;
   DateTime _lastMove = DateTime.now();
 
-  Channel get _channel => widget.channels[_index];
-  TvSource? get _source => widget.session.source;
+  Channel get _channel => _list[_index];
+  Session get _session => widget.page.session;
+  TvSource? get _source => _session.source;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _session.addListener(_onSession);
     _subs
-      ..add(_player.stream.playing.listen((v) => _set(() => _playing = v)))
-      ..add(_player.stream.buffering.listen((v) => _set(() => _buffering = v)))
-      ..add(_player.stream.position.listen((p) {
+      ..add(_pb.playingStream.listen((v) => _set(() => _playing = v)))
+      ..add(_pb.bufferingStream.listen((v) => _set(() => _buffering = v)))
+      ..add(_pb.positionStream.listen((p) {
         if (!_started && p > Duration.zero) {
           _set(() {
             _started = true;
             _status = null;
           });
+          _probe();
         }
       }))
-      ..add(_player.stream.error.listen(_onError))
-      ..add(_player.stream.completed.listen((done) {
+      ..add(_pb.heightStream.listen((h) => _set(() => _height = h)))
+      ..add(_pb.errorStream.listen(_onError))
+      ..add(_pb.completedStream.listen((done) {
         if (done && _started) _ended('sendingen stoppet');
       }));
     _watchdog = Timer.periodic(const Duration(seconds: 2), (_) => _check());
-    if (!isDesktop) unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky));
     unawaited(_start());
     _wake();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _session.removeListener(_onSession);
     for (final s in _subs) {
       unawaited(s.cancel());
     }
+    _flashTimer?.cancel();
     _hideTimer?.cancel();
     _epgTimer?.cancel();
+    _probeTimer?.cancel();
     _watchdog?.cancel();
     final ch = _opened;
     final src = _source;
     if (ch != null && src != null) unawaited(src.close(ch));
-    unawaited(_player.dispose());
+    unawaited(_pb.dispose());
     _focus.dispose();
-    if (_fullscreen) unawaited(windowManager.setFullScreen(false));
-    if (!isDesktop) unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    _searchFocus.dispose();
+    _sideFocus.dispose();
+    if (isDesktop) {
+      if (_shownFull == true) unawaited(_windowFull(false));
+    } else {
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    }
     super.dispose();
   }
 
@@ -102,38 +185,55 @@ class _PlayerPageState extends State<PlayerPage> {
     if (mounted) setState(fn);
   }
 
-  Future<void> _start() async {
-    // Direktesending over nett: koble til igjen ved korte brudd, og ikke vent evig på en strøm som er død.
-    // setProperty finnes bare på libmpv-spilleren (NativePlayer), derav dynamic.
-    final dynamic platform = _player.platform;
-    try {
-      await platform.setProperty('network-timeout', '20');
-      await platform.setProperty(
-        'stream-lavf-o',
-        'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5',
-      );
-    } on Object {
-      // en spiller uten disse innstillingene spiller likevel
+  /// favoritter og «sist sett» er endret
+  void _onSession() => _set(() {});
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (isDesktop) return;
+    if (state == AppLifecycleState.paused && !_suspended) {
+      // Telefon/TV: appen er lagt bort. Gi fra deg tilkoblingen, og start kanalen igjen når du kommer tilbake.
+      _suspended = true;
+      _seq++;
+      unawaited(_pb.stop());
+      final ch = _opened;
+      final src = _source;
+      _opened = null;
+      if (ch != null && src != null) unawaited(src.close(ch));
+    } else if (state == AppLifecycleState.resumed && _suspended) {
+      _suspended = false;
+      _retries.clear();
+      unawaited(_open());
     }
+  }
+
+  // ── avspilling ──
+
+  Future<void> _start() async {
+    await _pb.setup();
+    await _pb.setVolume(_muted ? 0 : _volume);
     await _open();
   }
 
   Future<void> _open({bool takeOver = false}) async {
     final src = _source;
-    if (src == null) return;
+    if (src == null || !mounted) return;
     final my = ++_seq;
     final ch = _channel;
     final prev = _opened;
     _opened = ch;
     if (prev != null && prev.id != ch.id) unawaited(src.close(prev));
-    widget.session.addRecent(ch);
+    _session.addRecent(ch);
     _loadEpg(ch);
+    _probeTimer?.cancel();
+    _target = null;
     _set(() {
       _status = null;
       _busy = null;
       _started = false;
       _buffering = true;
       _userPaused = false;
+      _tech = '';
     });
     _lastPos = Duration.zero;
     _lastMove = DateTime.now();
@@ -142,17 +242,17 @@ class _PlayerPageState extends State<PlayerPage> {
       if (my != _seq || !mounted) return;
       _target = t;
       _url = 0;
-      await _player.open(Media(t.urls.first, httpHeaders: src.httpHeaders));
+      await _pb.open(t.urls.first, src.httpHeaders);
     } on BusyException catch (e) {
       if (my != _seq || !mounted) return;
-      await _player.stop();
+      await _pb.stop();
       _set(() {
         _busy = e;
         _buffering = false;
       });
     } on SourceException catch (e) {
       if (my != _seq || !mounted) return;
-      await _player.stop();
+      await _pb.stop();
       _set(() {
         _status = e.message;
         _buffering = false;
@@ -166,19 +266,19 @@ class _PlayerPageState extends State<PlayerPage> {
     if (t == null || _url + 1 >= t.urls.length) return false;
     _url++;
     _lastMove = DateTime.now();
-    unawaited(_player.open(Media(t.urls[_url], httpHeaders: _source?.httpHeaders ?? const {})));
+    unawaited(_pb.open(t.urls[_url], _source?.httpHeaders ?? const {}));
     return true;
   }
 
   void _onError(String message) {
     debugPrint('mpv: $message');
-    if (!mounted || _started || _busy != null || _status != null || _target == null) return;
+    if (!mounted || _suspended || _started || _busy != null || _status != null || _target == null) return;
     if (_nextUrl()) return;
     // Siste adresse: mpv kan fortsatt komme seg, så vent litt før feilen vises.
     final my = _seq;
     Timer(const Duration(seconds: 8), () {
       if (!mounted || my != _seq || _started || _status != null || _busy != null) return;
-      unawaited(_player.stop());
+      unawaited(_pb.stop());
       _set(() {
         _status = 'Kanalen kunne ikke spilles ($message).';
         _buffering = false;
@@ -189,10 +289,11 @@ class _PlayerPageState extends State<PlayerPage> {
   /// Strømmen stoppet etter at den hadde startet. Åpne kanalen på nytt via kilden (så «alle tilkoblinger
   /// i bruk» vises om noen har tatt over), inntil tre ganger i minuttet.
   void _ended(String why) {
+    if (_suspended) return;
     final now = DateTime.now();
     _retries.removeWhere((t) => now.difference(t) > const Duration(minutes: 1));
     if (_retries.length >= 3) {
-      unawaited(_player.stop());
+      unawaited(_pb.stop());
       _set(() {
         _status = 'Kanalen stoppet ($why).';
         _buffering = false;
@@ -208,9 +309,9 @@ class _PlayerPageState extends State<PlayerPage> {
 
   /// Vakt: står bildet fast uten at mpv sier fra, prøves det på nytt.
   void _check() {
-    if (!mounted || _status != null || _busy != null || _target == null) return;
+    if (!mounted || _suspended || _status != null || _busy != null || _target == null) return;
     final now = DateTime.now();
-    final pos = _player.state.position;
+    final pos = _pb.position;
     if (pos != _lastPos || _userPaused) {
       _lastPos = pos;
       _lastMove = now;
@@ -223,7 +324,7 @@ class _PlayerPageState extends State<PlayerPage> {
     } else if (!_started && still > const Duration(seconds: 30)) {
       _lastMove = now;
       if (!_nextUrl()) {
-        unawaited(_player.stop());
+        unawaited(_pb.stop());
         _set(() {
           _status = 'Fikk ikke bilde fra kanalen.';
           _buffering = false;
@@ -232,11 +333,21 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  /// Kodek og dekoding vises i infoen når bildet har kommet i gang.
+  void _probe() {
+    _probeTimer?.cancel();
+    final my = _seq;
+    _probeTimer = Timer(const Duration(milliseconds: 1500), () async {
+      final text = await _pb.describe();
+      if (mounted && my == _seq) setState(() => _tech = text);
+    });
+  }
+
   void _loadEpg(Channel ch) {
     _epgTimer?.cancel();
     _set(() => _epg = const []);
     Future<void> load() async {
-      final list = await widget.session.epg(ch.id);
+      final list = await _session.epg(ch.id);
       if (mounted && _opened?.id == ch.id) setState(() => _epg = list);
     }
 
@@ -244,40 +355,143 @@ class _PlayerPageState extends State<PlayerPage> {
     _epgTimer = Timer.periodic(const Duration(minutes: 1), (_) => unawaited(load()));
   }
 
+  // ── kontroller ──
+
   void _wake() {
     _hideTimer?.cancel();
     if (!_controls) _set(() => _controls = true);
-    _hideTimer = Timer(const Duration(seconds: 4), () {
-      if (_playing && _status == null && _busy == null) _set(() => _controls = false);
+    _hideTimer = Timer(const Duration(seconds: 3), () {
+      if (_playing && _status == null && _busy == null && !_sideOpen && !_dragging) _set(() => _controls = false);
     });
   }
 
   void _togglePlay() {
     _userPaused = _playing;
-    unawaited(_player.playOrPause());
+    unawaited(_pb.playOrPause());
     _wake();
+  }
+
+  void _applyVolume({bool save = true}) {
+    unawaited(_pb.setVolume(_muted ? 0 : _volume));
+    if (save) _session.saveVolume(_volume, _muted);
+  }
+
+  void _setVolume(double v, {bool save = true}) {
+    final next = v.clamp(0.0, 100.0).toDouble();
+    setState(() {
+      _volume = next;
+      _muted = next == 0;
+    });
+    _applyVolume(save: save);
   }
 
   void _toggleMute() {
-    _muted = !_muted;
-    unawaited(_player.setVolume(_muted ? 0 : 100));
-    _set(() {});
+    setState(() {
+      _muted = !_muted;
+      if (!_muted && _volume == 0) _volume = 50;
+    });
+    _applyVolume();
+    _showFlash(_muted ? 'Lyd av' : 'Lyd ${_volume.round()} %');
   }
 
-  Future<void> _toggleFullscreen() async {
-    if (!isDesktop) return;
-    final next = !_fullscreen;
-    await windowManager.setFullScreen(next);
-    _set(() => _fullscreen = next);
+  void _nudgeVolume(double step) {
+    _setVolume((_muted ? 0 : _volume) + step);
+    _showFlash(_muted ? 'Lyd av' : 'Lyd ${_volume.round()} %');
+  }
+
+  /// musehjulet over bildet styrer lyden (PC)
+  void _onWheel(PointerSignalEvent event) {
+    GestureBinding.instance.pointerSignalResolver.register(event, (e) {
+      if (e is PointerScrollEvent && e.scrollDelta.dy != 0) {
+        _nudgeVolume(e.scrollDelta.dy < 0 ? 5 : -5);
+        _wake();
+      }
+    });
+  }
+
+  void _showFlash(String text) {
+    _flashTimer?.cancel();
+    setState(() => _flash = text);
+    _flashTimer = Timer(const Duration(milliseconds: 1200), () => _set(() => _flash = null));
+  }
+
+  void _toggleFull() {
+    setState(() {
+      _full = !_full;
+      if (!_full) _sideOpen = false;
+    });
+    _focus.requestFocus();
+    _wake();
+  }
+
+  /// Vinduet (PC) og systemlinjene (telefon/TV) følger fullskjermen.
+  void _syncFull(bool full) {
+    if (_shownFull == full) return;
+    final first = _shownFull == null;
+    _shownFull = full;
+    if (isDesktop) {
+      if (!first || full) unawaited(_windowFull(full));
+    } else {
+      unawaited(SystemChrome.setEnabledSystemUIMode(full ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge));
+    }
+  }
+
+  Future<void> _windowFull(bool on) async {
+    try {
+      await windowManager.setFullScreen(on);
+    } on Object {
+      // ikke tilgjengelig her (f.eks. i testene)
+    }
+  }
+
+  /// Kanallista: over bildet i fullskjerm, ellers flyttes fokus dit (den står alltid ved siden av).
+  void _toggleSide() {
+    if (!_fullNow) {
+      _sideKey.currentState?.focusCurrent();
+      return;
+    }
+    setState(() => _sideOpen = !_sideOpen);
+    if (_sideOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _sideKey.currentState?.focusCurrent();
+      });
+    } else {
+      _focus.requestFocus();
+    }
+    _wake();
+  }
+
+  /// Bytter til en kanal i en liste (▲▼ blar videre i den lista).
+  void _switchTo(List<Channel> list, int index) {
+    if (index < 0 || index >= list.length) return;
+    if (list[index].id == _channel.id) {
+      setState(() {
+        _list = list;
+        _index = index;
+      });
+      // samme kanal: prøv igjen hvis den hadde stoppet
+      if (_status != null || _busy != null) _retry();
+      return;
+    }
+    _last = (list: _list, index: _index);
+    _retries.clear();
+    setState(() {
+      _list = list;
+      _index = index;
+    });
+    unawaited(_open());
+    _wake();
   }
 
   void _zap(int step) {
-    final n = widget.channels.length;
+    final n = _list.length;
     if (n < 2) return;
-    _retries.clear();
-    _set(() => _index = (_index + step) % n);
-    unawaited(_open());
-    _wake();
+    _switchTo(_list, (_index + step) % n);
+  }
+
+  void _lastChannel() {
+    final last = _last;
+    if (last != null) _switchTo(last.list, last.index);
   }
 
   void _retry({bool takeOver = false}) {
@@ -285,172 +499,300 @@ class _PlayerPageState extends State<PlayerPage> {
     unawaited(_open(takeOver: takeOver));
   }
 
+  void _close() {
+    final nav = Navigator.of(context);
+    if (nav.canPop()) nav.pop();
+  }
+
+  void _toggleFav(Channel ch, {bool named = false}) {
+    final on = !_session.isFavorite(ch.id);
+    unawaited(_session.toggleFavorite(ch));
+    final name = nameParts(ch.name).main;
+    final text = named
+        ? (on ? '$name er lagt til i favoritter' : '$name er fjernet fra favoritter')
+        : (on ? 'Lagt til i favoritter' : 'Fjernet fra favoritter');
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 2)));
+  }
+
+  void _onStageTap() {
+    if (_pointer == PointerDeviceKind.mouse) {
+      // med mus: pause, som på nettsiden
+      if (_busy == null && _status == null) _togglePlay();
+      return;
+    }
+    if (_controls) {
+      _hideTimer?.cancel();
+      setState(() => _controls = false);
+    } else {
+      _wake();
+    }
+  }
+
+  // ── tastatur og fjernkontroll ──
+
+  static final _upKeys = {LogicalKeyboardKey.arrowUp, LogicalKeyboardKey.pageUp, LogicalKeyboardKey.channelUp};
+  static final _downKeys = {LogicalKeyboardKey.arrowDown, LogicalKeyboardKey.pageDown, LogicalKeyboardKey.channelDown};
+  static final _playKeys = {LogicalKeyboardKey.space, LogicalKeyboardKey.keyK, LogicalKeyboardKey.mediaPlayPause};
+  static final _okKeys = {LogicalKeyboardKey.enter, LogicalKeyboardKey.numpadEnter, LogicalKeyboardKey.select};
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
+    // du skriver i søkefeltet: bare Esc er vår
+    if (_searchFocus.hasFocus) {
+      if (key != LogicalKeyboardKey.escape) return KeyEventResult.ignored;
+      _focus.requestFocus();
+      if (_sideOpen) _toggleSide();
+      return KeyEventResult.handled;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed || keyboard.isMetaPressed || keyboard.isAltPressed) return KeyEventResult.ignored;
     _wake();
-    if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.pageUp || key == LogicalKeyboardKey.channelUp) {
+    // i kanallista flytter piltastene mellom kanalene; ← og Esc går tilbake til bildet
+    if (_sideFocus.hasFocus) {
+      if (key != LogicalKeyboardKey.escape && key != LogicalKeyboardKey.arrowLeft) return KeyEventResult.ignored;
+      if (_sideOpen) {
+        _toggleSide();
+      } else {
+        _focus.requestFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    if (_upKeys.contains(key)) {
       _zap(-1);
-    } else if (key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.pageDown ||
-        key == LogicalKeyboardKey.channelDown) {
+    } else if (_downKeys.contains(key)) {
       _zap(1);
-    } else if (key == LogicalKeyboardKey.space ||
-        key == LogicalKeyboardKey.keyK ||
-        key == LogicalKeyboardKey.mediaPlayPause) {
+    } else if (_playKeys.contains(key)) {
       _togglePlay();
-    } else if (key == LogicalKeyboardKey.keyF) {
-      unawaited(_toggleFullscreen());
+    } else if (key == LogicalKeyboardKey.mediaPlay) {
+      if (!_playing) _togglePlay();
+    } else if (key == LogicalKeyboardKey.mediaPause) {
+      if (_playing) _togglePlay();
     } else if (key == LogicalKeyboardKey.keyM) {
       _toggleMute();
+    } else if (key == LogicalKeyboardKey.keyF) {
+      _toggleFull();
+    } else if (key == LogicalKeyboardKey.keyC || key == LogicalKeyboardKey.contextMenu) {
+      _toggleSide();
+    } else if (key == LogicalKeyboardKey.backspace) {
+      _lastChannel();
     } else if (key == LogicalKeyboardKey.escape) {
-      if (_fullscreen) {
-        unawaited(_toggleFullscreen());
+      if (_sideOpen) {
+        _toggleSide();
+      } else if (_full) {
+        _toggleFull();
       } else {
-        unawaited(Navigator.of(context).maybePop());
+        _close();
       }
+    } else if (_okKeys.contains(key) && _focus.hasPrimaryFocus) {
+      // OK på fjernkontrollen: fullskjerm, og i fullskjerm kanallista
+      if (_fullNow) {
+        _toggleSide();
+      } else {
+        _toggleFull();
+      }
+    } else if (key == LogicalKeyboardKey.arrowRight && _focus.hasPrimaryFocus && !_fullNow) {
+      _sideKey.currentState?.focusCurrent();
     } else {
       return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
   }
 
-  static String _trackName(String? title, String? language, String id) {
-    final parts = [title, language].whereType<String>().where((s) => s.trim().isNotEmpty).toList();
-    return parts.isEmpty ? 'Spor $id' : parts.join(' · ');
+  // ── visning ──
+
+  /// «1080p · H.264 · maskinvaredekoding (d3d11va) · AAC stereo · via Fyrlys-serveren»
+  String _meta() => [
+        if ((_height ?? 0) > 0) '${_height}p',
+        if (_tech.isNotEmpty) _tech,
+        _route(),
+      ].where((s) => s.isNotEmpty).join(' · ');
+
+  String _route() {
+    final t = _target;
+    if (t == null || _busy != null) return '';
+    final url = t.urls[math.min(_url, t.urls.length - 1)];
+    if (url.contains('/api/live/')) return 'via Fyrlys-serveren';
+    final kind = url.contains('.m3u8') ? 'HLS' : 'MPEG-TS';
+    return _source?.kind == 'fyrlys' ? '$kind fra leverandøren via serveren' : '$kind rett fra leverandøren';
   }
 
-  Widget _tracksButton() {
-    return PopupMenuButton<Object>(
-      tooltip: 'Lydspor og undertekster',
-      icon: const Icon(Icons.subtitles_outlined, color: Colors.white),
-      onOpened: () => _hideTimer?.cancel(),
-      onSelected: (value) {
-        if (value is AudioTrack) unawaited(_player.setAudioTrack(value));
-        if (value is SubtitleTrack) unawaited(_player.setSubtitleTrack(value));
-        _wake();
-      },
-      itemBuilder: (context) {
-        final tracks = _player.state.tracks;
-        final current = _player.state.track;
-        final audio = [for (final t in tracks.audio) if (t.id != 'auto' && t.id != 'no') t];
-        final subtitles = [for (final t in tracks.subtitle) if (t.id != 'auto' && t.id != 'no') t];
-        return <PopupMenuEntry<Object>>[
-          const PopupMenuItem<Object>(enabled: false, child: Text('Lydspor')),
-          if (audio.isEmpty) const PopupMenuItem<Object>(enabled: false, child: Text('Bare ett')),
-          for (final t in audio)
-            CheckedPopupMenuItem<Object>(
-              value: t,
-              checked: current.audio.id == t.id,
-              child: Text(_trackName(t.title, t.language, t.id)),
-            ),
-          const PopupMenuDivider(),
-          const PopupMenuItem<Object>(enabled: false, child: Text('Undertekster')),
-          CheckedPopupMenuItem<Object>(
-            value: SubtitleTrack.no(),
-            checked: current.subtitle.id == 'no',
-            child: const Text('Av'),
-          ),
-          for (final t in subtitles)
-            CheckedPopupMenuItem<Object>(
-              value: t,
-              checked: current.subtitle.id == t.id,
-              child: Text(_trackName(t.title, t.language, t.id)),
-            ),
-        ];
-      },
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
+    // telefon på tvers: bare bildet, som i fullskjerm
+    final autoFull = !isDesktop && size.width > size.height && size.height < 500;
+    final full = _full || autoFull;
+    _fullNow = full;
+    if (_shownFull != full) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncFull(full);
+      });
+    }
+    final canToggleFull = _full || !autoFull;
+    final wide = size.width >= 860;
+    final stageWidth = full ? size.width : (wide ? size.width - 404 - pad.horizontal : size.width - pad.horizontal);
+    final stage = KeyedSubtree(
+      key: _stageKey,
+      child: _stage(full: full, compact: stageWidth < 680, canToggleFull: canToggleFull),
     );
-  }
-
-  Widget _card({required String text, required String action, required VoidCallback onPressed}) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 460),
-      margin: const EdgeInsets.all(24),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xE60C1B29),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1D3449)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final scheme = Theme.of(context).colorScheme;
+    final Widget body;
+    if (full) {
+      body = Stack(
+        fit: StackFit.expand,
         children: [
-          Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
-          const SizedBox(height: 16),
-          FilledButton(autofocus: true, onPressed: onPressed, child: Text(action)),
-        ],
-      ),
-    );
-  }
-
-  Widget _bars(Channel ch, NameParts parts, EpgEntry? cur, EpgEntry? next) {
-    final dim = Colors.white.withValues(alpha: 0.72);
-    const shade = Color(0xD9000000);
-    const clear = Color(0x00000000);
-    return Stack(
-      children: [
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [shade, clear]),
+          stage,
+          if (_sideOpen)
+            Positioned(
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: math.min(380.0, size.width),
+              child: Material(color: _sideBg, child: SafeArea(left: false, child: _side(overlay: true))),
             ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 16, 36),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      );
+    } else if (wide) {
+      final h = math.max(180.0, math.min((stageWidth) * 9 / 16, size.height - pad.vertical - 190));
+      body = SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    IconButton(
-                      tooltip: 'Tilbake',
-                      color: Colors.white,
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => unawaited(Navigator.of(context).maybePop()),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text.rich(
-                            TextSpan(children: [
-                              if (ch.number != null)
-                                TextSpan(text: '${ch.number}  ', style: TextStyle(color: dim, fontWeight: FontWeight.w600)),
-                              if (parts.time.isNotEmpty)
-                                TextSpan(
-                                  text: '${parts.time}  ',
-                                  style: const TextStyle(color: Color(0xFFF2B544), fontWeight: FontWeight.w700),
-                                ),
-                              TextSpan(text: parts.main),
-                            ]),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
-                          ),
-                          if (parts.sub.isNotEmpty)
-                            Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: dim)),
-                          if (cur != null)
-                            Text(
-                              '${cur.title}  ${hhmm(cur.start)}–${hhmm(cur.stop)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          if (next != null)
-                            Text(
-                              'Deretter ${hhmm(next.start)}: ${next.title}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: dim),
-                            ),
-                        ],
-                      ),
-                    ),
+                    SizedBox(height: h, child: ClipRRect(borderRadius: BorderRadius.circular(12), child: stage)),
+                    _info(wide: true),
                   ],
                 ),
+              ),
+            ),
+            SizedBox(
+              width: 360,
+              child: Material(
+                color: _sideBg,
+                shape: Border(left: BorderSide(color: scheme.outline)),
+                child: _side(),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      body = SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: math.min(stageWidth * 9 / 16, size.height * 0.45), child: stage),
+            _info(wide: false),
+            Expanded(
+              child: Material(
+                color: _sideBg,
+                shape: Border(top: BorderSide(color: scheme.outline)),
+                child: _side(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return PopScope(
+      canPop: !_full && !_sideOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_sideOpen) {
+          _toggleSide();
+        } else if (_full) {
+          _toggleFull();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: full ? Colors.black : scheme.surfaceContainerLowest,
+        body: Focus(focusNode: _focus, autofocus: true, onKeyEvent: _onKey, child: body),
+      ),
+    );
+  }
+
+  /// Bildet med det som ligger over: kontroller, venting, beskjeder. Samme widget i alle oppsett (GlobalKey),
+  /// så avspillingen ikke forstyrres når du går inn og ut av fullskjerm.
+  Widget _stage({required bool full, required bool compact, required bool canToggleFull}) {
+    final busy = _busy;
+    final status = _status;
+    final flash = _flash;
+    final showBars = _controls || busy != null || status != null;
+    return Listener(
+      onPointerDown: (e) {
+        _pointer = e.kind;
+        if (!_focus.hasPrimaryFocus) _focus.requestFocus();
+      },
+      onPointerSignal: isDesktop ? _onWheel : null,
+      child: MouseRegion(
+        cursor: showBars ? MouseCursor.defer : SystemMouseCursors.none,
+        onHover: (_) => _wake(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // trykk og dobbeltklikk bare på selve bildet, så knappene svarer med en gang
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _onStageTap,
+              onDoubleTap: canToggleFull ? _toggleFull : null,
+              child: _pb.view(),
+            ),
+            if (_buffering && busy == null && status == null)
+              const IgnorePointer(child: Center(child: CircularProgressIndicator())),
+            if (flash != null)
+              Positioned(top: full ? 96 : 16, right: 20, child: IgnorePointer(child: _flashBadge(flash))),
+            ExcludeFocus(
+              excluding: !showBars,
+              child: IgnorePointer(
+                ignoring: !showBars,
+                child: AnimatedOpacity(
+                  opacity: showBars ? 1 : 0,
+                  duration: const Duration(milliseconds: 250),
+                  child: _overlay(full: full, compact: compact, canToggleFull: canToggleFull),
+                ),
+              ),
+            ),
+            if (busy != null)
+              _card(
+                text: '${busy.message}\nNår noen lukker spilleren, blir tilkoblingen ledig.',
+                action: busy.busy.length == 1 ? 'Stopp ${busy.busy.first} og se her' : 'Ta over en av tilkoblingene',
+                onPressed: () => _retry(takeOver: true),
+              )
+            else if (status != null)
+              _card(text: status, action: 'Prøv igjen', onPressed: _retry),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _overlay({required bool full, required bool compact, required bool canToggleFull}) {
+    return Stack(
+      children: [
+        if (full) Positioned(left: 0, right: 0, top: 0, child: _topBar()),
+        Positioned(
+          left: 12,
+          top: 12,
+          child: SafeArea(
+            right: false,
+            bottom: false,
+            child: Material(
+              color: const Color(0x8C000000),
+              shape: const CircleBorder(side: BorderSide(color: Color(0x2EFFFFFF))),
+              child: IconButton(
+                tooltip: 'Lukk (Esc)',
+                icon: const Icon(Icons.close, size: 20),
+                color: Colors.white,
+                onPressed: _close,
               ),
             ),
           ),
@@ -459,130 +801,393 @@ class _PlayerPageState extends State<PlayerPage> {
           left: 0,
           right: 0,
           bottom: 0,
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [shade, clear]),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 36, 12, 12),
-                child: Row(
-                  children: [
-                    IconButton(
-                      tooltip: _playing ? 'Pause (mellomrom)' : 'Spill av (mellomrom)',
-                      color: Colors.white,
-                      iconSize: 32,
-                      icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
-                      onPressed: _togglePlay,
-                    ),
-                    IconButton(
-                      tooltip: 'Forrige kanal (↑)',
-                      color: Colors.white,
-                      icon: const Icon(Icons.keyboard_arrow_up),
-                      onPressed: () => _zap(-1),
-                    ),
-                    IconButton(
-                      tooltip: 'Neste kanal (↓)',
-                      color: Colors.white,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      onPressed: () => _zap(1),
-                    ),
-                    const SizedBox(width: 12),
-                    if (cur != null)
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: cur.progressAt(DateTime.now()),
-                            minHeight: 4,
-                            color: const Color(0xFFF2B544),
-                            backgroundColor: Colors.white24,
-                          ),
-                        ),
-                      )
-                    else
-                      const Spacer(),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      tooltip: _muted ? 'Lyd på (M)' : 'Lyd av (M)',
-                      color: Colors.white,
-                      icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
-                      onPressed: _toggleMute,
-                    ),
-                    _tracksButton(),
-                    if (isDesktop)
-                      IconButton(
-                        tooltip: _fullscreen ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
-                        color: Colors.white,
-                        icon: Icon(_fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
-                        onPressed: () => unawaited(_toggleFullscreen()),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          child: _bottomBar(full: full, compact: compact, canToggleFull: canToggleFull),
         ),
       ],
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  /// I fullskjerm: kanal og program øverst på bildet.
+  Widget _topBar() {
     final ch = _channel;
     final parts = nameParts(ch.name);
     final nn = nowAndNext(_epg, DateTime.now());
-    final busy = _busy;
-    final status = _status;
-    final showBars = _controls || busy != null || status != null;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Focus(
-        focusNode: _focus,
-        autofocus: true,
-        onKeyEvent: _onKey,
-        child: MouseRegion(
-          cursor: showBars ? SystemMouseCursors.basic : SystemMouseCursors.none,
-          onHover: (_) => _wake(),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (_controls) {
-                _hideTimer?.cancel();
-                _set(() => _controls = false);
-              } else {
-                _wake();
-              }
-            },
-            onDoubleTap: isDesktop ? () => unawaited(_toggleFullscreen()) : null,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Video(controller: _video, controls: NoVideoControls),
-                if (_buffering && busy == null && status == null) const Center(child: CircularProgressIndicator()),
-                IgnorePointer(
-                  ignoring: !showBars,
-                  child: AnimatedOpacity(
-                    opacity: showBars ? 1 : 0,
-                    duration: const Duration(milliseconds: 250),
-                    child: _bars(ch, parts, nn.now, nn.next),
-                  ),
+    final cur = nn.now;
+    final next = nn.next;
+    final meta = _meta();
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xD1000000), Color(0x00000000)],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(68, 14, 12, 40),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _title(ch, parts, size: 19, color: Colors.white, numberColor: _dim),
+                    if (cur != null)
+                      _nowLine(cur, color: const Color(0xFFDFE6EA), bar: 90, fontSize: 14)
+                    else if (parts.sub.isNotEmpty)
+                      Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _dim)),
+                    if (next != null)
+                      Text(
+                        'Deretter ${hhmm(next.start)}: ${next.title}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _dim, fontSize: 13),
+                      ),
+                    if (meta.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Text(
+                          meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Color(0xFF8696A2), fontSize: 12),
+                        ),
+                      ),
+                  ],
                 ),
-                if (busy != null)
-                  Center(
-                    child: _card(
-                      text: '${busy.message}\nNår noen lukker spilleren, blir tilkoblingen ledig.',
-                      action: busy.busy.length == 1 ? 'Stopp ${busy.busy.first} og se her' : 'Ta over en av tilkoblingene',
-                      onPressed: () => _retry(takeOver: true),
-                    ),
-                  ),
-                if (status != null && busy == null)
-                  Center(child: _card(text: status, action: 'Prøv igjen', onPressed: _retry)),
-              ],
-            ),
+              ),
+              _star(ch, idle: Colors.white70),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _bottomBar({required bool full, required bool compact, required bool canToggleFull}) {
+    final volume = _muted ? 0.0 : _volume;
+    final volumeIcon = volume == 0 ? Icons.volume_off : (volume < 50 ? Icons.volume_down : Icons.volume_up);
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [Color(0xDB000000), Color(0x00000000)],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(compact ? 4 : 12, 44, compact ? 4 : 12, compact ? 4 : 10),
+          child: Row(
+            children: [
+              _ctl(_playing ? Icons.pause : Icons.play_arrow, _playing ? 'Pause (mellomrom)' : 'Spill av (mellomrom)',
+                  _togglePlay,
+                  size: 30),
+              if (!compact) _liveBadge(),
+              const Spacer(),
+              _ctl(Icons.keyboard_arrow_up, 'Forrige kanal (↑)', () => _zap(-1)),
+              _ctl(Icons.keyboard_arrow_down, 'Neste kanal (↓)', () => _zap(1)),
+              if (!compact) _ctl(Icons.swap_horiz, 'Kanalen du så sist (Backspace)', _last == null ? null : _lastChannel),
+              _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
+              if (isDesktop && !compact) _volumeSlider(volume),
+              if (full) _ctl(Icons.list, 'Kanaler (C)', _toggleSide, on: _sideOpen),
+              _tracksButton(),
+              if (canToggleFull)
+                _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen, full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
+                    _toggleFull),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _ctl(IconData icon, String tooltip, VoidCallback? onPressed, {double size = 24, bool on = false}) {
+    return IconButton(
+      tooltip: tooltip,
+      iconSize: size,
+      color: on ? Theme.of(context).colorScheme.primary : Colors.white,
+      disabledColor: Colors.white38,
+      icon: Icon(icon),
+      onPressed: onPressed,
+    );
+  }
+
+  Widget _liveBadge() {
+    return Container(
+      height: 28,
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: _playing ? FyrlysColors.live : Colors.white24,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+            child: SizedBox(width: 8, height: 8),
+          ),
+          SizedBox(width: 7),
+          Text(
+            'DIREKTE',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.7),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _volumeSlider(double volume) {
+    return SizedBox(
+      width: 100,
+      child: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          trackHeight: 3,
+          activeTrackColor: Colors.white,
+          inactiveTrackColor: Colors.white24,
+          thumbColor: Colors.white,
+          overlayColor: Colors.white24,
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+          overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+        ),
+        child: Slider(
+          value: volume,
+          max: 100,
+          semanticFormatterCallback: (v) => 'Volum ${v.round()} %',
+          onChangeStart: (_) => _dragging = true,
+          onChanged: (v) {
+            _setVolume(v, save: false);
+            _wake();
+          },
+          onChangeEnd: (v) {
+            _dragging = false;
+            _setVolume(v);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _tracksButton() {
+    return PopupMenuButton<TrackChoice>(
+      tooltip: 'Lydspor og undertekster',
+      icon: const Icon(Icons.subtitles_outlined, color: Colors.white),
+      onOpened: () => _hideTimer?.cancel(),
+      onCanceled: _wake,
+      onSelected: (t) {
+        unawaited(_pb.selectTrack(t));
+        _wake();
+        _probe();
+      },
+      itemBuilder: (context) {
+        final audio = _pb.audioTracks();
+        final subtitles = _pb.subtitleTracks();
+        return <PopupMenuEntry<TrackChoice>>[
+          const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Lydspor')),
+          if (audio.isEmpty) const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Bare ett')),
+          for (final t in audio) CheckedPopupMenuItem<TrackChoice>(value: t, checked: t.selected, child: Text(t.label)),
+          const PopupMenuDivider(),
+          const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Undertekster')),
+          for (final t in subtitles)
+            CheckedPopupMenuItem<TrackChoice>(value: t, checked: t.selected, child: Text(t.label)),
+        ];
+      },
+    );
+  }
+
+  Widget _flashBadge(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(color: const Color(0xA6000000), borderRadius: BorderRadius.circular(12)),
+      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+    );
+  }
+
+  Widget _card({required String text, required String action, required VoidCallback onPressed}) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 460),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xE60C1B29),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1D3449)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
+              const SizedBox(height: 16),
+              FilledButton(autofocus: true, onPressed: onPressed, child: Text(action)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _title(Channel ch, NameParts parts,
+      {required double size, required Color color, required Color numberColor, int maxLines = 1}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Text.rich(
+      TextSpan(children: [
+        if (ch.number != null)
+          TextSpan(
+            text: '${ch.number}  ',
+            style: TextStyle(color: numberColor, fontSize: (size * 0.65).roundToDouble(), fontWeight: FontWeight.w700),
+          ),
+        if (parts.time.isNotEmpty) TextSpan(text: '${parts.time}  ', style: TextStyle(color: scheme.primary)),
+        TextSpan(text: parts.main),
+      ]),
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: color, fontSize: size, fontWeight: FontWeight.w700, letterSpacing: -0.3, height: 1.25),
+    );
+  }
+
+  Widget _nowLine(EpgEntry cur, {required Color color, double? bar, double fontSize = 14}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              cur.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: color, fontSize: fontSize),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text('${hhmm(cur.start)}–${hhmm(cur.stop)}', style: TextStyle(color: _dim, fontSize: fontSize - 1)),
+          if (bar != null) ...[
+            const SizedBox(width: 10),
+            SizedBox(
+              width: bar,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: cur.progressAt(DateTime.now()),
+                  minHeight: 3,
+                  color: scheme.primary,
+                  backgroundColor: Colors.white24,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _star(Channel ch, {required Color idle}) {
+    final scheme = Theme.of(context).colorScheme;
+    final fav = _session.isFavorite(ch.id);
+    return IconButton(
+      key: const ValueKey('player-star'),
+      tooltip: fav ? 'Fjern fra favoritter' : 'Legg til i favoritter',
+      icon: Icon(fav ? Icons.star : Icons.star_border, size: 26, color: fav ? scheme.primary : idle),
+      onPressed: () => _toggleFav(ch),
+    );
+  }
+
+  /// Under bildet: kanal, stjerne, programmet nå og etterpå, beskrivelse og teknisk info.
+  Widget _info({required bool wide}) {
+    final ch = _channel;
+    final parts = nameParts(ch.name);
+    final nn = nowAndNext(_epg, DateTime.now());
+    final cur = nn.now;
+    final next = nn.next;
+    final scheme = Theme.of(context).colorScheme;
+    final meta = _meta();
+    return Padding(
+      padding: wide ? const EdgeInsets.fromLTRB(2, 14, 2, 8) : const EdgeInsets.fromLTRB(14, 8, 4, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: _title(
+                  ch,
+                  parts,
+                  size: wide ? 24 : 18,
+                  color: scheme.onSurface,
+                  numberColor: scheme.onSurfaceVariant,
+                  maxLines: wide ? 2 : 1,
+                ),
+              ),
+              _star(ch, idle: scheme.onSurfaceVariant),
+            ],
+          ),
+          if (cur != null)
+            _nowLine(cur, color: scheme.onSurface, bar: wide ? 140 : null, fontSize: wide ? 15 : 14)
+          else if (parts.sub.isNotEmpty)
+            Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _ink2)),
+          if (next != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'Deretter ${hhmm(next.start)}: ${next.title}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _ink2, fontSize: 14),
+              ),
+            ),
+          if (wide && cur != null && cur.description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Text(
+                  cur.description,
+                  maxLines: 6,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _ink2, fontSize: 14, height: 1.4),
+                ),
+              ),
+            ),
+          if (meta.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                meta,
+                maxLines: wide ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12, letterSpacing: 0.2),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _side({bool overlay = false}) {
+    final page = widget.page;
+    return Focus(
+      focusNode: _sideFocus,
+      child: ChannelSideList(
+        key: _sideKey,
+        session: _session,
+        title: page.fromFavorites ? 'Alle kanaler' : page.listTitle,
+        channels: page.fromFavorites ? _session.channels : page.channels,
+        tab: _tab,
+        onTab: (t) => setState(() => _tab = t),
+        currentId: _channel.id,
+        onPlay: _switchTo,
+        onStar: (ch) => _toggleFav(ch, named: true),
+        searchFocus: _searchFocus,
+        onClose: overlay ? _toggleSide : null,
       ),
     );
   }

@@ -22,6 +22,13 @@ ingen detaljer om hjemmenettet hans i koden (eksempeladresser som 192.168.1.10 e
   filinfo på Windows settes med `sed` i workflowen. Ikonene er tegnet fra `fyrlys.svg` i nettversjonen.
 - Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva Pål-Erik må
   prøve på Windows-PC-en (peagpc), telefon eller TV.
+- Flutter- og media_kit-kildene kan hentes for å sjekke API-er (github.com er åpent for git):
+  `git clone --depth 1 --branch stable --filter=blob:none --sparse https://github.com/flutter/flutter.git`
+  og `git sparse-checkout set packages/flutter/lib packages/flutter_test/lib` (tilsvarende for media-kit/media-kit).
+  `unnecessary_import` er en advarsel og stopper bygget; sjekk hva `material.dart` eksporterer.
+- **Ikke lag ny versjon for hver rettelse** (Pål-Erik 25.10): push til `main`, så tester han bygget fra
+  Actions (nyeste «Bygg» → Artifacts → `Fyrlys-windows`). Versjon, byggnummer og commit står nederst i menyen
+  (`--dart-define` FYRLYS_VERSION/BUILD/COMMIT i workflowen, `lib/build_info.dart`). Ny versjon når det virker.
 - Release: oppdater `version` i pubspec.yaml, push, og start
   `gh workflow run build.yml --repo ungerdas/fyrlys -f release=vX.Y.Z`. Jobben `release` lager taggen og en
   GitHub-release med `Fyrlys-vX.Y.Z-windows.zip` og APK-er per ABI (v0.x som forhåndsutgivelse). Tagger kan
@@ -41,13 +48,23 @@ ingen detaljer om hjemmenettet hans i koden (eksempeladresser som 192.168.1.10 e
 - `core/session.dart` – tilstanden (ChangeNotifier): innlogging (lagres i shared_preferences, også
   Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
   favoritter (lokalt for Xtream, på serveren for Fyrlys-server, i kø), «sist sett», lys/mørk.
-- `ui/login_page.dart`, `ui/home_page.dart` (sidemeny ≥ 900 px, ellers nedtrekksliste), `ui/channel_card.dart`,
-  `ui/player_page.dart` (media_kit `Video` uten egne kontroller + eget lag: kanalbytte, lydspor/undertekster,
-  fullskjerm via window_manager, tastatur og fjernkontroll; nye forsøk ved brudd/fast bilde, tre per minutt).
+- `ui/login_page.dart`, `ui/home_page.dart` (sidemeny ≥ 900 px, ellers nedtrekksliste), `ui/channel_card.dart`.
+- `ui/player_page.dart` – som spilleren på nettsiden (alltid mørk): bildet med kontroller og programinfo under,
+  kanallista (`ui/side_list.dart`: lista du kom fra / ★ Favoritter, søk) til høyre fra 860 px, ellers under.
+  Fullskjerm = bare bildet (window_manager på PC, immersive på Android), kanallista over bildet med C; telefon på
+  tvers = fullskjerm. Bildet ligger under en GlobalKey, så det flyttes mellom oppsettene uten å starte på nytt.
+  Volum (glidebryter på PC, musehjulet over bildet, lagres i Session), ⇄/Backspace, tastatur og fjernkontroll
+  (OK = fullskjerm/kanalliste, → inn i lista, ← ut). Infoen viser oppløsning, kodek/hwdec/lyd (mpv-egenskaper)
+  og hvor strømmen kommer fra. Nye forsøk ved brudd/fast bilde, tre per minutt. Telefon/TV: kanalen stoppes når
+  appen legges bort (`paused`) og startes igjen ved `resumed`.
+- `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene.
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
-- Tester i `test/`: navn, Xtream-kilden, Fyrlys-kilden (med MockClient) og widget-tester med en falsk kilde.
+- Tester i `test/`: navn, Xtream-kilden, Fyrlys-kilden (med MockClient), widget-tester for TV-siden og
+  spilleren (`player_test.dart`) med falsk kilde og avspiller (`fakes.dart`).
 
 ## Status
-- 25.10.2026: v0.1 skrevet. Ikke prøvd på ekte enheter ennå.
+- 25.10.2026: v0.1 skrevet. Pål-Erik prøvde Windows-versjonen og savnet volumkontroll og spilleren slik den er
+  på nettsiden før fullskjerm. Laget samme dag (spilleren som på nettsiden, volum, byggnummer i menyen), testet med
+  widget-tester. Ikke prøvd på ekte enheter ennå; Android TV-navigasjon er helt uprøvd.
 - Ideer senere: tilbakespoling i mpv-bufferet, TV-guide, bilde-i-bilde på Android, filmer/serier,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.

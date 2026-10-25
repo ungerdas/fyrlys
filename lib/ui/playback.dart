@@ -1,0 +1,181 @@
+import 'package:flutter/widgets.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+
+import '../core/names.dart';
+
+/// Et lydspor eller en undertekst man kan velge i spilleren.
+class TrackChoice {
+  const TrackChoice(this.label, {required this.selected, required this.value});
+
+  final String label;
+  final bool selected;
+
+  /// sporet slik avspilleren kjenner det
+  final Object value;
+}
+
+/// Avspilleren bak spilleren: mpv via media_kit i appen, en falsk i testene (mpv finnes ikke der).
+abstract class Playback {
+  Stream<bool> get playingStream;
+  Stream<bool> get bufferingStream;
+  Stream<Duration> get positionStream;
+  Stream<String> get errorStream;
+  Stream<bool> get completedStream;
+
+  /// bildets høyde i piksler, når den er kjent
+  Stream<int?> get heightStream;
+
+  Duration get position;
+
+  /// innstillinger for direktesending over nett, før første kanal åpnes
+  Future<void> setup();
+
+  Future<void> open(String url, Map<String, String> headers);
+
+  Future<void> stop();
+
+  Future<void> playOrPause();
+
+  /// 0–100
+  Future<void> setVolume(double volume);
+
+  List<TrackChoice> audioTracks();
+
+  List<TrackChoice> subtitleTracks();
+
+  Future<void> selectTrack(TrackChoice choice);
+
+  /// for feilsøking: kodek, dekoding og lyd, f.eks. «H.264 · maskinvaredekoding (d3d11va) · AC3 5.1»
+  Future<String> describe();
+
+  Widget view();
+
+  Future<void> dispose();
+}
+
+/// mpv via media_kit.
+class MpvPlayback implements Playback {
+  MpvPlayback() {
+    _video = VideoController(_player);
+  }
+
+  final Player _player = Player();
+  late final VideoController _video;
+
+  @override
+  Stream<bool> get playingStream => _player.stream.playing;
+
+  @override
+  Stream<bool> get bufferingStream => _player.stream.buffering;
+
+  @override
+  Stream<Duration> get positionStream => _player.stream.position;
+
+  @override
+  Stream<String> get errorStream => _player.stream.error;
+
+  @override
+  Stream<bool> get completedStream => _player.stream.completed;
+
+  @override
+  Stream<int?> get heightStream => _player.stream.height;
+
+  @override
+  Duration get position => _player.state.position;
+
+  @override
+  Future<void> setup() async {
+    final p = _player.platform;
+    if (p is! NativePlayer) return;
+    try {
+      // Direktesending over nett: koble til igjen ved korte brudd, og ikke vent evig på en strøm som er død.
+      await p.setProperty('network-timeout', '20');
+      await p.setProperty(
+        'stream-lavf-o',
+        'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5',
+      );
+    } on Object {
+      // en spiller uten disse innstillingene spiller likevel
+    }
+  }
+
+  @override
+  Future<void> open(String url, Map<String, String> headers) => _player.open(Media(url, httpHeaders: headers));
+
+  @override
+  Future<void> stop() => _player.stop();
+
+  @override
+  Future<void> playOrPause() => _player.playOrPause();
+
+  @override
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
+
+  static String _name(String? title, String? language, String id) {
+    final parts = [title, language].whereType<String>().where((s) => s.trim().isNotEmpty).toList();
+    return parts.isEmpty ? 'Spor $id' : parts.join(' · ');
+  }
+
+  @override
+  List<TrackChoice> audioTracks() {
+    final current = _player.state.track.audio.id;
+    return [
+      for (final t in _player.state.tracks.audio)
+        if (t.id != 'auto' && t.id != 'no')
+          TrackChoice(_name(t.title, t.language, t.id), selected: t.id == current, value: t),
+    ];
+  }
+
+  @override
+  List<TrackChoice> subtitleTracks() {
+    final current = _player.state.track.subtitle.id;
+    return [
+      TrackChoice('Av', selected: current == 'no', value: SubtitleTrack.no()),
+      for (final t in _player.state.tracks.subtitle)
+        if (t.id != 'auto' && t.id != 'no')
+          TrackChoice(_name(t.title, t.language, t.id), selected: t.id == current, value: t),
+    ];
+  }
+
+  @override
+  Future<void> selectTrack(TrackChoice choice) async {
+    final v = choice.value;
+    if (v is AudioTrack) await _player.setAudioTrack(v);
+    if (v is SubtitleTrack) await _player.setSubtitleTrack(v);
+  }
+
+  @override
+  Future<String> describe() async {
+    final p = _player.platform;
+    if (p is! NativePlayer) return '';
+    Future<String> prop(String name) async {
+      try {
+        return (await p.getProperty(name)).trim();
+      } on Object {
+        return '';
+      }
+    }
+
+    final video = await prop('video-format');
+    final hwdec = await prop('hwdec-current');
+    final audio = await prop('audio-codec-name');
+    final channels = await prop('audio-params/hr-channels');
+    return [
+      if (video.isNotEmpty) codecName(video),
+      if (video.isNotEmpty && hwdec.isNotEmpty) hwdec == 'no' ? 'programvaredekoding' : 'maskinvaredekoding ($hwdec)',
+      if (audio.isNotEmpty) [codecName(audio), if (channels.isNotEmpty) channelLayout(channels)].join(' '),
+    ].join(' · ');
+  }
+
+  @override
+  Widget view() => Video(
+        controller: _video,
+        controls: NoVideoControls,
+        // spilleren gir selv fra seg kanalen når appen legges bort, og starter den igjen etterpå
+        pauseUponEnteringBackgroundMode: false,
+      );
+
+  @override
+  Future<void> dispose() => _player.dispose();
+}
