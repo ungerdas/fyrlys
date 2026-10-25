@@ -4,6 +4,9 @@ const String appVersion = String.fromEnvironment('FYRLYS_VERSION');
 const String appBuild = String.fromEnvironment('FYRLYS_BUILD');
 const String appCommit = String.fromEnvironment('FYRLYS_COMMIT');
 
+/// repoet med testbyggene appen oppdaterer seg fra (et fork bygger med sitt eget)
+const String appRepo = String.fromEnvironment('FYRLYS_REPO', defaultValue: 'ungerdas/fyrlys');
+
 /// «Fyrlys 0.1.0 · bygg 12 (a1b2c3d)», så det er lett å se hvilket testbygg som kjører.
 String get appBuildLabel {
   final version = appVersion.isEmpty ? '' : ' $appVersion';

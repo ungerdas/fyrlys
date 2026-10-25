@@ -5,14 +5,18 @@ import 'package:flutter/material.dart';
 import '../build_info.dart';
 import '../core/models.dart';
 import '../core/session.dart';
+import '../core/updater.dart';
 import 'channel_card.dart';
 import 'player_page.dart';
 
 /// TV-siden: kategorier (sidemeny på PC og TV, nedtrekksliste på telefon), søk og kanalkort.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.session});
+  const HomePage({super.key, required this.session, this.updater});
 
   final Session session;
+
+  /// oppdateringer fra GitHub (Windows); null i testene og der appen ikke oppdaterer seg selv
+  final Updater? updater;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -133,11 +137,14 @@ class _HomePageState extends State<HomePage> {
             tooltip: 'Meny',
             onSelected: (v) {
               if (v == 'reload') unawaited(s.load(force: true));
+              if (v == 'update') unawaited(_checkUpdates());
               if (v == 'logout') unawaited(s.logout());
             },
             itemBuilder: (context) => [
               PopupMenuItem<String>(enabled: false, child: Text(s.source?.label ?? '')),
               const PopupMenuItem<String>(value: 'reload', child: Text('Hent listene på nytt')),
+              if (widget.updater?.enabled ?? false)
+                const PopupMenuItem<String>(value: 'update', child: Text('Se etter oppdateringer')),
               const PopupMenuItem<String>(value: 'logout', child: Text('Logg ut')),
               const PopupMenuDivider(),
               PopupMenuItem<String>(
@@ -149,26 +156,119 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: wide
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(width: 280, child: _sidebar()),
-                VerticalDivider(width: 1, color: theme.colorScheme.outline),
-                Expanded(
-                  child: Column(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.updater case final u?) ListenableBuilder(listenable: u, builder: (context, _) => _updateBanner(u)),
+          Expanded(
+            child: wide
+                ? Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [_header(list), Expanded(child: content)],
+                    children: [
+                      SizedBox(width: 280, child: _sidebar()),
+                      VerticalDivider(width: 1, color: theme.colorScheme.outline),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [_header(list), Expanded(child: content)],
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [_picker(), Expanded(child: content)],
                   ),
-                ),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [_picker(), Expanded(child: content)],
-            ),
+          ),
+        ],
+      ),
     );
   }
+
+  Future<void> _checkUpdates() async {
+    final u = widget.updater;
+    if (u == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final info = await u.check(manual: true);
+      if (info == null) messenger.showSnackBar(SnackBar(content: Text('Du har siste versjon ($appBuildLabel).')));
+    } on UpdateException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Fikk ikke sjekket oppdateringer: ${e.message}')));
+    }
+  }
+
+  /// Ny versjon: lastes ned i bakgrunnen og legges inn når du lukker Fyrlys (eller med «Start på nytt nå»).
+  Widget _updateBanner(Updater u) {
+    final scheme = Theme.of(context).colorScheme;
+    final info = u.available;
+    String? text;
+    double? progress;
+    final actions = <Widget>[];
+    final close = IconButton(tooltip: 'Lukk', icon: const Icon(Icons.close), onPressed: u.dismiss);
+    switch (u.state) {
+      case UpdateState.available:
+        text = 'Ny versjon: ${info?.title ?? ''}';
+        if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
+        actions.add(FilledButton(onPressed: () => unawaited(u.download()), child: const Text('Last ned')));
+      case UpdateState.downloading:
+        text = 'Laster ned ${info?.title ?? 'ny versjon'} … ${(u.progress * 100).round()} %';
+        progress = u.progress;
+      case UpdateState.ready:
+        text = '${info?.title ?? 'En ny versjon'} er lastet ned og legges inn når du lukker Fyrlys.';
+        if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
+        actions.add(FilledButton(onPressed: () => unawaited(u.restartNow()), child: const Text('Start på nytt nå')));
+      case UpdateState.failed:
+        text = u.error ?? 'Oppdateringen feilet.';
+        actions
+          ..add(TextButton(onPressed: () => unawaited(u.check()), child: const Text('Prøv igjen')))
+          ..add(close);
+      case UpdateState.idle:
+      case UpdateState.checking:
+        text = u.notice;
+        actions.add(close);
+    }
+    if (text == null) return const SizedBox.shrink();
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  u.state == UpdateState.failed ? Icons.error_outline : Icons.system_update_alt,
+                  color: u.state == UpdateState.failed ? scheme.error : scheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(text)),
+                for (final a in actions) Padding(padding: const EdgeInsets.only(left: 8), child: a),
+              ],
+            ),
+            if (progress != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(36, 6, 8, 4),
+                child: LinearProgressIndicator(value: progress),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _notesButton(UpdateInfo info) => TextButton(
+        onPressed: () => unawaited(showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(info.title),
+            content: SingleChildScrollView(child: SelectableText(info.notes)),
+            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Lukk'))],
+          ),
+        )),
+        child: const Text('Hva er nytt?'),
+      );
 
   Widget _searchField({bool autofocus = false}) => TextField(
         controller: _search,

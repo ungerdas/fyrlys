@@ -1,14 +1,18 @@
+import 'dart:ui' show AppExitResponse;
+
 import 'package:flutter/material.dart';
 
 import 'core/session.dart';
+import 'core/updater.dart';
 import 'theme.dart';
 import 'ui/home_page.dart';
 import 'ui/login_page.dart';
 
 class FyrlysApp extends StatefulWidget {
-  const FyrlysApp({super.key, required this.session});
+  const FyrlysApp({super.key, required this.session, this.updater});
 
   final Session session;
+  final Updater? updater;
 
   @override
   State<FyrlysApp> createState() => _FyrlysAppState();
@@ -34,6 +38,14 @@ class _FyrlysAppState extends State<FyrlysApp> with WidgetsBindingObserver {
   }
 
   @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    // en nedlastet oppdatering legges inn når du lukker appen (skriptet venter til den er lukket)
+    final updater = widget.updater;
+    if (updater != null) await updater.apply(restart: false);
+    return AppExitResponse.exit;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final session = widget.session;
     return ListenableBuilder(
@@ -48,7 +60,7 @@ class _FyrlysAppState extends State<FyrlysApp> with WidgetsBindingObserver {
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
             : session.source == null
                 ? LoginPage(session: session)
-                : HomePage(session: session),
+                : HomePage(session: session, updater: widget.updater),
       ),
     );
   }

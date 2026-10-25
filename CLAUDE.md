@@ -2,9 +2,9 @@
 
 Egen app for Fyrlys, Pål-Eriks IPTV-spiller: Flutter med media_kit (mpv) som avspiller, for Windows,
 Android og Android TV (senere macOS, Linux og iOS). Den kommer **i tillegg til** Docker-versjonen
-(nettside + server med ffmpeg) i det private repoet `ungerdas/peagstreams`, som kjører på LenovoTorrentPC
-(http://192.168.50.18:8766). Ikke bland inn endringer der herfra. Dette repoet er tenkt offentlig, så
-ingen detaljer om hjemmenettet hans i koden (eksempeladresser som 192.168.1.10 er greit).
+(nettside + server med ffmpeg) i det private repoet `ungerdas/peagstreams`, som kjører på hjemmeserveren hans.
+Ikke bland inn endringer der herfra. **Dette repoet er offentlig** (fra 25.10.2026): ingen detaljer om
+hjemmenettet hans her, verken i koden, testene eller disse notatene (eksempeladresser som 192.168.1.10 er greit).
 
 ## Arbeidsmåte
 - Svar alltid på **norsk**. Commit-meldinger på norsk med prefikset `Fyrlys:`. Push rett til `main`.
@@ -21,14 +21,16 @@ ingen detaljer om hjemmenettet hans i koden (eksempeladresser som 192.168.1.10 e
   (adaptivt ikon, `drawable-xhdpi/banner.png`), `windows/runner/resources/app_icon.ico`. Vindustittelen og
   filinfo på Windows settes med `sed` i workflowen. Ikonene er tegnet fra `fyrlys.svg` i nettversjonen.
 - Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva Pål-Erik må
-  prøve på Windows-PC-en (peagpc), telefon eller TV.
+  prøve på Windows-PC-en sin, telefon eller TV.
 - Flutter- og media_kit-kildene kan hentes for å sjekke API-er (github.com er åpent for git):
   `git clone --depth 1 --branch stable --filter=blob:none --sparse https://github.com/flutter/flutter.git`
   og `git sparse-checkout set packages/flutter/lib packages/flutter_test/lib` (tilsvarende for media-kit/media-kit).
   `unnecessary_import` er en advarsel og stopper bygget; sjekk hva `material.dart` eksporterer.
-- **Ikke lag ny versjon for hver rettelse** (Pål-Erik 25.10): push til `main`, så tester han bygget fra
-  Actions (nyeste «Bygg» → Artifacts → `Fyrlys-windows`). Versjon, byggnummer og commit står nederst i menyen
-  (`--dart-define` FYRLYS_VERSION/BUILD/COMMIT i workflowen, `lib/build_info.dart`). Ny versjon når det virker.
+- **Ikke lag ny versjon for hver rettelse** (Pål-Erik 25.10): push til `main`. Hver push oppdaterer releasen
+  `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, navnet «Fyrlys X · bygg N (sha)»
+  settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra. Versjon, byggnummer
+  og commit står nederst i menyen (`--dart-define` FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`).
+  Ny versjon når det virker.
 - Release: oppdater `version` i pubspec.yaml, push, og start
   `gh workflow run build.yml --repo ungerdas/fyrlys -f release=vX.Y.Z`. Jobben `release` lager taggen og en
   GitHub-release med `Fyrlys-vX.Y.Z-windows.zip` og APK-er per ABI (v0.x som forhåndsutgivelse). Tagger kan
@@ -58,13 +60,26 @@ ingen detaljer om hjemmenettet hans i koden (eksempeladresser som 192.168.1.10 e
   og hvor strømmen kommer fra. Nye forsøk ved brudd/fast bilde, tre per minutt. Telefon/TV: kanalen stoppes når
   appen legges bort (`paused`) og startes igjen ved `resumed`.
 - `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene.
+- `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer):
+  `GET api.github.com/repos/<repo>/releases/tags/testbygg` ved oppstart (+8 s) og hver 6. time, byggnummeret
+  fra navnet, `-windows.zip` lastes ned til `%LOCALAPPDATA%\Fyrlys\oppdatering\bygg-N` (størrelsen sjekkes),
+  så `klar.json`. Legges inn når appen lukkes (`didRequestAppExit` i `app.dart`), med «Start på nytt nå», eller
+  før appen vises neste gang (`beforeStart` i `main.dart`). Et PowerShell-skript (bare ASCII) venter på prosessen,
+  pakker ut og kopierer med robocopy, skriver `resultat.txt` (vises i banneret) og `oppdatering.log`.
+  `klar.json` slettes før skriptet startes, og `i-gang.txt` (90 s) hindrer at appen starter midt i, så det
+  aldri blir en løkke. Krever at Fyrlys-mappen er skrivbar (ikke Programfiler). Banner og «Se etter
+  oppdateringer» i `home_page.dart`. Android oppdaterer seg ikke selv ennå (trenger fast signeringsnøkkel og
+  installasjon av APK).
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
-- Tester i `test/`: navn, Xtream-kilden, Fyrlys-kilden (med MockClient), widget-tester for TV-siden og
-  spilleren (`player_test.dart`) med falsk kilde og avspiller (`fakes.dart`).
+- Tester i `test/`: navn, Xtream-kilden, Fyrlys-kilden (med MockClient), oppdateringen (`updater_test.dart`),
+  widget-tester for TV-siden og spilleren (`player_test.dart`) med falsk kilde og avspiller (`fakes.dart`).
 
 ## Status
 - 25.10.2026: v0.1 skrevet. Pål-Erik prøvde Windows-versjonen og savnet volumkontroll og spilleren slik den er
   på nettsiden før fullskjerm. Laget samme dag (spilleren som på nettsiden, volum, byggnummer i menyen), testet med
   widget-tester. Ikke prøvd på ekte enheter ennå; Android TV-navigasjon er helt uprøvd.
+- 25.10.2026: repoet gjort offentlig (Pål-Eriks valg) for automatisk oppdatering fra releasen `testbygg`.
+  Gamle commits nevner fortsatt LAN-IP-en til serveren (privat adresse); historikken er ikke skrevet om.
+  Oppdateringen er testet med tester, ikke på Windows ennå: første bygg med den må lastes ned for hånd.
 - Ideer senere: tilbakespoling i mpv-bufferet, TV-guide, bilde-i-bilde på Android, filmer/serier,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.

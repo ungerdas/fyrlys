@@ -15,9 +15,18 @@ Under **Releases** her på GitHub ligger:
 - **Android og Android TV:** `Fyrlys-…-android-arm64-v8a.apk` passer de fleste nyere telefoner og
   TV-bokser; `armeabi-v7a` er for eldre og billigere bokser. Tillat installasjon fra ukjente kilder.
 
-**Testbygg:** hver endring bygges på GitHub Actions. Under *Actions* → nyeste «Bygg» → *Artifacts* ligger
-`Fyrlys-windows` og `Fyrlys-android` (krever innlogging på GitHub). Versjon og byggnummer står nederst i
-menyen i appen.
+**Testbygg:** releasen «Testbygg» har alltid siste bygg fra `main`, med de siste endringene. Versjon og
+byggnummer står nederst i menyen i appen.
+
+## Oppdateringer
+
+Fyrlys på Windows oppdaterer seg selv fra testbyggene. Den ser etter nye bygg når den starter og hver 6. time,
+laster dem ned i bakgrunnen og legger dem inn når du lukker appen, eller straks med «Start på nytt nå». Blir
+den ikke lukket som vanlig, legges oppdateringen inn neste gang den starter. Menyen har også «Se etter
+oppdateringer».
+
+Fyrlys må ligge i en mappe du kan skrive til, f.eks. under Dokumenter (ikke Programfiler). Egne bygg (uten
+byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 
 ## Logg inn
 

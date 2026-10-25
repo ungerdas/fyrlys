@@ -61,15 +61,15 @@ void main() {
       return http.Response('ukjent', 404);
     });
 
-    final src = await FyrlysSource.connect('192.168.50.18:8766', client: client);
-    expect(src.base, 'http://192.168.50.18:8766');
+    final src = await FyrlysSource.connect('192.168.1.10:8766', client: client);
+    expect(src.base, 'http://192.168.1.10:8766');
     expect((await src.account()).user, 'bob');
 
     final chans = await src.channels();
     expect(chans.length, 250);
     expect(chans.first.id, '1000');
     expect(chans.last.id, '1249');
-    expect(src.logoUrl(chans.first.icon), 'http://192.168.50.18:8766/api/xtream/img?u=http%3A%2F%2Flogo%2Fk0.png');
+    expect(src.logoUrl(chans.first.icon), 'http://192.168.1.10:8766/api/xtream/img?u=http%3A%2F%2Flogo%2Fk0.png');
 
     await expectLater(
       src.open(chans.first),
@@ -77,7 +77,7 @@ void main() {
     );
     final target = await src.open(chans.first, takeOver: true);
     expect(calls.where((c) => c.contains('force=1')), hasLength(1));
-    expect(target.urls, ['http://192.168.50.18:8766/api/live/1000/index.m3u8?c=${src.clientId}']);
+    expect(target.urls, ['http://192.168.1.10:8766/api/live/1000/index.m3u8?c=${src.clientId}']);
 
     await src.close(chans.first);
     expect(calls.last, startsWith('POST /api/live/1000/stop'));

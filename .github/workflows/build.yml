@@ -1,5 +1,6 @@
-# Analyse og tester ved hver endring, og bygg for Windows og Android. Hvert bygg kan lastes ned som testbygg
-# (Artifacts på kjøringen), med byggnummer og commit i appens meny.
+# Analyse og tester ved hver endring, og bygg for Windows og Android, med versjon, byggnummer og commit i
+# appens meny. Hver push til main oppdaterer releasen «testbygg» (Windows-zip og APK-er); Fyrlys på Windows
+# ser etter nye bygg der og oppdaterer seg selv.
 # Plattformmappene lages av «flutter create» her; i repoet ligger bare det vi har tilpasset
 # (AndroidManifest, ikoner, TV-banner og Windows-ikonet), og det skrives ikke over.
 # En release (Windows-zip og Android-APK-er, v0.x som forhåndsutgivelse) lages av en tag som v0.1.0, eller med
@@ -70,7 +71,7 @@ jobs:
       - name: Versjon og byggnummer til appen (vises i menyen)
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
-          echo "DEFINES=--dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7}" | tee -a "$GITHUB_ENV"
+          echo "DEFINES=--dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
       - run: flutter build windows --release $DEFINES 2>&1 | tee build.log
       - uses: actions/upload-artifact@v5
         with:
@@ -104,7 +105,7 @@ jobs:
       - name: Versjon og byggnummer til appen (vises i menyen)
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
-          echo "DEFINES=--dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7}" | tee -a "$GITHUB_ENV"
+          echo "DEFINES=--dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
       - run: flutter build apk --release --split-per-abi $DEFINES 2>&1 | tee build.log
       - uses: actions/upload-artifact@v5
         with:
@@ -118,6 +119,58 @@ jobs:
             msg=$(tail -n 60 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "::error title=$f::$msg"
           done
+
+  testbygg:
+    name: Testbygg på Releases
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    # to pusher rett etter hverandre skal ikke oppdatere releasen samtidig
+    concurrency:
+      group: testbygg
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 30
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+      - name: Pakk filene og skriv endringene
+        run: |
+          version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+          # appen leser byggnummeret fra navnet («bygg N»)
+          echo "TITLE=Fyrlys $version · bygg ${{ github.run_number }} (${GITHUB_SHA::7})" | tee -a "$GITHUB_ENV"
+          mkdir -p out
+          (cd dist/Fyrlys-windows && zip -qr ../../out/Fyrlys-testbygg-windows.zip .)
+          for f in dist/Fyrlys-android/*.apk; do
+            abi=$(basename "$f" | sed 's/^app-//; s/-release\.apk$//')
+            cp "$f" "out/Fyrlys-testbygg-android-${abi}.apk"
+          done
+          ls -la out
+          {
+            echo "Siste bygg fra main, laget automatisk ved hver endring. Fyrlys på Windows oppdaterer seg selv herfra."
+            echo
+            echo "Siste endringer:"
+            git log -10 --format='- %s (%h)' | sed 's/^- Fyrlys: /- /'
+          } > notes.md
+          cat notes.md
+      - name: Oppdater releasen «testbygg»
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag -f testbygg "$GITHUB_SHA"
+          git push -f origin refs/tags/testbygg
+          if gh release view testbygg > /dev/null 2>&1; then
+            # filene først, så navnet: appen tror ikke at et nytt bygg er klart før filene er der
+            gh release upload testbygg out/* --clobber
+            gh release edit testbygg --title "$TITLE" --notes-file notes.md --prerelease
+          else
+            gh release create testbygg out/* --title "$TITLE" --notes-file notes.md --prerelease --verify-tag
+          fi
+      - name: Vis feilen som merknad
+        if: failure()
+        run: echo "::error title=testbygg::Releasen testbygg ble ikke oppdatert, se loggen for jobben"
 
   release:
     name: Release
