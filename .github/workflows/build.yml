@@ -1,7 +1,9 @@
 # Analyse og tester ved hver endring, og bygg for Windows og Android.
 # Plattformmappene lages av «flutter create» her; i repoet ligger bare det vi har tilpasset
 # (AndroidManifest, ikoner, TV-banner og Windows-ikonet), og det skrives ikke over.
-# En tag som v0.1.0 lager en release med Windows-zip og Android-APK-er (v0.x som forhåndsutgivelse).
+# En release (Windows-zip og Android-APK-er, v0.x som forhåndsutgivelse) lages av en tag som v0.1.0, eller med
+#   gh workflow run build.yml --repo ungerdas/fyrlys -f release=v0.1.0
+# (tagger kan ikke pushes fra Claude-økta, men den kan starte workflowen).
 # Feiler et steg, legges slutten av loggen som merknad på kjøringen (kan leses med
 # «gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations»).
 name: Bygg
@@ -12,6 +14,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Lag en release med denne versjonen, f.eks. v0.1.0 (tomt: bare bygg)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -105,9 +112,11 @@ jobs:
 
   release:
     name: Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
     needs: [windows, android]
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.release || github.ref_name }}
     steps:
       - uses: actions/download-artifact@v5
         with:
@@ -115,16 +124,19 @@ jobs:
       - name: Pakk filene
         run: |
           cd dist
-          (cd Fyrlys-windows && zip -qr "../Fyrlys-${GITHUB_REF_NAME}-windows.zip" .)
+          (cd Fyrlys-windows && zip -qr "../Fyrlys-${VERSION}-windows.zip" .)
           for f in Fyrlys-android/*.apk; do
             abi=$(basename "$f" | sed 's/^app-//; s/-release\.apk$//')
-            cp "$f" "Fyrlys-${GITHUB_REF_NAME}-android-${abi}.apk"
+            cp "$f" "Fyrlys-${VERSION}-android-${abi}.apk"
           done
           ls -la
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Fyrlys ${{ env.VERSION }}
           files: |
             dist/Fyrlys-*-windows.zip
             dist/Fyrlys-*-android-*.apk
-          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
+          prerelease: ${{ startsWith(env.VERSION, 'v0.') }}
           generate_release_notes: true

@@ -22,8 +22,11 @@ ingen detaljer om hjemmenettet hans i koden (eksempeladresser som 192.168.1.10 e
   filinfo på Windows settes med `sed` i workflowen. Ikonene er tegnet fra `fyrlys.svg` i nettversjonen.
 - Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva Pål-Erik må
   prøve på Windows-PC-en (peagpc), telefon eller TV.
-- Release: push en tag `vX.Y.Z` (og oppdater `version` i pubspec.yaml) → jobben `release` lager en
-  GitHub-release med `Fyrlys-vX.Y.Z-windows.zip` og APK-er per ABI.
+- Release: oppdater `version` i pubspec.yaml, push, og start
+  `gh workflow run build.yml --repo ungerdas/fyrlys -f release=vX.Y.Z`. Jobben `release` lager taggen og en
+  GitHub-release med `Fyrlys-vX.Y.Z-windows.zip` og APK-er per ABI (v0.x som forhåndsutgivelse). Tagger kan
+  ikke pushes fra Claude-økta, og git/refs-API-et er stengt, men workflowen kan startes. En tag `v*` som
+  Pål-Erik lager selv, gir samme resultat. Bruk `[skip ci]` i commit-meldingen når et bygg bare er bortkastet.
 
 ## Arkitektur (`lib/`)
 - `core/source.dart` – `TvSource`: kilde til kanaler, EPG, strømadresser og favoritter.
