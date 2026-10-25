@@ -1,7 +1,9 @@
 # Analyse og tester ved hver endring, og bygg for Windows og Android.
 # Plattformmappene lages av «flutter create» her; i repoet ligger bare det vi har tilpasset
 # (AndroidManifest, ikoner, TV-banner og Windows-ikonet), og det skrives ikke over.
-# En tag som v0.1.0 lager en release med Windows-zip og Android-APK-er som alle kan laste ned.
+# En tag som v0.1.0 lager en release med Windows-zip og Android-APK-er (v0.x som forhåndsutgivelse).
+# Feiler et steg, legges slutten av loggen som merknad på kjøringen (kan leses med
+# «gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations»).
 name: Bygg
 
 on:
@@ -14,53 +16,70 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     name: Analyse og tester
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - run: flutter --version
-      - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos
-      - run: flutter test
+      - run: flutter --version | tee version.log
+      - run: flutter pub get 2>&1 | tee pub.log
+      - run: flutter analyze --no-fatal-infos 2>&1 | tee analyze.log
+      - run: flutter test 2>&1 | tee test.log
+      - name: Vis feilen som merknad
+        if: failure()
+        run: |
+          for f in *.log; do
+            [ -f "$f" ] || continue
+            msg=$(tail -n 60 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=$f::$msg"
+          done
 
   windows:
     name: Windows
     needs: test
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
       - name: Lag resten av Windows-oppsettet
         run: |
-          flutter create --org no.peag --project-name fyrlys --platforms=windows .
+          flutter create --org no.peag --project-name fyrlys --platforms=windows . 2>&1 | tee create.log
           sed -i 's/L"fyrlys"/L"Fyrlys"/' windows/runner/main.cpp
           sed -i 's/VALUE "FileDescription", "fyrlys"/VALUE "FileDescription", "Fyrlys"/; s/VALUE "ProductName", "fyrlys"/VALUE "ProductName", "Fyrlys"/; s/VALUE "CompanyName", "no.peag"/VALUE "CompanyName", "Fyrlys"/' windows/runner/Runner.rc
           grep -n 'L"Fyrlys"' windows/runner/main.cpp
-      - run: flutter build windows --release
-      - uses: actions/upload-artifact@v4
+      - run: flutter build windows --release 2>&1 | tee build.log
+      - uses: actions/upload-artifact@v5
         with:
           name: Fyrlys-windows
           path: build/windows/x64/runner/Release/
+      - name: Vis feilen som merknad
+        if: failure()
+        run: |
+          for f in *.log; do
+            [ -f "$f" ] || continue
+            msg=$(tail -n 60 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=$f::$msg"
+          done
 
   android:
     name: Android
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -69,12 +88,20 @@ jobs:
           channel: stable
           cache: true
       - name: Lag resten av Android-oppsettet
-        run: flutter create --org no.peag --project-name fyrlys --platforms=android .
-      - run: flutter build apk --release --split-per-abi
-      - uses: actions/upload-artifact@v4
+        run: flutter create --org no.peag --project-name fyrlys --platforms=android . 2>&1 | tee create.log
+      - run: flutter build apk --release --split-per-abi 2>&1 | tee build.log
+      - uses: actions/upload-artifact@v5
         with:
           name: Fyrlys-android
           path: build/app/outputs/flutter-apk/*-release.apk
+      - name: Vis feilen som merknad
+        if: failure()
+        run: |
+          for f in *.log; do
+            [ -f "$f" ] || continue
+            msg=$(tail -n 60 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=$f::$msg"
+          done
 
   release:
     name: Release
@@ -82,7 +109,7 @@ jobs:
     needs: [windows, android]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: dist
       - name: Pakk filene
@@ -99,4 +126,5 @@ jobs:
           files: |
             dist/Fyrlys-*-windows.zip
             dist/Fyrlys-*-android-*.apk
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
           generate_release_notes: true

@@ -12,6 +12,9 @@ ingen detaljer om hjemmenettet hans i koden (eksempeladresser som 192.168.1.10 e
   og la GitHub Actions analysere, teste og bygge: `gh run list --repo ungerdas/fyrlys`,
   `gh run view <id> --repo ungerdas/fyrlys --log-failed`, `gh run watch <id> --repo ungerdas/fyrlys`.
   Advarsler fra `flutter analyze` stopper bygget (info gjør ikke det), f.eks. ubrukte importer.
+  Loggene og artefaktene kan **ikke** lastes ned herfra (de ligger i blob-lagring som er stengt). Når et steg
+  feiler, legger workflowen slutten av loggen som merknad; les den med
+  `gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations` (jobb-id fra `gh run view <id> --json jobs`).
 - Plattformmappene lages av `flutter create --org no.peag --project-name fyrlys` i hvert bygg. I repoet
   ligger bare det som er tilpasset, og det skrives ikke over: `android/app/src/main/AndroidManifest.xml`
   (INTERNET, cleartext, Android TV med leanback og banner), ikonene i `android/.../res/`
