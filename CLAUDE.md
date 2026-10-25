@@ -87,5 +87,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
 - 25.10.2026: automatisk oppdatering fra releasen `testbygg`. Pål-Erik ville beholde repoet privat, så den går via
   Fyrlys-serveren (`app/appupdate.py` i peagstreams, nøkkelen i `data/github.json` på serveren). Serverdelen er
   prøvd mot ekte GitHub, appdelen bare med tester. Første bygg med den må lastes ned for hånd.
+  Nøkkelen ligger på serveren (virker, 25.10), og bygg 6 kjører på PC-en hans. Bygg 7 er laget for å prøve
+  selve oppdateringen på Windows.
 - Ideer senere: tilbakespoling i mpv-bufferet, TV-guide, bilde-i-bilde på Android, filmer/serier,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.

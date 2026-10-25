@@ -191,7 +191,12 @@ class _HomePageState extends State<HomePage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final info = await u.check(manual: true);
-      if (info == null) messenger.showSnackBar(SnackBar(content: Text('Du har siste versjon ($appBuildLabel).')));
+      final text = info == null
+          ? 'Du har siste versjon ($appBuildLabel).'
+          : u.state == UpdateState.ready
+              ? '${info.title} er lastet ned og klar.'
+              : 'Fant ${info.title}. Den lastes ned nå.';
+      messenger.showSnackBar(SnackBar(content: Text(text)));
     } on UpdateException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Fikk ikke sjekket oppdateringer: ${e.message}')));
     }
@@ -211,7 +216,8 @@ class _HomePageState extends State<HomePage> {
         if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
         actions.add(FilledButton(onPressed: () => unawaited(u.download()), child: const Text('Last ned')));
       case UpdateState.downloading:
-        text = 'Laster ned ${info?.title ?? 'ny versjon'} … ${(u.progress * 100).round()} %';
+        final size = info != null && info.size > 0 ? ' av ${(info.size / 1048576).round()} MB' : '';
+        text = 'Laster ned ${info?.title ?? 'ny versjon'} … ${(u.progress * 100).round()} %$size';
         progress = u.progress;
       case UpdateState.ready:
         text = '${info?.title ?? 'En ny versjon'} er lastet ned og legges inn når du lukker Fyrlys.';
