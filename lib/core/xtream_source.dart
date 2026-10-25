@@ -98,13 +98,17 @@ List<VodItem> parseVodItems(VodKind kind, Object? raw) => [
 SeriesInfo parseSeriesInfo(Object? d) {
   if (d is! Map) throw const SourceException('Fant ikke serien');
   final info = d['info'] is Map ? d['info'] as Map : const <Object?, Object?>{};
-  var raw = d['episodes'];
-  if (raw is List) raw = {for (var i = 0; i < raw.length; i++) '${i + 1}': raw[i]};
+  final rawEpisodes = d['episodes'];
+  final Map<Object?, Object?> bySeason = rawEpisodes is List
+      ? <Object?, Object?>{for (var i = 0; i < rawEpisodes.length; i++) '${i + 1}': rawEpisodes[i]}
+      : rawEpisodes is Map
+          ? rawEpisodes
+          : const <Object?, Object?>{};
   final seasons = <Season>[];
-  if (raw is Map) {
-    final keys = [...raw.keys]..sort((a, b) => (_number(a) ?? 0).compareTo(_number(b) ?? 0));
+  if (bySeason.isNotEmpty) {
+    final keys = [...bySeason.keys]..sort((a, b) => (_number(a) ?? 0).compareTo(_number(b) ?? 0));
     for (final k in keys) {
-      final eps = raw[k];
+      final eps = bySeason[k];
       seasons.add(Season(
         number: '$k',
         episodes: [
