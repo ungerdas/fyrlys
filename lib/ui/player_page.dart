@@ -219,6 +219,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       // Telefon/TV: appen er lagt bort. Gi fra deg tilkoblingen, og start kanalen igjen når du kommer tilbake.
       _suspended = true;
       _seq++;
+      _shiftTimer?.cancel();
+      _target = null;
       unawaited(_pb.stop());
       final ch = _opened;
       final src = _source;
@@ -241,7 +243,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   Future<void> _open({bool takeOver = false}) async {
     final src = _source;
-    if (src == null || !mounted) return;
+    // lagt bort (telefon/TV) mens noe var på vei: startes igjen når du kommer tilbake
+    if (src == null || !mounted || _suspended) return;
     final my = ++_seq;
     final ch = _channel;
     final prev = _opened;
@@ -264,13 +267,15 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _resetShift();
     try {
       final t = await src.open(ch, takeOver: takeOver);
-      if (my != _seq || !mounted) return;
+      if (my != _seq || !mounted || _suspended) return;
       _target = t;
       _url = 0;
       await _pb.open(t.urls.first, src.httpHeaders);
     } on BusyException catch (e) {
       if (my != _seq || !mounted) return;
       await _pb.stop();
+      // byttet kanal mens avspilleren stoppet: ikke vis den gamle kanalens beskjed på den nye
+      if (my != _seq || !mounted) return;
       _set(() {
         _busy = e;
         _buffering = false;
@@ -278,6 +283,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     } on SourceException catch (e) {
       if (my != _seq || !mounted) return;
       await _pb.stop();
+      if (my != _seq || !mounted) return;
       _set(() {
         _status = e.message;
         _buffering = false;
@@ -295,7 +301,9 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     return true;
   }
 
-  void _onError(String message) {
+  void _onError(String raw) {
+    // mpv sier «Failed to open <hele adressen>»: rett mot leverandøren står brukernavn og passord i den
+    final message = _source?.redact(raw) ?? raw;
     debugPrint('mpv: $message');
     if (!mounted || _suspended || _started || _busy != null || _status != null || _target == null) return;
     if (_nextUrl()) return;
@@ -448,6 +456,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _shiftTarget = null;
     _shiftTimer?.cancel();
     _shiftDrag = null;
+    // tidslinja kan ha forsvunnet midt i et drag (da kommer aldri onChangeEnd)
+    _dragging = false;
   }
 
   Future<void> _refreshWindow() async {
@@ -465,6 +475,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       // noen andre har tatt over tilkoblingen mens du hadde pauset
       if (!mounted || my != _seq) return;
       await _pb.stop();
+      if (!mounted || my != _seq) return;
       _set(() {
         _busy = e;
         _buffering = false;
@@ -479,6 +490,12 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// ←/→ og knappene: flytt [seconds] (negativt er tilbake). Trykk som kommer tett, samles før spillelista åpnes.
   void _nudgeShift(int seconds) {
     if (!_canShift) return;
+    if (seconds > 0 && _shiftTarget == null && _atLive) {
+      // allerede direkte: ingenting å spole fram til (og ikke last strømmen på nytt)
+      _showFlash('Direkte');
+      _wake();
+      return;
+    }
     final t = _target!;
     var to = (_shiftTarget ?? _behind) - Duration(seconds: seconds);
     if (to < Duration.zero) to = Duration.zero;
@@ -509,7 +526,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   Future<void> _shiftTo(Duration back) async {
     final src = _source;
     final t = _target;
-    if (src == null || t == null || !_canShift) return;
+    if (src == null || t == null || !_canShift || _suspended) return;
     final my = ++_seq;
     final url = t.urls[_url];
     _shiftTarget = back;
@@ -529,6 +546,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       } on BusyException catch (e) {
         if (my != _seq || !mounted) return;
         await _pb.stop();
+        if (my != _seq || !mounted) return;
         _set(() {
           _busy = e;
           _buffering = false;
@@ -539,6 +557,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
         if (my != _seq || !mounted) return;
       }
     }
+    if (my != _seq || !mounted || _suspended) return;
     _set(() {
       _behind0 = behind;
       _pausedTotal = Duration.zero;
@@ -771,6 +790,9 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       } else {
         _close();
       }
+    } else if (_okKeys.contains(key) && _focus.hasPrimaryFocus && (_busy != null || _status != null)) {
+      // OK når kortet med «Ta over» eller «Prøv igjen» vises: knappen på kortet (den får ikke fokus selv)
+      _retry(takeOver: _busy != null);
     } else if (_okKeys.contains(key) && _focus.hasPrimaryFocus) {
       // OK på fjernkontrollen: fullskjerm, og i fullskjerm kanallista
       if (_fullNow) {
@@ -812,6 +834,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     final autoFull = !isDesktop && size.width > size.height && size.height < 500;
     final full = _full || autoFull;
     _fullNow = full;
+    // telefonen snudd tilbake til høyden: kanallista over bildet finnes ikke lenger (ellers virker ikke Tilbake)
+    if (!full) _sideOpen = false;
     if (_shownFull != full) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _syncFull(full);

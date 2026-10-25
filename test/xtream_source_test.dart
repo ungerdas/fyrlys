@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/core/source.dart';
+import 'package:fyrlys/core/vod.dart';
 import 'package:fyrlys/core/xtream_source.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -127,5 +128,20 @@ void main() {
       XtreamSource.login('iptv.example', 'bob', 'x', client: client),
       throwsA(isA<SourceException>().having((e) => e.message, 'message', contains('Xtream'))),
     );
+  });
+
+  test('passord med spesialtegn kodes i adressene, og innloggingen vises aldri i feiltekster', () {
+    final src = XtreamSource(server: 'http://iptv.example:8080', user: 'bob', password: 'p#ss/1 x');
+    expect(src.movieUrl(const VodItem(id: '6', name: 'Film', ext: 'mkv')), 'http://iptv.example:8080/movie/bob/p%23ss%2F1%20x/6.mkv');
+    final msg = src.redact('Failed to open http://iptv.example:8080/live/bob/p%23ss%2F1%20x/101.ts.');
+    expect(msg, isNot(contains('p%23ss')));
+    expect(msg, isNot(contains('/bob/')));
+    expect(msg, contains('***'));
+    expect(XtreamSource(server: 's', user: 'bob', password: 'hemmelig').redact('?username=bob&password=hemmelig'),
+        '?username=***&password=***');
+  });
+
+  test('IPv6-adresser beholder klammene', () {
+    expect(cleanServer('http://[fe80::1]:8080/get.php?username=a&password=b').server, 'http://[fe80::1]:8080');
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/models.dart';
@@ -306,6 +308,7 @@ class _SideRow extends StatefulWidget {
 class _SideRowState extends State<_SideRow> {
   final focusNode = FocusNode(debugLabel: 'kanal i lista');
   Future<List<EpgEntry>>? _epg;
+  Timer? _wait;
 
   @override
   void initState() {
@@ -327,14 +330,29 @@ class _SideRowState extends State<_SideRow> {
   @override
   void dispose() {
     if (widget.owner._rows[widget.channel.id] == this) widget.owner._rows.remove(widget.channel.id);
+    _wait?.cancel();
     focusNode.dispose();
     super.dispose();
   }
 
   void _load() {
+    _wait?.cancel();
     final ch = widget.channel;
     // eventkanaler har kampen i navnet, og ofte ingen EPG
-    _epg = ch.hasEpg && nameParts(ch.name).sub.isEmpty ? widget.session.epg(ch.id) : null;
+    if (!ch.hasEpg || nameParts(ch.name).sub.isNotEmpty) {
+      _epg = null;
+      return;
+    }
+    final s = widget.session;
+    if (s.epgCached(ch.id) != null) {
+      _epg = s.epg(ch.id);
+      return;
+    }
+    // hentes først når kortet har vært framme litt, så rask rulling ikke fyller køen med det du rullet forbi
+    _epg = null;
+    _wait = Timer(const Duration(milliseconds: 150), () {
+      if (mounted) setState(() => _epg = s.epg(ch.id));
+    });
   }
 
   @override

@@ -154,5 +154,13 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   serverens HLS, MPVKit for MKV), bygget på GitHubs macOS-maskiner (~10x prisen per minutt) og lagt i TestFlight
   (krever betalt utviklerkonto). Enklere alternativ om det kommer opp igjen: M3U/XMLTV eller Xtream-API fra
   Fyrlys-serveren for en ferdig Apple TV-app.
+- 26.10.2026: v2.0.0 (Pål-Eriks valg av nummer) etter en gjennomgang av koden med to uavhengige lesere. Rettet:
+  passord i mpv-feil (`TvSource.redact`), kodede innloggingsdeler i Xtream-adressene, EPG-kø (150 ms før
+  henting i kort og sideliste, nyeste først, feil huskes ikke), Filmer/Serier-løkke ved feil/tom side, én felles
+  nedlasting av VOD-lister rett mot leverandøren (og 3 min tidsgrense for store lister), innlogging som ble
+  hengende, IPv6, favoritter etter feil/ny innlogging, emoji i logo-forkortelsen, oppdateringsskriptet (venter på
+  alle Fyrlys-prosesser, sikkerhetskopi og tilbakelegging), og i spilleren: OK på kortene, `_sideOpen` etter
+  snuing, → ved direkte, `live_start_index` tilbake til 3 etter spoling, arbeid som startet rett før appen ble
+  lagt bort.
 - Ideer senere: tilbakespoling rett mot leverandøren (mpv-bufferet), bilde-i-bilde på Android,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.

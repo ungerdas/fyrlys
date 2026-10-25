@@ -169,6 +169,9 @@ class Session extends ChangeNotifier {
       recent = [for (final r in recent) _byId[r.id] ?? r];
     } on SourceException catch (e) {
       if (source == src) error = e.message;
+    } on Object {
+      // uventet svar (ikke som en Xtream- eller Fyrlys-server): vis en feil i stedet for en tom liste
+      if (source == src) error = 'Uventet svar fra serveren da lista ble hentet';
     } finally {
       if (source == src) {
         loading = false;
@@ -202,9 +205,13 @@ class Session extends ChangeNotifier {
     final src = source;
     if (src == null) return Future.value(const <EpgEntry>[]);
     // doble og overlappende programmer ryddes her, så det gjelder begge kildene (og eldre Fyrlys-servere)
-    final future =
-        _limited(() => src.epg(channelId, limit: limit)).then(cleanEpg).catchError((Object _) => const <EpgEntry>[]);
-    final entry = _EpgHit(limit, future);
+    late final _EpgHit entry;
+    final future = _limited(() => src.epg(channelId, limit: limit)).then(cleanEpg).catchError((Object _) {
+      // en feil skal ikke huskes i fem minutter: neste gang kanalen vises, prøves det igjen
+      if (identical(_epg[channelId], entry)) _epg.remove(channelId);
+      return const <EpgEntry>[];
+    });
+    entry = _EpgHit(limit, future);
     unawaited(future.then((list) => entry.value = list));
     _epg.remove(channelId);
     _epg[channelId] = entry;
@@ -232,7 +239,8 @@ class Session extends ChangeNotifier {
       return await task();
     } finally {
       _epgBusy--;
-      if (_epgWaiting.isNotEmpty) _epgWaiting.removeFirst().complete();
+      // nyeste først: det som vises nå (etter at du har rullet), før det du rullet forbi
+      if (_epgWaiting.isNotEmpty) _epgWaiting.removeLast().complete();
     }
   }
 
@@ -304,16 +312,22 @@ class Session extends ChangeNotifier {
   Future<void> _change(TvSource src, Map<String, Object?> change) {
     _favPending++;
     final run = _favQueue.then((_) async {
+      var failed = false;
       try {
         final f = await src.changeFavorites(change);
         if (_favPending == 1 && f != null && source == src) _adopt(f);
       } on SourceException catch (e) {
+        failed = true;
         _messages.add(e.message);
       } on Object {
+        failed = true;
         _messages.add('Klarte ikke å lagre favorittene');
       } finally {
         _favPending--;
       }
+      // Feilet en endring, eller er du logget inn på nytt imens (da hoppet den nye kilden over hentingen fordi
+      // køen ikke var tom): hent lista slik serveren har den, så det du ser, stemmer.
+      if (_favPending == 0 && (failed || source != src)) unawaited(refreshFavorites());
     });
     _favQueue = run;
     return run;

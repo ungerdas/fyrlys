@@ -65,8 +65,8 @@ class _VodBrowserState extends State<VodBrowser> {
     try {
       final c = await src.vodCatalog(widget.kind, force: force);
       if (mounted) setState(() => _catalog = c);
-    } on SourceException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = e is SourceException ? e.message : 'Uventet svar fra serveren');
     }
   }
 
@@ -98,14 +98,15 @@ class _VodBrowserState extends State<VodBrowser> {
       if (!mounted || my != _seq) return;
       setState(() {
         _items.addAll(page.items);
-        _total = page.total;
+        // en tom side betyr at det ikke er mer, uansett hva totalen sa (ellers spør vi igjen og igjen)
+        _total = page.items.isEmpty ? _items.length : page.total;
         _loadedOnce = true;
         _loading = false;
       });
-    } on SourceException catch (e) {
+    } on Object catch (e) {
       if (!mounted || my != _seq) return;
       setState(() {
-        _error = e.message;
+        _error = e is SourceException ? e.message : 'Uventet svar fra serveren';
         _loading = false;
       });
     }
@@ -113,7 +114,8 @@ class _VodBrowserState extends State<VodBrowser> {
 
   /// Kalles mens rutenettet bygges: hentingen startes etter at bildet er tegnet.
   void _maybeMore() {
-    if (_morePending || _loading || _items.length >= _total) return;
+    // etter en feil hentes det ikke mer av seg selv (da ville den spurt igjen for hver ombygging); se «Prøv igjen»
+    if (_morePending || _loading || _error != null || _items.length >= _total) return;
     _morePending = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _morePending = false;
@@ -294,6 +296,25 @@ class _VodBrowserState extends State<VodBrowser> {
             },
           ),
         ),
+        if (_error != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              child: Row(
+                children: [
+                  Flexible(child: Text(_error!, style: TextStyle(color: scheme.error))),
+                  const SizedBox(width: 12),
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _error = null);
+                      unawaited(_more());
+                    },
+                    child: const Text('Prøv igjen'),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }

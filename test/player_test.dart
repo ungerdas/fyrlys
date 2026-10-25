@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/theme.dart';
+import 'package:fyrlys/ui/channel_card.dart';
 import 'package:fyrlys/ui/player_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -195,6 +196,23 @@ void main() {
     expect(find.text('Stopp NRK 1 HD og se her'), findsNothing);
 
     await _close(tester);
+  });
+
+  testWidgets('fjernkontroll: OK på kortet tar over tilkoblingen', (tester) async {
+    final (session, _) = await _session(busy: {'101'});
+    final playback = await _openPlayer(tester, session);
+    expect(find.text('Stopp NRK 1 HD og se her'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await _settle(tester);
+    expect(playback.urls, ['http://example/101.ts']);
+
+    await _close(tester);
+  });
+
+  testWidgets('logoen uten bilde: tre hele tegn, også med flagg foran navnet', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Center(child: ChannelLogo(url: null, name: '🇳🇴 NRK1 HD'))));
+    expect(find.text('🇳🇴 N'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('smal skjerm: programinfo og kanallista under bildet', (tester) async {

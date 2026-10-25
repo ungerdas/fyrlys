@@ -31,6 +31,18 @@ nettsiden (Docker-versjonen), og kan logge inn mot Fyrlys-serveren eller rett mo
 - Fyrlys på Windows oppdaterer seg selv fra testbyggene (via Fyrlys-serveren) og legger dem inn når du lukker
   appen, eller straks med «Start på nytt nå».
 
+**Rettet før utgivelsen** (etter en gjennomgang av koden)
+- Brukernavn og passord hos leverandøren vises aldri i feilmeldinger fra spilleren, og passord med
+  spesialtegn virker i adressene.
+- Programinfo hentes først for det som faktisk vises (rask rulling fyller ikke køen), og en feil prøves igjen.
+- Filmer/Serier spør ikke serveren om og om igjen når en side feiler.
+- Fjernkontroll: OK trykker «Ta over» og «Prøv igjen»; Tilbake virker etter at telefonen er snudd.
+- Spoling: → når du alt ser direkte, laster ikke strømmen på nytt, og en ny start etter spoling begynner
+  ved direkte.
+- Oppdateringen på Windows legger seg ikke over en Fyrlys som kjører, og legger den forrige utgaven tilbake
+  hvis kopieringen feiler.
+- Logoer uten bilde tåler flagg og emoji foran kanalnavnet; IPv6-adresser virker ved innlogging.
+
 **Filer**
 - Windows: `Fyrlys-v2.0.0-windows.zip`. Pakk ut i en mappe du kan skrive til (f.eks. under Dokumenter) og
   start `fyrlys.exe`.

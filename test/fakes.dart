@@ -84,6 +84,9 @@ class FakeSource implements TvSource {
   }
 
   @override
+  String redact(String text) => text.replaceAll('hemmelig', '***');
+
+  @override
   Future<LiveWindow?> liveWindow(String url) async {
     windowRequests.add(url);
     if (takenOver) throw const BusyException('Alle tilkoblingene er i bruk.', ['Stua']);

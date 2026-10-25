@@ -96,6 +96,14 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(fake.liveFromEnds.last, 3);
+    // → når du alt er direkte: ingenting skjer (strømmen lastes ikke på nytt)
+    fake.moveTo(const Duration(seconds: 4));
+    await tester.pump();
+    final opens = fake.urls.length;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    expect(fake.urls.length, opens);
 
     // pause i et minutt: serveren får høre fra oss hele tiden, og vi er et minutt bak
     fake.moveTo(const Duration(seconds: 4));

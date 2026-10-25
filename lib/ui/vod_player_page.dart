@@ -178,7 +178,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
       await _pb.open(item.url, _session.source?.httpHeaders ?? const {}, start: start);
     } on Object catch (e) {
       _set(() {
-        _status = 'Kunne ikke spille av ($e).';
+        _status = 'Kunne ikke spille av (${_session.source?.redact('$e') ?? e}).';
         _buffering = false;
       });
     }
@@ -196,7 +196,9 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     }
   }
 
-  void _onError(String message) {
+  void _onError(String raw) {
+    // mpv sier «Failed to open <hele adressen>»: rett mot leverandøren står brukernavn og passord i den
+    final message = _session.source?.redact(raw) ?? raw;
     debugPrint('mpv: $message');
     if (!mounted || _started) return;
     _set(() {
@@ -359,7 +361,10 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     final key = event.logicalKey;
     final repeat = event is KeyRepeatEvent;
     _wake();
-    if (_playKeys.contains(key) && !repeat && _focus.hasPrimaryFocus) {
+    if (_status != null && !repeat && _focus.hasPrimaryFocus && (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select)) {
+      // OK når «Prøv igjen» vises: knappen på kortet (den får ikke fokus selv)
+      unawaited(_open());
+    } else if (_playKeys.contains(key) && !repeat && _focus.hasPrimaryFocus) {
       _togglePlay();
     } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyJ || key == LogicalKeyboardKey.mediaRewind) {
       _seekBy(-10);

@@ -21,6 +21,7 @@ void main() {
   test('adressen gjøres om til en full lenke', () {
     expect(FyrlysSource.normalize('192.168.1.10:8766'), 'http://192.168.1.10:8766');
     expect(FyrlysSource.normalize('https://tv.example.no/'), 'https://tv.example.no');
+    expect(FyrlysSource.normalize('[fe80::1]:8766'), 'http://[fe80::1]:8766');
     expect(() => FyrlysSource.normalize(''), throwsA(isA<SourceException>()));
   });
 

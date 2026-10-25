@@ -57,7 +57,8 @@ class FyrlysSource implements TvSource {
     while (path.endsWith('/')) {
       path = path.substring(0, path.length - 1);
     }
-    return '${u.scheme.toLowerCase()}://${u.host}${u.hasPort ? ':${u.port}' : ''}$path';
+    final host = u.host.contains(':') ? '[${u.host}]' : u.host;
+    return '${u.scheme.toLowerCase()}://$host${u.hasPort ? ':${u.port}' : ''}$path';
   }
 
   static Future<FyrlysSource> connect(String address, {http.Client? client}) async {
@@ -238,6 +239,10 @@ class FyrlysSource implements TvSource {
     }
     throw SourceException(_error(body, r.statusCode));
   }
+
+  /// adressene til serveren har ingen innlogging i seg
+  @override
+  String redact(String text) => text;
 
   @override
   Future<LiveWindow?> liveWindow(String url) async {

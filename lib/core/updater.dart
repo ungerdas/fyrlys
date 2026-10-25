@@ -431,15 +431,34 @@ function Write-Log([string]$text) {
 try {
   Write-Log "Venter til Fyrlys ($ProcessId) er lukket"
   Wait-Process -Id $ProcessId -Timeout 120 -ErrorAction SilentlyContinue
+  if (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) { throw 'Fyrlys ble ikke lukket' }
+  # Ble Fyrlys startet igjen for skriptet kom i gang, ventes det litt; ellers venter oppdateringen til neste gang.
+  $name = [IO.Path]::GetFileNameWithoutExtension($Exe)
+  for ($i = 0; $i -lt 30; $i++) {
+    $running = @(Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $Exe })
+    if ($running.Count -eq 0) { break }
+    Start-Sleep -Seconds 1
+  }
+  if ($running.Count -gt 0) { throw 'Fyrlys kjorer fortsatt, oppdateringen legges inn neste gang' }
   Start-Sleep -Milliseconds 500
   $new = Join-Path $Work 'ny'
   if (Test-Path -LiteralPath $new) { Remove-Item -LiteralPath $new -Recurse -Force }
   Write-Log "Pakker ut $Zip"
   Expand-Archive -LiteralPath $Zip -DestinationPath $new -Force
+  # Sikkerhetskopi forst: feiler kopieringen halvveis, legges den forrige utgaven tilbake.
+  $old = Join-Path $Work 'forrige'
+  if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force }
+  & robocopy.exe $Target $old /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+  if ($LASTEXITCODE -ge 8) { throw "fikk ikke tatt sikkerhetskopi (robocopy $LASTEXITCODE)" }
   Write-Log "Kopierer til $Target"
   & robocopy.exe $new $Target /E /R:5 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
-  if ($LASTEXITCODE -ge 8) { throw "robocopy feilet med kode $LASTEXITCODE" }
+  if ($LASTEXITCODE -ge 8) {
+    $code = $LASTEXITCODE
+    & robocopy.exe $old $Target /E /R:5 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+    throw "robocopy feilet med kode $code, den forrige utgaven er lagt tilbake"
+  }
   Remove-Item -LiteralPath $new -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath (Split-Path -Parent $Zip) -Recurse -Force -ErrorAction SilentlyContinue
   Set-Content -LiteralPath $result -Value 'ok' -Encoding UTF8
   Write-Log 'Ferdig'

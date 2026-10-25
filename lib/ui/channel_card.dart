@@ -21,6 +21,7 @@ class ChannelCard extends StatefulWidget {
 
 class _ChannelCardState extends State<ChannelCard> {
   Future<List<EpgEntry>>? _epg;
+  Timer? _wait;
   bool _focused = false;
 
   @override
@@ -35,10 +36,30 @@ class _ChannelCardState extends State<ChannelCard> {
     if (old.channel.id != widget.channel.id) _load();
   }
 
+  @override
+  void dispose() {
+    _wait?.cancel();
+    super.dispose();
+  }
+
   void _load() {
+    _wait?.cancel();
     final ch = widget.channel;
     // eventkanaler har kampen i navnet, og ofte ingen EPG
-    _epg = ch.hasEpg && nameParts(ch.name).sub.isEmpty ? widget.session.epg(ch.id) : null;
+    if (!ch.hasEpg || nameParts(ch.name).sub.isNotEmpty) {
+      _epg = null;
+      return;
+    }
+    final s = widget.session;
+    if (s.epgCached(ch.id) != null) {
+      _epg = s.epg(ch.id);
+      return;
+    }
+    // hentes først når kortet har vært framme litt, så rask rulling ikke fyller køen med det du rullet forbi
+    _epg = null;
+    _wait = Timer(const Duration(milliseconds: 150), () {
+      if (mounted) setState(() => _epg = s.epg(ch.id));
+    });
   }
 
   @override
@@ -140,7 +161,8 @@ class ChannelLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final main = nameParts(name).main;
-    final short = main.isEmpty ? '?' : main.substring(0, main.length < 3 ? main.length : 3);
+    // hele tegn, så et flagg eller en emoji foran navnet ikke deles i to
+    final short = main.isEmpty ? '?' : main.characters.take(3).toString();
     final initials = Text(short, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700));
     final logo = url;
     return Container(

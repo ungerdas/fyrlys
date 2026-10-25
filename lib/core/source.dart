@@ -83,6 +83,9 @@ abstract class TvSource {
 
   Future<Favorites?> changeFavorites(Map<String, Object?> change);
 
+  /// Tekst som skal vises eller logges (f.eks. en feil fra mpv med hele adressen): uten brukernavn og passord.
+  String redact(String text);
+
   /// Spillelista til en direktesending slik den er nå, for å spole i den (bare når [PlayTarget.timeshift] er
   /// over 0). Hentes også mens du har pauset, så serveren vet at du fortsatt ser på.
   Future<LiveWindow?> liveWindow(String url);

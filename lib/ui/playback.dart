@@ -121,14 +121,20 @@ class MpvPlayback implements Playback {
     }
   }
 
+  /// segmentene fra slutten sist en direktesending ble åpnet tilbake i tid (null: som vanlig)
+  int? _liveFromEnd;
+
   @override
   Future<void> open(String url, Map<String, String> headers, {Duration? start, int? liveFromEnd}) async {
     final p = _player.platform;
-    if (liveFromEnd != null && p is NativePlayer) {
+    // Etter en spoling står valget i mpv til det endres: tilbake til ffmpegs vanlige 3 (direkte) neste gang.
+    final want = liveFromEnd ?? (_liveFromEnd != null ? 3 : null);
+    _liveFromEnd = liveFromEnd;
+    if (want != null && p is NativePlayer) {
       try {
         // ffmpeg begynner en direktesending (HLS) så mange segmenter fra slutten. Legges til det media_kit har
         // satt i demuxer-lavf-o (protocol_whitelist osv.), og siste verdi gjelder.
-        await p.command(['change-list', 'demuxer-lavf-o', 'append', 'live_start_index=-$liveFromEnd']);
+        await p.command(['change-list', 'demuxer-lavf-o', 'append', 'live_start_index=-$want']);
       } on Object {
         // eldre mpv: begynner ved direkte
       }

@@ -35,8 +35,11 @@ XtreamLogin cleanServer(String raw) {
     path = path.substring(0, path.length - 1);
   }
   final port = u.hasPort ? ':${u.port}' : '';
-  return XtreamLogin('${u.scheme.toLowerCase()}://${u.host}$port$path', u.queryParameters['username'], u.queryParameters['password']);
+  return XtreamLogin('${u.scheme.toLowerCase()}://${hostOf(u)}$port$path', u.queryParameters['username'], u.queryParameters['password']);
 }
+
+/// Vertsnavnet slik det skrives i en adresse: IPv6 i klammer («[fe80::1]»).
+String hostOf(Uri u) => u.host.contains(':') ? '[${u.host}]' : u.host;
 
 /// Tekst i EPG-en er base64 hos de fleste leverandører; det som ikke er det, brukes som det er.
 String decodeBase64Text(Object? value) {
@@ -153,6 +156,10 @@ class XtreamSource implements TvSource {
   DateTime? _channelsAt;
   List<Category>? _categories;
   final Map<VodKind, ({DateTime at, List<VodCategory> categories, List<VodItem> items})> _vod = {};
+  final Map<VodKind, Future<({List<VodCategory> categories, List<VodItem> items})>> _vodLoading = {};
+
+  /// store lister (alle kanaler, filmer eller serier) kan være mange megabyte på en treg linje
+  static const _bigList = Duration(minutes: 3);
 
   /// Sjekker innloggingen hos leverandøren før den lagres.
   static Future<XtreamSource> login(String serverInput, String user, String password, {http.Client? client}) async {
@@ -184,7 +191,7 @@ class XtreamSource implements TvSource {
   @override
   bool get sharedFavorites => false;
 
-  Future<Object?> _api(String? action, [Map<String, String> params = const {}]) async {
+  Future<Object?> _api(String? action, [Map<String, String> params = const {}, Duration timeout = const Duration(seconds: 60)]) async {
     final uri = Uri.parse('$server/player_api.php').replace(queryParameters: {
       'username': user,
       'password': password,
@@ -193,7 +200,7 @@ class XtreamSource implements TvSource {
     });
     final http.Response r;
     try {
-      r = await _http.get(uri, headers: httpHeaders).timeout(const Duration(seconds: 60));
+      r = await _http.get(uri, headers: httpHeaders).timeout(timeout);
     } on Exception {
       throw const SourceException('Får ikke kontakt med IPTV-serveren');
     }
@@ -254,7 +261,7 @@ class XtreamSource implements TvSource {
     if (!force && cached != null && at != null && DateTime.now().difference(at) < const Duration(minutes: 30)) {
       return cached;
     }
-    final raw = await _api('get_live_streams');
+    final raw = await _api('get_live_streams', const {}, _bigList);
     final list = <Channel>[];
     if (raw is List) {
       for (final s in raw) {
@@ -306,7 +313,7 @@ class XtreamSource implements TvSource {
   @override
   Future<PlayTarget> open(Channel channel, {bool takeOver = false}) async {
     // HLS fra leverandøren starter ved direktepunktet; MPEG-TS er reserven
-    final base = '$server/live/$user/$password/${channel.id}';
+    final base = '$server/live/$_creds/${channel.id}';
     return PlayTarget(['$base.m3u8', '$base.ts']);
   }
 
@@ -325,14 +332,24 @@ class XtreamSource implements TvSource {
 
   // ── filmer og serier: hele lista hentes (mellomlagret 30 min), og appen filtrerer og deler i sider ──
 
-  Future<({List<VodCategory> categories, List<VodItem> items})> _vodLists(VodKind kind, {bool force = false}) async {
+  /// Kategoriene og hele lista for filmer eller serier. Spør to deler av appen samtidig (kategoriene og første
+  /// side), lastes lista bare ned én gang.
+  Future<({List<VodCategory> categories, List<VodItem> items})> _vodLists(VodKind kind, {bool force = false}) {
+    final running = _vodLoading[kind];
+    if (running != null) return running;
+    final f = _loadVodLists(kind, force: force);
+    _vodLoading[kind] = f;
+    return f.whenComplete(() => _vodLoading.remove(kind));
+  }
+
+  Future<({List<VodCategory> categories, List<VodItem> items})> _loadVodLists(VodKind kind, {bool force = false}) async {
     final hit = _vod[kind];
     if (!force && hit != null && DateTime.now().difference(hit.at) < const Duration(minutes: 30)) {
       return (categories: hit.categories, items: hit.items);
     }
     final movies = kind == VodKind.movies;
     final rawCats = await _api(movies ? 'get_vod_categories' : 'get_series_categories');
-    final rawItems = await _api(movies ? 'get_vod_streams' : 'get_series');
+    final rawItems = await _api(movies ? 'get_vod_streams' : 'get_series', const {}, _bigList);
     final categories = [
       for (final c in rawCats is List ? rawCats : const [])
         if (c is Map) VodCategory(id: '${c['category_id']}', name: _text(c['category_name'])),
@@ -374,10 +391,25 @@ class XtreamSource implements TvSource {
   Future<SeriesInfo> seriesInfo(String id) async => parseSeriesInfo(await _api('get_series_info', {'series_id': id}));
 
   @override
-  String movieUrl(VodItem movie) => '$server/movie/$user/$password/${movie.id}.${movie.ext}';
+  String movieUrl(VodItem movie) => '$server/movie/$_creds/${movie.id}.${movie.ext}';
 
   @override
-  String episodeUrl(Episode episode) => '$server/series/$user/$password/${episode.id}.${episode.ext}';
+  String episodeUrl(Episode episode) => '$server/series/$_creds/${episode.id}.${episode.ext}';
+
+  /// brukernavn og passord i adressene til strømmene (kodet, så `#`, `/` og mellomrom virker)
+  String get _creds => '${Uri.encodeComponent(user)}/${Uri.encodeComponent(password)}';
+
+  @override
+  String redact(String text) {
+    var out = text;
+    for (final secret in {password, Uri.encodeComponent(password), Uri.encodeQueryComponent(password)}) {
+      if (secret.length >= 3) out = out.replaceAll(secret, '***');
+    }
+    for (final name in {user, Uri.encodeComponent(user)}) {
+      if (name.length >= 3) out = out.replaceAll('/$name/', '/***/').replaceAll('username=$name', 'username=***');
+    }
+    return out;
+  }
 
   @override
   Map<String, String> toPrefs() => {'kind': kind, 'server': server, 'user': user, 'password': password};

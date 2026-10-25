@@ -52,6 +52,14 @@ class _LoginPageState extends State<LoginPage> {
           _message = e.message;
         });
       }
+    } on Object {
+      // noe uventet (f.eks. en adresse som ikke lar seg tolke): ikke bli stående på «Kobler til …»
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _message = 'Kunne ikke koble til. Sjekk adressen.';
+        });
+      }
     }
   }
 
