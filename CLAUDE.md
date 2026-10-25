@@ -143,5 +143,10 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   fjernkontroll ennå.
 - 25.10.2026: pause/tilbakespoling i direktesending og «Fortsett å se» (Pål-Eriks valg). Bare testet med tester;
   om `live_start_index` virker i mpv-en til media_kit, er ikke prøvd.
+- 26.10.2026: Apple TV vurdert og lagt bort (Pål-Erik stoppet det). Flutter har ingen offisiell tvOS (bare
+  flutter-tvos, uoffisiell) og media_kit finnes ikke for tvOS, så det ville blitt en egen Swift-app (AVPlayer for
+  serverens HLS, MPVKit for MKV), bygget på GitHubs macOS-maskiner (~10x prisen per minutt) og lagt i TestFlight
+  (krever betalt utviklerkonto). Enklere alternativ om det kommer opp igjen: M3U/XMLTV eller Xtream-API fra
+  Fyrlys-serveren for en ferdig Apple TV-app.
 - Ideer senere: tilbakespoling rett mot leverandøren (mpv-bufferet), bilde-i-bilde på Android,
   kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.
