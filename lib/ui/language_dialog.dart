@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../core/fyrlys_source.dart';
 import '../core/languages.dart';
 import '../core/session.dart';
 import 'playback.dart';
@@ -11,11 +10,7 @@ import 'playback.dart';
 Future<bool> showLanguageDialog(BuildContext context, Session session) async {
   final result = await showDialog<LanguagePrefs>(
     context: context,
-    builder: (_) {
-      final src = session.source;
-      // eldre Fyrlys-servere (uten direkte avspilling) gjør om TV-kanalene med ffmpeg
-      return _LanguageDialog(initial: session.languages, viaServer: src is FyrlysSource && !src.direct);
-    },
+    builder: (_) => _LanguageDialog(initial: session.languages),
   );
   if (result == null) return false;
   session.saveLanguages(result);
@@ -23,12 +18,9 @@ Future<bool> showLanguageDialog(BuildContext context, Session session) async {
 }
 
 class _LanguageDialog extends StatefulWidget {
-  const _LanguageDialog({required this.initial, required this.viaServer});
+  const _LanguageDialog({required this.initial});
 
   final LanguagePrefs initial;
-
-  /// TV via Fyrlys-serveren har bare ett lydspor og ingen undertekster
-  final bool viaServer;
 
   @override
   State<_LanguageDialog> createState() => _LanguageDialogState();
@@ -106,14 +98,6 @@ class _LanguageDialogState extends State<_LanguageDialog> {
               ),
               const SizedBox(height: 8),
               _chips(_subs),
-              if (widget.viaServer) ...[
-                const SizedBox(height: 18),
-                Text(
-                  'TV-kanalene via Fyrlys-serveren har ett lydspor og ingen undertekster, så valget gjelder filmer og '
-                  'serier der.',
-                  style: dim,
-                ),
-              ],
             ],
           ),
         ),

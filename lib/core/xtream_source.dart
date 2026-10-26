@@ -68,7 +68,7 @@ String _ext(Object? v) {
   return _extRe.hasMatch(e) ? e : 'mp4';
 }
 
-/// Filmer og serier fra player_api.php, i samme form som Fyrlys-serveren lager dem.
+/// Filmer og serier fra player_api.php.
 List<VodItem> parseVodItems(VodKind kind, Object? raw) => [
       for (final s in raw is List ? raw : const [])
         if (s is Map && (kind == VodKind.series ? s['series_id'] : s['stream_id']) != null)
@@ -174,7 +174,7 @@ SeriesInfo parseSeriesInfo(Object? d) {
   );
 }
 
-/// IPTV-leverandøren direkte (Xtream Codes), uten Fyrlys-serveren.
+/// IPTV-leverandøren direkte (Xtream Codes).
 class XtreamSource implements TvSource {
   XtreamSource({required this.server, required this.user, required this.password, http.Client? client})
       : _http = client ?? http.Client();
@@ -222,6 +222,9 @@ class XtreamSource implements TvSource {
 
   @override
   bool get sharedFavorites => false;
+
+  @override
+  bool get hasVod => true;
 
   Future<Object?> _api(String? action, [Map<String, String> params = const {}, Duration timeout = const Duration(seconds: 60)]) async {
     final uri = Uri.parse('$server/player_api.php').replace(queryParameters: {
@@ -352,13 +355,6 @@ class XtreamSource implements TvSource {
 
   @override
   Future<void> close(Channel channel) async {}
-
-  @override
-  Future<void> stillWatching(PlayTarget target) async {}
-
-  /// leverandøren har ingen tilbakespoling her
-  @override
-  Future<LiveWindow?> liveWindow(String url) async => null;
 
   @override
   Future<Favorites?> loadFavorites() async => null;

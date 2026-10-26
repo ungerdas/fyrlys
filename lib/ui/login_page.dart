@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 
-enum _Mode { fyrlys, xtream }
+enum _Mode { m3u, xtream }
 
-/// Innlogging: mot Fyrlys-serveren (Docker-versjonen) eller rett mot IPTV-leverandøren.
+/// Innlogging hos IPTV-leverandøren: med M3U-lenken (og en EPG-lenke om du vil), eller med Xtream Codes.
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.session});
 
@@ -16,17 +16,19 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _address = TextEditingController();
+  final _m3u = TextEditingController();
+  final _epg = TextEditingController();
   final _server = TextEditingController();
   final _user = TextEditingController();
   final _password = TextEditingController();
-  _Mode _mode = _Mode.fyrlys;
+  _Mode _mode = _Mode.m3u;
   bool _busy = false;
   String? _message;
 
   @override
   void dispose() {
-    _address.dispose();
+    _m3u.dispose();
+    _epg.dispose();
     _server.dispose();
     _user.dispose();
     _password.dispose();
@@ -40,8 +42,8 @@ class _LoginPageState extends State<LoginPage> {
       _message = null;
     });
     try {
-      if (_mode == _Mode.fyrlys) {
-        await widget.session.loginFyrlys(_address.text);
+      if (_mode == _Mode.m3u) {
+        await widget.session.loginM3u(_m3u.text, epg: _epg.text);
       } else {
         await widget.session.loginXtream(_server.text, _user.text, _password.text);
       }
@@ -57,7 +59,7 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _message = 'Kunne ikke koble til. Sjekk adressen.';
+          _message = 'Kunne ikke koble til. Sjekk lenken eller adressen.';
         });
       }
     }
@@ -93,8 +95,8 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 24),
                   SegmentedButton<_Mode>(
                     segments: const [
-                      ButtonSegment(value: _Mode.fyrlys, label: Text('Fyrlys-server'), icon: Icon(Icons.dns_outlined)),
-                      ButtonSegment(value: _Mode.xtream, label: Text('IPTV-leverandør'), icon: Icon(Icons.live_tv_outlined)),
+                      ButtonSegment(value: _Mode.m3u, label: Text('M3U-lenke'), icon: Icon(Icons.playlist_play)),
+                      ButtonSegment(value: _Mode.xtream, label: Text('Xtream Codes'), icon: Icon(Icons.live_tv_outlined)),
                     ],
                     selected: {_mode},
                     onSelectionChanged: _busy
@@ -105,26 +107,36 @@ class _LoginPageState extends State<LoginPage> {
                             }),
                   ),
                   const SizedBox(height: 16),
-                  if (_mode == _Mode.fyrlys) ...[
+                  if (_mode == _Mode.m3u) ...[
                     Text(
-                      'Adressen til Fyrlys på serveren din. Innloggingen hos leverandøren, favorittene og «Ta over» deles da med nettsiden.',
+                      'Lenken til kanallista fra leverandøren. Er det en Xtream-lenke (get.php med brukernavn og passord), '
+                      'får du også filmer og serier.',
                       style: hint,
                     ),
                     const SizedBox(height: 12),
                     TextField(
-                      controller: _address,
+                      controller: _m3u,
+                      enabled: !_busy,
+                      autocorrect: false,
+                      keyboardType: TextInputType.url,
+                      decoration: const InputDecoration(labelText: 'M3U-lenke', hintText: 'http://server.no:8080/get.php?…'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _epg,
                       enabled: !_busy,
                       autocorrect: false,
                       keyboardType: TextInputType.url,
                       textInputAction: TextInputAction.go,
-                      decoration: const InputDecoration(labelText: 'Adresse', hintText: 'http://192.168.1.10:8766'),
+                      decoration: const InputDecoration(
+                        labelText: 'EPG-lenke (valgfri)',
+                        hintText: 'XMLTV, .xml eller .xml.gz',
+                        helperText: 'Står den tom, brukes EPG-lenken i lista',
+                      ),
                       onSubmitted: (_) => _submit(),
                     ),
                   ] else ...[
-                    Text(
-                      'Innloggingen du har fått fra IPTV-leverandøren (Xtream Codes). Du kan også lime inn hele M3U-lenken i serverfeltet.',
-                      style: hint,
-                    ),
+                    Text('Innloggingen du har fått fra IPTV-leverandøren (Xtream Codes).', style: hint),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _server,

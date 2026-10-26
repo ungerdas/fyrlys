@@ -1,6 +1,6 @@
 # Fyrlys
 
-TV, filmer og serier fra IPTV-abonnementet ditt (Xtream Codes), med [mpv](https://mpv.io) som avspiller via
+TV, filmer og serier fra IPTV-abonnementet ditt (M3U-lenke eller Xtream Codes), med [mpv](https://mpv.io) som avspiller via
 [media_kit](https://github.com/media-kit/media-kit). mpv spiller det meste: H.265, AC3, DTS, MKV,
 flere lydspor og undertekster, med maskinvaredekoding.
 
@@ -25,21 +25,23 @@ laster dem ned i bakgrunnen og legger dem inn når du lukker appen, eller straks
 den ikke lukket som vanlig, legges oppdateringen inn neste gang den starter. Menyen har også «Se etter
 oppdateringer».
 
-Er appen logget inn på en Fyrlys-server, hentes byggene derfra. Serveren trenger da en lesenøkkel til GitHub
-(se README-en til Docker-versjonen). Uten Fyrlys-server spør appen GitHub direkte, som bare virker når repoet
-er offentlig.
+Byggene hentes via **oppdateringsserveren**: Docker-versjonen av Fyrlys på serveren din, som har en lesenøkkel til
+GitHub (se README-en til Docker-versjonen). Adressen (f.eks. `http://192.168.1.10:8766`) settes i menyen under
+«Oppdateringsserver …». Serveren brukes bare til dette, ikke til TV. Uten oppdateringsserver spør appen GitHub
+direkte, som bare virker når repoet er offentlig.
 
 Fyrlys må ligge i en mappe du kan skrive til, f.eks. under Dokumenter (ikke Programfiler). Egne bygg (uten
 byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 
 ## Logg inn
 
-- **Fyrlys-server:** adressen til Docker-versjonen av Fyrlys på serveren din, f.eks.
-  `http://192.168.1.10:8766`. Da deler appen innloggingen hos leverandøren, favorittene og
-  «Ta over» med nettsiden, og serveren holder styr på hvem som bruker tilkoblingene. TV-kanalene kommer uendret
-  fra leverandøren (serveren sender dem bare videre), med originallyd, alle lydspor og undertekster.
-- **IPTV-leverandør:** server, brukernavn og passord fra leverandøren, eller hele M3U-lenken
-  (`get.php?username=…&password=…`) i serverfeltet. Favorittene lagres da i appen.
+Appen henter alt rett fra leverandøren. Favorittene lagres i appen.
+
+- **M3U-lenke:** lenken til kanallista fra leverandøren. Kanalene og kategoriene kommer fra lista, og TV-guiden fra
+  EPG-lenken (XMLTV, også `.xml.gz`) som står i lista, eller en du limer inn i feltet under. Filmer og serier i
+  lista tas ikke med. Er det en Xtream-lenke (`get.php?username=…&password=…`), logges du inn med Xtream Codes i
+  stedet, og får også filmer og serier.
+- **Xtream Codes:** server, brukernavn og passord fra leverandøren. Gir TV, TV-guide, filmer og serier.
 
 ## Bruk
 
@@ -74,7 +76,7 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 - Under bildet står oppløsning, kodek, om bildet dekodes i maskinvare, lyden og hvor strømmen kommer fra.
 - Brytes strømmen, prøver spilleren på nytt, inntil tre ganger i minuttet. Legges appen bort på telefon
   eller TV, gir den fra seg tilkoblingen og starter kanalen igjen når du kommer tilbake.
-- **Filmer og Serier:** fanene øverst (nederst på telefon). Velg kategori og rekkefølge (leverandørens, nyeste
+- **Filmer og Serier:** fanene øverst (nederst på telefon), når du er logget inn med Xtream Codes. Velg kategori og rekkefølge (leverandørens, nyeste
   først eller A–Å), eller søk; flere plakater hentes etter hvert som du blar. En film har «Spill av», eller
   «Fortsett fra …» og «Fra begynnelsen» når du har sett litt av den. En serie har «Spill av S01E01», eller
   «Fortsett S01E03» der du slapp (og den neste når en er sett ferdig), og sesongene og episodene, med en strek

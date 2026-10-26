@@ -3,6 +3,8 @@
 Egen app for Fyrlys, Pål-Eriks IPTV-spiller: Flutter med media_kit (mpv) som avspiller, for Windows,
 Android og Android TV (senere macOS, Linux og iOS). Den kommer **i tillegg til** Docker-versjonen
 (nettside + server med ffmpeg) i det private repoet `ungerdas/peagstreams`, som kjører på hjemmeserveren hans.
+Fra 2.1.6 (Pål-Erik 26.10: «Fyrlys server dropper vi») logger appen inn med M3U-lenke eller Xtream Codes og henter
+alt rett fra leverandøren; Fyrlys-serveren brukes bare som oppdateringsserver (`/api/app/release`).
 Ikke bland inn endringer der herfra. Repoet er **privat** (Pål-Erik valgte 25.10 å beholde det slik), men hold
 det fritt for detaljer om hjemmenettet hans, verken i koden, testene eller disse notatene, i tilfelle det blir
 offentlig (eksempeladresser som 192.168.1.10 er greit).
@@ -33,7 +35,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   byggnummeret (det brukes bare av oppdateringen). Skriv avsnittet i `CHANGELOG.md`. GitHub-release (workflowen)
   bare når han ber om det. Hver push oppdaterer releasen
   `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, navnet «Fyrlys X · bygg N (sha)»
-  settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra via Fyrlys-serveren.
+  settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra via oppdateringsserveren.
   Privat repo: 2000 gratis Actions-minutter i måneden på gratiskontoen, og hver push bruker rundt 25 (Windows
   teller dobbelt). Bruk `[skip ci]` når en endring bare gjelder notater. Versjon, byggnummer
   og commit står nederst i menyen (`--dart-define` FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`).
@@ -50,26 +52,20 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   er stengt i proxyen), så Pål-Erik må legge dem inn selv.
 
 ## Arkitektur (`lib/`)
-- `core/source.dart` – `TvSource`: kilde til kanaler, EPG, strømadresser og favoritter.
-  - `core/xtream_source.dart` – rett mot leverandøren (Xtream Codes, port av `xtream.py`): `player_api.php`,
+- `core/source.dart` – `TvSource` (`kind` `xtream`/`m3u`, `hasVod`): kilde til kanaler, EPG, strømadresser og
+  favoritter. `PlayTarget(urls, localShift:)`. Begge kildene spiller rett fra leverandøren (`localShift: true`).
+  - `core/xtream_source.dart` – Xtream Codes (port av `xtream.py`): `player_api.php`,
     User-Agent som VLC, strøm `/live/<bruker>/<passord>/<id>.m3u8` og `.ts` som reserve, EPG i base64.
-  - `core/fyrlys_source.dart` – mot Fyrlys-serveren: `/api/streams/info` (ffmpeg?), `/api/xtream/status`,
-    `/api/xtream/categories`, `/api/xtream/streams` (sider à 120), `/api/xtream/epg`, logoer via
-    `/api/xtream/img?u=`. TV **direkte** (2.1.4, Pål-Erik: «det skal ikke gjennom serveren»), når `/api/streams/info`
-    har `direct: true`: `GET /api/live/<id>/direct?c=<klient>` spørres først (409 `busy` → «Ta over»; `&force=1` bare
-    da), så spiller mpv `/api/xtream/hls/<id>.m3u8?c=` (reserve `/api/xtream/file/live/<id>.ts?c=`): leverandørens
-    strøm uendret via serverens mellomstasjon (passordet blir på serveren), og `stillWatching` gjentar `direct?c=`
-    hvert 10. s (`PlayTarget.keepAlive`; 409 = tatt over). Eldre servere: ffmpeg som før (`GET
-    /api/live/<id>/index.m3u8?c=`, så samme adresse uten force, tilbakespoling på serveren).
-    `POST /api/live/<id>/stop?c=` ved kanalbytte/lukking. Favoritter som endringer
-    (`PUT /api/streams/favs` med `op`), delt med nettsiden.
-  - Filmer og serier (`core/vod.dart`: modellene, `pageOf`/`catalogOf` for filtrering, sortering og sider à 120,
-    `episodeCode`, `ratingText`): Fyrlys-serveren gjør det selv (`/api/xtream/categories?kind=vod|series`,
-    `/api/xtream/streams?kind=&cat=&q=&sort=&start=`, `/api/xtream/vod?id=`, `/api/xtream/series?id=`, filen via
-    `/api/xtream/file/vod|series/<id>.<ext>` med Range), uavhengig av `FYRLYS_VOD` (som bare gjelder nettsiden).
-    Rett mot leverandøren hentes hele lista (`get_vod_streams`/`get_series`, 30 min) og filtreres i appen;
-    filene er `/movie/` og `/series/<bruker>/<passord>/<id>.<ext>`. Filmer og serier går utenom «Ta over» og
-    seertellingen på serveren.
+  - `core/m3u_source.dart` (2.1.6) – en vanlig M3U-liste: `parseM3u` (`#EXTINF` med tvg-id/tvg-name/tvg-logo/
+    group-title/tvg-chno, `#EXTGRP`, `url-tvg`/`x-tvg-url` i toppen; filmer/episoder etter sti eller filtype hoppes
+    over), kanal-id = `stableHash` av tvg-id+navn (ellers gruppe+navn), kategorier = gruppene, nummer = tvg-chno
+    eller plassen i lista. Store lister (> 200 kB) og XMLTV leses i en isolate. TV-guide fra XMLTV (`parseXmltv`
+    med regex, gzip, bare −2 t til +24 t, hentes hver 6. time; egen EPG-lenke går foran lista sin), kobles på
+    tvg-id, ellers display-name. Ingen filmer/serier (`hasVod: false`, fanene skjules). `Session.loginM3u`: en
+    Xtream-lenke (get.php/player_api.php med username og password) prøves først som Xtream Codes.
+  - Filmer og serier (bare Xtream; `core/vod.dart`: modellene, `pageOf`/`catalogOf` for filtrering, sortering og
+    sider à 120, `episodeCode`, `ratingText`): hele lista hentes (`get_vod_streams`/`get_series`, 30 min) og
+    filtreres i appen; filene er `/movie/` og `/series/<bruker>/<passord>/<id>.<ext>`.
 - `core/cache.dart` – det som tas vare på mellom gangene (2.1.3): `ListCache` (`FileListCache` i
   `getApplicationSupportDirectory()/lister`, én JSON per kilde med nøkkelen `kind|label`; `MemoryListCache` i testene)
   og `ImageStore` (bildene i `getApplicationCacheDirectory()/bilder`, filnavn `stableHash(url)`, fornyes etter 14 dager,
@@ -78,15 +74,19 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
 - `core/session.dart` – tilstanden (ChangeNotifier): innlogging (lagres i shared_preferences, også
   Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
   `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene; `cleanEpg` i `models.dart` slår sammen
-  doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt for Xtream, på
-  serveren for Fyrlys-server, i kø), «sist sett», lys/mørk, og «fortsett der du
+  doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt), «sist sett», lys/mørk,
+  oppdateringsserveren (`updateServer`/`saveUpdateServer`, `update_server` i shared_preferences; en lagret
+  innlogging med `kind: fyrlys` fra før 2.1.6 blir dit ved `restore`, og favorittene hentes én gang fra
+  `/api/streams/favs` når appen ikke har egne), og «fortsett der du
   slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
   `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken). Språkene (`languages`/`saveLanguages`,
   `lang_audio`/`lang_subs` i shared_preferences; `LanguagePrefs` og kodene i `core/languages.dart`). Lista fra
   `listCache` vises med en gang (`_startLists`), `load` skriver den nye; `_prefetchEpg` henter programinfo for 12
-  favoritter og 8 sist sett når lista er klar og når favorittene kommer fra serveren.
-- `ui/login_page.dart`, `ui/home_page.dart` (TV/TV-guide/Filmer/Serier: SegmentedButton i toppen ≥ 900 px (ikoner ≥ 1200), ellers
-  NavigationBar nederst; TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
+  favoritter og 8 sist sett når lista er klar.
+- `ui/login_page.dart` (to valg: «M3U-lenke» med valgfri EPG-lenke, og «Xtream Codes»), `ui/home_page.dart`
+  (TV/TV-guide/Filmer/Serier, de to siste bare med `hasVod` (`_sectionList`/`_current`): SegmentedButton i toppen
+  ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; «Oppdateringsserver …» i menyen (`_UpdateServerDialog`,
+  bare når oppdateringen er på; «Se etter oppdateringer» uten server åpner den); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
   på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå).
 - `ui/start_view.dart` – Hjem (filteret `home`, valgt når appen starter, 26.10 for 2.0.3; Pål-Erik ville ha vekt på TV,
   ikke filmer/serier): hilsen og dato/klokke, `LastWatchedCard` (siste i «sist sett», nå/etterpå, «Se videre»), eller
@@ -103,8 +103,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   «Fortsett å se», sist sett). Tester må `pumpAndSettle` etter fane-/listebytter (to barn under overgangen).
 - `ui/language_dialog.dart` – «Språk for lyd og undertekster» (FilterChips i den rekkefølgen du velger, «Av» for
   undertekster) og `TracksButton`, sporvalget i begge spillerne (henter sporene asynkront så det som faktisk spilles
-  er huket av; «Foretrukne språk …» nederst gjelder straks). TV via ffmpeg på serveren (eldre servere) har bare første
-  lydspor og ingen undertekster (`-map 0:a:0 -sn`); direkte (2.1.4) har alt.
+  er huket av; «Foretrukne språk …» nederst gjelder straks).
 - `ui/guide_view.dart` – TV-guiden, som på nettsiden: 6 timer fra halvtimen før denne halvtimen (`guideStart`),
   5 px/min (4 på smale skjermer), «nå»-strek, «Til nå», kategori (★ Favorittkanaler / Alle / dine kategorier
   først; huskes i `guide_cat`) og søket i toppen. Kanalnavnene er en egen liste til venstre som rulles sammen med
@@ -140,20 +139,15 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   toppstripa i fullskjerm skjules imens. Den lille spinneren i banneret går til bildet starter: ingen
   `pumpAndSettle` i tester etter et kanalbytte (den falske avspilleren starter aldri). Telefon/TV: kanalen stoppes når
   appen legges bort (`paused`) og startes igjen ved `resumed`.
-  Pause og tilbakespoling i appen selv (2.1.4, `PlayTarget.localShift`: direkte via serveren og rett mot leverandøren):
+  Pause og tilbakespoling i appen selv (2.1.4, `PlayTarget.localShift`; tilbakespoling på serveren er borte i 2.1.6):
   `setup(live: true)` gir mpv `cache=yes`, `demuxer-seekable-cache=yes` og `cache-on-disk` i
   `<cache>/mpv` (`MpvPlayback.cacheDir`, ryddes ved start; 2000/1000 MiB bak/foran på PC, 600/300 på Android, mindre i
   minnet uten mappe). Vakta spør `liveCache()` (fra `demuxer-cache-state`: `reader-pts`, `cache-end`,
   `seekable-ranges`) hvert 2. s; «direkte» er det minste avspilleren har foran mens du ser direkte (`_liveAhead`,
   strømmen kommer i biter, derfor 15 s slakk i `_atLive`), bak direkte = foran − det. Spoling = `seekBy` (mpv
-  `seek <s> relative`) i bufferet, uten å åpne på nytt. Ikke prøvd i ekte mpv.
-  Tilbakespoling via Fyrlys-serveren med ffmpeg (eldre servere: `PlayTarget.timeshift` fra `timeshift_min` i
-  `/api/streams/info`): ffmpegs HLS-demuxer kan ikke spole i en direktesending, så spillelista åpnes på nytt med
-  `live_start_index=-N` (`change-list demuxer-lavf-o append`, så media_kits egne valg står). N regnes ut fra
-  `#EXTINF` i spillelista (`TvSource.liveWindow`, `LiveWindow.at`; 3 fra slutten er «direkte»). Hvor langt bak du
-  er = der du begynte + pausene (`package:clock`, så testene kan spole tida). Spillelista hentes hvert 15. s (10 s på
-  pause, så serveren ikke stopper kanalen); 409 da = tatt over. Pause over 45 s åpnes på nytt der du var. Tidslinje,
-  −10/+10 (samles i 450 ms), «DIREKTE» (trykk = direkte), ←, → (på PC og i fullskjerm; ellers inn i lista), L/End.
+  `seek <s> relative`) i bufferet, uten å åpne på nytt (`package:clock` for tida på pause, så testene kan spole den).
+  Ikke prøvd i ekte mpv. Tidslinje, −10/+10 (samles i 450 ms), «DIREKTE» (trykk = direkte), ←, → (på PC og i
+  fullskjerm; ellers inn i lista), L/End.
 - `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene (`playbackFactory`
   byttes ut i testene for sider som lager avspilleren selv). Fullskjerm for begge spillerne:
   `WindowFullscreen` i `ui/window_effects.dart`. Språk: `setLanguages` setter `alang`/`slang` og
@@ -162,7 +156,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   `tracks()` leser `aid`/`sid` fra mpv (media_kit vet bare om spor valgt via `setAudioTrack`). Bildeundertekster
   (PGS/DVB) vises ikke: media_kit tegner tekstundertekster selv (`sub-visibility=no` uten libass).
 - `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer). Repoet er
-  privat, så når appen er logget inn på en Fyrlys-server spør den `<server>/api/app/release` (serveren har en
+  privat, så med en oppdateringsserver (`serverBase` = `Session.updateServer`, `normalizeServerAddress`) spør den
+  `<server>/api/app/release` (Fyrlys-serveren har en
   lesenøkkel i `data/github.json` og svarer i GitHubs form, med relative adresser `download/<fil>` som løses
   mot release-adressen); ellers `api.github.com/repos/<repo>/releases/tags/testbygg` (virker bare om repoet er
   offentlig). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
@@ -175,7 +170,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   oppdateringer» i `home_page.dart`. Android oppdaterer seg ikke selv ennå (trenger fast signeringsnøkkel og
   installasjon av APK).
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
-- Tester i `test/`: navn, Xtream-kilden, Fyrlys-kilden (med MockClient), oppdateringen (`updater_test.dart`),
+- Tester i `test/`: navn, Xtream-kilden, M3U-kilden og innloggingen (`m3u_source_test.dart`, med MockClient og
+  `http.runWithClient`), oppdateringen (`updater_test.dart`),
   widget-tester for TV-siden og spilleren (`player_test.dart`, tilbakespoling i `timeshift_test.dart`) med falsk
   kilde og avspiller (`fakes.dart`),
   filmer og serier (`vod_source_test.dart`: kildene og lister; `vod_test.dart`: fanene, detaljsiden, spilleren,
@@ -228,4 +224,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   `display-fps-override` fra Flutters `display.refreshRate`), to valg nederst i `TracksButton`, og `describe` med
   fps/deinterlacet, bitrate, tapte bilder og om `display-sync-active`, hvert 5. s. Ikke prøvd i ekte mpv; usikkert
   om display-sync virker med media_kits libmpv-rendering.
+- 26.10.2026: 2.1.6: innlogging med M3U-lenke eller Xtream Codes, Fyrlys-serveren bare til oppdateringer (Pål-Eriks
+  valg). Fjernet `fyrlys_source.dart`, tilbakespoling på serveren (`LiveWindow`, `live_start_index`), «direkte»-økter
+  og hjerteslag fra appen (serverens API-er for dem står igjen i peagstreams). Testet med tester; ekte M3U-lister og
+  XMLTV fra leverandøren hans er ikke prøvd.
 - Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.

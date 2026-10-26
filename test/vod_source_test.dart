@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fyrlys/core/fyrlys_source.dart';
 import 'package:fyrlys/core/vod.dart';
 import 'package:fyrlys/core/xtream_source.dart';
 import 'package:http/http.dart' as http;
@@ -81,76 +80,6 @@ void main() {
       expect(ratingText(null), '');
       expect(ratingText(0), '');
     });
-  });
-
-  test('Fyrlys-serveren: lister, info og filer', () async {
-    final calls = <String>[];
-    final client = MockClient((req) async {
-      calls.add('${req.url.path}?${req.url.query}');
-      final p = req.url.path;
-      final q = req.url.queryParameters;
-      if (p == '/api/xtream/categories') {
-        return json({
-          'categories': [
-            {'id': '11', 'name': 'Action', 'count': 2},
-          ],
-          'total': 2,
-        });
-      }
-      if (p == '/api/xtream/streams' && q['kind'] == 'vod') {
-        return json({
-          'items': [
-            {'id': '201', 'name': 'Fyrlyset', 'cat': '11', 'icon': 'http://img/p.jpg', 'ext': 'mkv', 'rating': 7.5, 'added': 3},
-            {'id': '202', 'name': 'Nordlys', 'cat': '11', 'icon': null, 'ext': 'mp4', 'rating': null, 'added': 1},
-          ],
-          'total': 2,
-          'start': 0,
-          'page': 120,
-        });
-      }
-      if (p == '/api/xtream/vod') return json({'plot': 'Om et fyr.', 'genre': 'Drama', 'year': '2024', 'duration': '01:45:00'});
-      if (p == '/api/xtream/series') {
-        return json({
-          'name': 'Kystvakten',
-          'cover': 'http://img/c.jpg',
-          'plot': 'Kysten.',
-          'genre': '',
-          'year': '2023',
-          'rating': 8,
-          'seasons': [
-            {
-              'season': '1',
-              'episodes': [
-                {'id': '401', 'ep': 1, 'title': 'Første', 'ext': 'mkv', 'img': null, 'plot': 'Start.', 'duration': '00:45:00'},
-                {'id': '402', 'ep': '2', 'title': 'Andre', 'ext': 'mp4', 'img': 'http://img/e.jpg', 'plot': '', 'duration': null},
-              ],
-            },
-          ],
-        });
-      }
-      return json({'error': 'nei'}, 404);
-    });
-    final src = FyrlysSource(base: 'http://192.168.1.10:8766', client: client);
-
-    final cat = await src.vodCatalog(VodKind.movies);
-    expect(cat.categories.single.name, 'Action');
-    expect(cat.total, 2);
-
-    final page = await src.vodPage(VodKind.movies, category: '11', query: 'fyr lys', sort: VodSort.newest, start: 0);
-    expect(calls.last, '/api/xtream/streams?kind=vod&cat=11&q=fyr+lys&sort=added&start=0');
-    expect(page.total, 2);
-    expect(page.items.first.ext, 'mkv');
-    expect(page.items.first.rating, 7.5);
-    expect(page.items.last.icon, isNull);
-    expect(src.movieUrl(page.items.first), 'http://192.168.1.10:8766/api/xtream/file/vod/201.mkv');
-
-    expect((await src.movieInfo('201')).plot, 'Om et fyr.');
-
-    final info = await src.seriesInfo('301');
-    expect(info.seasons.single.episodes.map((e) => e.number), [1, 2]);
-    expect(info.seasons.single.episodes.last.image, 'http://img/e.jpg');
-    expect(info.seasons.single.episodes.last.duration, '');
-    expect(src.episodeUrl(info.seasons.single.episodes.first), 'http://192.168.1.10:8766/api/xtream/file/series/401.mkv');
   });
 
   group('leverandøren direkte', () {

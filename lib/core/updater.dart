@@ -16,6 +16,22 @@ class UpdateException implements Exception {
   String toString() => message;
 }
 
+/// «192.168.1.10:8766» → «http://192.168.1.10:8766» (adressen til Fyrlys-serveren); null når den ikke kan tolkes.
+String? normalizeServerAddress(String raw) {
+  var text = raw.trim();
+  if (text.isEmpty) return null;
+  if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(text)) text = 'http://$text';
+  final u = Uri.tryParse(text);
+  if (u == null || u.host.isEmpty) return null;
+  var path = u.path;
+  while (path.endsWith('/')) {
+    path = path.substring(0, path.length - 1);
+  }
+  final host = u.host.contains(':') ? '[${u.host}]' : u.host;
+  final port = u.hasPort ? ':${u.port}' : '';
+  return '${u.scheme.toLowerCase()}://$host$port$path';
+}
+
 /// En nyere utgave av appen: testbygget fra main på GitHub.
 class UpdateInfo {
   const UpdateInfo({required this.build, required this.title, required this.url, required this.size, this.notes = ''});
@@ -63,8 +79,8 @@ UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
 enum UpdateState { idle, checking, available, downloading, ready, failed }
 
 /// Oppdaterer appen fra testbyggene (releasen «testbygg», som CI lager ved hver endring på main). Repoet er
-/// privat, så byggene hentes via Fyrlys-serveren når appen er logget inn der (serveren har en lesenøkkel til
-/// GitHub); ellers spørres GitHub direkte, som bare virker om repoet er offentlig.
+/// privat, så byggene hentes via Fyrlys-serveren (oppdateringsserveren i menyen; serveren har en lesenøkkel til
+/// GitHub); uten den spørres GitHub direkte, som bare virker om repoet er offentlig.
 /// Ser etter nye bygg ved oppstart og hver 6. time, laster ned i bakgrunnen og legger inn når appen lukkes
 /// (eller med «Start på nytt nå»). Ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
 /// starter. Bare på Windows, og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
@@ -106,7 +122,7 @@ class Updater extends ChangeNotifier {
   /// en kort beskjed i banneret, f.eks. at appen nettopp ble oppdatert
   String? notice;
 
-  /// adressen til Fyrlys-serveren appen er logget inn på (null: spør GitHub direkte)
+  /// adressen til Fyrlys-serveren byggene hentes fra (null: spør GitHub direkte)
   String? Function()? serverBase;
 
   /// hvem vi spør, til feilmeldingene

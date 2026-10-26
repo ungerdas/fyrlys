@@ -3,15 +3,17 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cache.dart';
-import 'fyrlys_source.dart';
 import 'languages.dart';
+import 'm3u_source.dart';
 import 'models.dart';
 import 'names.dart';
 import 'picture.dart';
 import 'source.dart';
+import 'updater.dart' show normalizeServerAddress;
 import 'vod.dart';
 import 'xtream_source.dart';
 
@@ -19,7 +21,8 @@ typedef SourceFactory = Future<TvSource?> Function(Map<String, String> saved);
 
 /// Tilstanden i appen: kilden du er logget inn på, kanallista, favoritter, «sist sett» og lys/mørk.
 class Session extends ChangeNotifier {
-  Session(this._prefs, {this.sourceFactory, this.listCache}) : themeMode = _themeFrom(_prefs.getString('theme'));
+  Session(this._prefs, {this.sourceFactory, this.listCache, this.httpClient})
+      : themeMode = _themeFrom(_prefs.getString('theme'));
 
   final SharedPreferences _prefs;
 
@@ -28,6 +31,9 @@ class Session extends ChangeNotifier {
 
   /// kanallista fra sist (null: hentes hver gang, som i testene)
   final ListCache? listCache;
+
+  /// for testene (flyttingen fra Fyrlys-serveren)
+  final http.Client? httpClient;
 
   TvSource? source;
   bool restoring = true;
@@ -71,8 +77,19 @@ class Session extends ChangeNotifier {
     if (raw != null) {
       try {
         final saved = (jsonDecode(raw) as Map).map((k, v) => MapEntry('$k', '$v'));
-        final factory = sourceFactory;
-        src = factory != null ? await factory(saved) : _fromPrefs(saved);
+        final base = saved['base'];
+        if (saved['kind'] == 'fyrlys') {
+          // Innlogging mot Fyrlys-serveren finnes ikke lenger (2.1.6): adressen brukes bare til oppdateringene, og
+          // du logger inn med M3U-lenken eller Xtream Codes.
+          if (base != null) {
+            if (updateServer == null) await _prefs.setString('update_server', base);
+            await _importServerFavorites(base);
+          }
+          await _prefs.remove('source');
+        } else {
+          final factory = sourceFactory;
+          src = factory != null ? await factory(saved) : _fromPrefs(saved);
+        }
       } on Object {
         src = null;
       }
@@ -86,11 +103,46 @@ class Session extends ChangeNotifier {
     }
   }
 
+  /// Favorittene lå bare på Fyrlys-serveren. De tas med over (samme kanal-id-er hos Xtream Codes), når appen
+  /// ikke har egne fra før.
+  Future<void> _importServerFavorites(String base) async {
+    if (_prefs.getString('favorites') != null) return;
+    final client = httpClient ?? http.Client();
+    try {
+      final r = await client.get(Uri.parse('$base/api/streams/favs')).timeout(const Duration(seconds: 4));
+      if (r.statusCode != 200) return;
+      final d = jsonDecode(utf8.decode(r.bodyBytes, allowMalformed: true));
+      if (d is! Map) return;
+      final favs = d['favs'];
+      final cats = d['cats'];
+      if (favs is List) {
+        final list = [
+          for (final f in favs)
+            if (f is Map && f['id'] != null)
+              Channel(
+                id: '${f['id']}',
+                name: '${f['name'] ?? ''}',
+                categoryId: '${f['cat'] ?? ''}',
+                icon: f['icon'] is String ? f['icon'] as String : null,
+                number: f['num']?.toString(),
+                hasEpg: f['epg'] != false,
+              ).toJson(),
+        ];
+        await _prefs.setString('favorites', jsonEncode(list));
+      }
+      if (cats is List) await _prefs.setStringList('favoriteCategories', [for (final c in cats) '$c']);
+    } on Object {
+      // serveren svarer ikke: uten favorittene, da
+    } finally {
+      if (httpClient == null) client.close();
+    }
+  }
+
   TvSource? _fromPrefs(Map<String, String> s) {
     switch (s['kind']) {
-      case 'fyrlys':
-        final base = s['base'];
-        return base == null ? null : FyrlysSource(base: base, clientId: s['client']);
+      case 'm3u':
+        final url = s['url'];
+        return url == null ? null : M3uSource(url: url, epgUrl: s['epg'] ?? '');
       case 'xtream':
         final server = s['server'];
         final user = s['user'];
@@ -101,10 +153,40 @@ class Session extends ChangeNotifier {
     return null;
   }
 
-  Future<void> loginFyrlys(String address) async => _use(await FyrlysSource.connect(address));
+  /// En M3U-lenke. Er det en Xtream-lenke (get.php med brukernavn og passord), logges du inn med Xtream Codes, som
+  /// også har TV-guide, filmer og serier; ellers leses lista (med TV-guide fra [epg] eller lenken i lista).
+  Future<void> loginM3u(String link, {String epg = ''}) async {
+    final address = M3uSource.normalize(link);
+    final login = cleanServer(address);
+    final path = Uri.parse(address).path;
+    if (login.user != null && login.password != null && (path.endsWith('get.php') || path.endsWith('player_api.php'))) {
+      try {
+        await _use(await XtreamSource.login(address, '', ''));
+        return;
+      } on SourceException {
+        // ikke en Xtream-server likevel: lista leses som den er
+      }
+    }
+    await _use(await M3uSource.connect(address, epgUrl: epg));
+  }
 
   Future<void> loginXtream(String server, String user, String password) async =>
       _use(await XtreamSource.login(server, user, password));
+
+  /// Fyrlys-serveren oppdateringene på Windows hentes fra (repoet er privat); null: ingen
+  String? get updateServer => _prefs.getString('update_server');
+
+  /// [address] tom: ingen oppdateringsserver. Kaster SourceException ved en ugyldig adresse.
+  Future<void> saveUpdateServer(String address) async {
+    if (address.trim().isEmpty) {
+      await _prefs.remove('update_server');
+    } else {
+      final base = normalizeServerAddress(address);
+      if (base == null) throw const SourceException('Ugyldig adresse');
+      await _prefs.setString('update_server', base);
+    }
+    notifyListeners();
+  }
 
   Future<void> _use(TvSource src) async {
     await _prefs.setString('source', jsonEncode(src.toPrefs()));
@@ -186,7 +268,7 @@ class Session extends ChangeNotifier {
     } on SourceException catch (e) {
       if (source == src) error = e.message;
     } on Object {
-      // uventet svar (ikke som en Xtream- eller Fyrlys-server): vis en feil i stedet for en tom liste
+      // uventet svar (ikke en Xtream-server eller M3U-liste): vis en feil i stedet for en tom liste
       if (source == src) error = 'Uventet svar fra serveren da lista ble hentet';
     } finally {
       if (source == src) {
@@ -247,7 +329,7 @@ class Session extends ChangeNotifier {
     if (hit != null) return hit.list;
     final src = source;
     if (src == null) return Future.value(const <EpgEntry>[]);
-    // doble og overlappende programmer ryddes her, så det gjelder begge kildene (og eldre Fyrlys-servere)
+    // doble og overlappende programmer ryddes her, så det gjelder begge kildene
     late final _EpgHit entry;
     final future = _limited(() => src.epg(channelId, limit: limit)).then(cleanEpg).catchError((Object _) {
       // en feil skal ikke huskes i fem minutter: neste gang kanalen vises, prøves det igjen

@@ -57,9 +57,8 @@ abstract class Playback {
   /// hopp så langt fram (eller tilbake, negativt) i det avspilleren har tatt vare på
   Future<void> seekBy(Duration delta);
 
-  /// [start]: hvor filmen skal begynne (fortsett der du slapp). [liveFromEnd]: direktesending, så mange
-  /// segmenter fra slutten av spillelista (3 er direkte; flere er tilbake i tid).
-  Future<void> open(String url, Map<String, String> headers, {Duration? start, int? liveFromEnd});
+  /// [start]: hvor filmen skal begynne (fortsett der du slapp).
+  Future<void> open(String url, Map<String, String> headers, {Duration? start});
 
   Future<void> stop();
 
@@ -193,10 +192,7 @@ class MpvPlayback implements Playback {
     await _try(() => p.command(['seek', (delta.inMilliseconds / 1000).toStringAsFixed(2), 'relative']));
   }
 
-  /// segmentene fra slutten sist en direktesending ble åpnet tilbake i tid (null: som vanlig)
-  int? _liveFromEnd;
-
-  /// adressen som ble åpnet sist (samme adresse igjen, f.eks. etter spoling, beholder sporene du valgte)
+  /// adressen som ble åpnet sist (samme adresse igjen beholder sporene du valgte)
   String? _lastUrl;
   LanguagePrefs _langs = const LanguagePrefs();
 
@@ -209,16 +205,8 @@ class MpvPlayback implements Playback {
   }
 
   @override
-  Future<void> open(String url, Map<String, String> headers, {Duration? start, int? liveFromEnd}) async {
+  Future<void> open(String url, Map<String, String> headers, {Duration? start}) async {
     final p = _player.platform;
-    // Etter en spoling står valget i mpv til det endres: tilbake til ffmpegs vanlige 3 (direkte) neste gang.
-    final want = liveFromEnd ?? (_liveFromEnd != null ? 3 : null);
-    _liveFromEnd = liveFromEnd;
-    if (want != null && p is NativePlayer) {
-      // ffmpeg begynner en direktesending (HLS) så mange segmenter fra slutten. Legges til det media_kit har
-      // satt i demuxer-lavf-o (protocol_whitelist osv.), og siste verdi gjelder.
-      await _try(() => p.command(['change-list', 'demuxer-lavf-o', 'append', 'live_start_index=-$want']));
-    }
     // Ny fil eller kanal: sporene velges etter språkene dine (et spor du valgte i forrige fil, står ellers i mpv).
     if (url != _lastUrl && p is NativePlayer) await _autoTracks(p);
     _lastUrl = url;

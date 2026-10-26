@@ -10,7 +10,7 @@ class SourceException implements Exception {
   String toString() => message;
 }
 
-/// Alle tilkoblingene hos leverandøren er i bruk. Fyrlys-serveren sier hvilke kanaler som går.
+/// Alle tilkoblingene hos leverandøren er i bruk (med navnene på kanalene som går, når kilden vet dem).
 class BusyException extends SourceException {
   const BusyException(super.message, this.busy);
 
@@ -19,24 +19,17 @@ class BusyException extends SourceException {
 
 /// Hvor strømmen hentes fra. Adressene prøves i rekkefølge (f.eks. HLS først, så MPEG-TS).
 class PlayTarget {
-  const PlayTarget(this.urls, {this.timeshift = Duration.zero, this.keepAlive, this.localShift = false});
+  const PlayTarget(this.urls, {this.localShift = false});
 
   final List<String> urls;
 
-  /// hvor langt tilbake det går an å spole i direktesendingen (Fyrlys-serveren med ffmpeg); 0 = ikke mulig
-  final Duration timeshift;
-
-  /// spørres hvert 10. sekund mens du ser (Fyrlys-serveren holder tilkoblingen til deg); 409 = noen har tatt over
-  final String? keepAlive;
-
-  /// strømmen kommer uendret fra leverandøren: avspilleren tar vare på det siste selv, så du kan pause og spole
-  /// tilbake i det
+  /// en direktesending: avspilleren tar vare på det siste selv, så du kan pause og spole tilbake i det
   final bool localShift;
 }
 
-/// En kilde til TV: rett mot IPTV-leverandøren (Xtream Codes) eller via Fyrlys-serveren (Docker-versjonen).
+/// En kilde til TV: IPTV-leverandøren med Xtream Codes, eller en M3U-liste.
 abstract class TvSource {
-  /// 'xtream' eller 'fyrlys'
+  /// 'xtream' eller 'm3u'
   String get kind;
 
   /// vises i menyen, f.eks. «bob på iptv.example»
@@ -45,10 +38,13 @@ abstract class TvSource {
   /// sendes med til strømmene (User-Agent hos leverandøren)
   Map<String, String> get httpHeaders;
 
-  /// favorittene ligger hos kilden (Fyrlys-serveren) og deles med nettsiden, ikke bare i appen
+  /// favorittene ligger hos kilden og deles med andre enheter, ikke bare i appen (ingen av kildene nå)
   bool get sharedFavorites;
 
-  /// sjekkes når appen starter, f.eks. om serveren har ffmpeg
+  /// kilden har filmer og serier (fanene skjules ellers)
+  bool get hasVod;
+
+  /// sjekkes når appen starter
   Future<void> prepare();
 
   Future<Account> account();
@@ -68,10 +64,6 @@ abstract class TvSource {
 
   /// frigjør tilkoblingen når du går til en annen kanal eller lukker spilleren
   Future<void> close(Channel channel);
-
-  /// Du ser fortsatt på (hvert 10. sekund når [PlayTarget.keepAlive] er satt). Kaster BusyException når noen andre
-  /// har tatt over tilkoblingen.
-  Future<void> stillWatching(PlayTarget target);
 
   Future<Favorites?> loadFavorites();
 
@@ -96,10 +88,6 @@ abstract class TvSource {
 
   /// Tekst som skal vises eller logges (f.eks. en feil fra mpv med hele adressen): uten brukernavn og passord.
   String redact(String text);
-
-  /// Spillelista til en direktesending slik den er nå, for å spole i den (bare når [PlayTarget.timeshift] er
-  /// over 0). Hentes også mens du har pauset, så serveren vet at du fortsatt ser på.
-  Future<LiveWindow?> liveWindow(String url);
 
   /// det som lagres for å koble til igjen neste gang
   Map<String, String> toPrefs();

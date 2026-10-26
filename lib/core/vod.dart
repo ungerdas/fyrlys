@@ -1,4 +1,4 @@
-// Filmer og serier: det appen vet om dem, uansett kilde (Fyrlys-serveren eller leverandøren direkte).
+// Filmer og serier fra leverandøren (Xtream Codes): det appen vet om dem.
 
 enum VodKind {
   movies('vod', 'Filmer'),
@@ -6,7 +6,7 @@ enum VodKind {
 
   const VodKind(this.api, this.title);
 
-  /// navnet hos Fyrlys-serveren (kind=vod / kind=series)
+  /// navnet i Xtream-API-et (vod / series)
   final String api;
   final String title;
 }
@@ -402,8 +402,7 @@ String ratingText(double? rating) {
   return '★ ${text.replaceAll('.', ',')}';
 }
 
-/// Siden lister filtreres og sorteres likt hos begge kildene: Fyrlys-serveren gjør det selv, og for
-/// leverandøren direkte gjør appen det med hele lista.
+/// Lister filtreres og sorteres i appen (leverandøren gir hele lista), i sider à [vodPageSize].
 const vodPageSize = 120;
 
 VodPage pageOf(List<VodItem> items, {String category = '', String query = '', VodSort sort = VodSort.provider, int start = 0}) {

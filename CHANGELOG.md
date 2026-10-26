@@ -2,6 +2,17 @@
 
 Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
 
+## v2.1.6
+
+- **Ny innlogging: M3U-lenke eller Xtream Codes.** Innloggingen mot Fyrlys-serveren er borte: appen henter TV rett
+  fra leverandøren. Med en M3U-lenke får du kanalene og kategoriene fra lista, og TV-guide fra EPG-lenken (XMLTV) i
+  lista eller en du limer inn selv. Er lenken en Xtream-lenke (get.php med brukernavn og passord), logges du inn med
+  Xtream Codes i stedet, med TV-guide, filmer og serier.
+- **Filmer og Serier** vises bare når kilden har dem (ikke for en vanlig M3U-liste).
+- **Oppdateringsserveren:** Fyrlys-serveren brukes nå bare til å hente nye versjoner på Windows. Adressen står i menyen
+  («Oppdateringsserver …») og tas med av seg selv fra innloggingen du hadde. Det samme gjør favorittene dine.
+- Etter oppdateringen må du logge inn på nytt én gang, med M3U-lenken eller Xtream Codes.
+
 ## v2.1.5
 
 - **Fjern striper (deinterlacing):** kanaler som sendes interlacet (1080i, vanlig hos NRK og TV 2), får ikke lenger

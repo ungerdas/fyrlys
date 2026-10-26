@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 // Det appen vet om kategorier, kanaler, programmer, kontoen og favorittene.
 
 class Category {
@@ -107,51 +105,6 @@ List<EpgEntry> cleanEpg(List<EpgEntry> list) {
     if (!merged) out.add(e);
   }
   return out;
-}
-
-/// Spillelista for en direktesending på Fyrlys-serveren: segmentene som ligger der nå (for å spole tilbake).
-class LiveWindow {
-  const LiveWindow(this.segments);
-
-  /// lengden på hvert segment, eldst først
-  final List<Duration> segments;
-
-  /// mpv begynner så mange segmenter fra slutten når den åpner en direktesending; det er «direkte»
-  static const liveFromEnd = 3;
-
-  /// hvor langt tilbake det går an å spole, regnet fra direkte
-  Duration get length {
-    var total = Duration.zero;
-    for (var i = 0; i < segments.length - liveFromEnd; i++) {
-      total += segments[i];
-    }
-    return total;
-  }
-
-  /// Hvor mange segmenter fra slutten avspilleren skal begynne for å ligge [back] bak direkte, og hvor langt bak
-  /// det faktisk blir (hele segmenter; aldri lenger tilbake enn lista går).
-  ({int fromEnd, Duration behind}) at(Duration back) {
-    var behind = Duration.zero;
-    var fromEnd = liveFromEnd;
-    while (behind < back && fromEnd < segments.length) {
-      fromEnd++;
-      behind += segments[segments.length - fromEnd];
-    }
-    return (fromEnd: fromEnd, behind: behind);
-  }
-}
-
-/// «#EXTINF:2.002,» for hvert segment i en HLS-spilleliste.
-LiveWindow parseLiveWindow(String text) {
-  final out = <Duration>[];
-  for (final raw in const LineSplitter().convert(text)) {
-    final line = raw.trim();
-    if (!line.startsWith('#EXTINF:')) continue;
-    final value = line.substring(8).split(',').first;
-    final seconds = double.tryParse(value);
-    if (seconds != null && seconds > 0) out.add(Duration(microseconds: (seconds * 1000000).round()));
-  }
-  return LiveWindow(out);
 }
 
 /// Programmet som går nå, og det som kommer etter.

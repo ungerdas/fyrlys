@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../build_info.dart';
 import '../core/models.dart';
 import '../core/session.dart';
+import '../core/source.dart';
 import '../core/updater.dart';
 import '../core/vod.dart';
 import 'channel_card.dart';
@@ -24,7 +25,7 @@ class HomePage extends StatefulWidget {
 
   final Session session;
 
-  /// oppdateringer fra GitHub (Windows); null i testene og der appen ikke oppdaterer seg selv
+  /// oppdateringer via Fyrlys-serveren (Windows); null i testene og der appen ikke oppdaterer seg selv
   final Updater? updater;
 
   @override
@@ -32,6 +33,7 @@ class HomePage extends StatefulWidget {
 }
 
 /// TV, TV-guide, Filmer og Serier: valget i toppen (PC og TV) eller nederst (telefon).
+/// Filmer og Serier bare når kilden har dem (Xtream Codes, ikke en vanlig M3U-liste).
 enum _Section { tv, guide, movies, series }
 
 class _HomePageState extends State<HomePage> {
@@ -120,7 +122,7 @@ class _HomePageState extends State<HomePage> {
   /// Tall på TV-siden og i TV-guiden (ikke mens du skriver i søket, og ikke når noe ligger over siden).
   bool _onKey(KeyEvent event) {
     if (event is! KeyDownEvent || !mounted) return false;
-    if (_section != _Section.tv && _section != _Section.guide) return false;
+    if (_current != _Section.tv && _current != _Section.guide) return false;
     if (_searchFocus.hasFocus || !(ModalRoute.of(context)?.isCurrent ?? false)) return false;
     final keyboard = HardwareKeyboard.instance;
     if (keyboard.isControlPressed || keyboard.isMetaPressed || keyboard.isAltPressed) return false;
@@ -147,7 +149,7 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     setState(() => _digits = '');
     if (digits.isEmpty) return;
-    if (_section == _Section.tv) {
+    if (_current == _Section.tv) {
       final list = s.channelsIn(_listFilter);
       final i = channelByNumber(list, digits);
       if (i >= 0) {
@@ -176,7 +178,14 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  String get _searchHint => switch (_section) {
+  /// fanene kilden har
+  List<_Section> get _sectionList =>
+      (s.source?.hasVod ?? false) ? _Section.values : const [_Section.tv, _Section.guide];
+
+  /// fanen som vises (TV hvis du sto på Filmer/Serier og kilden ikke har dem)
+  _Section get _current => _sectionList.contains(_section) ? _section : _Section.tv;
+
+  String get _searchHint => switch (_current) {
         _Section.tv || _Section.guide => 'Søk etter kanal',
         _Section.movies => 'Søk i filmer',
         _Section.series => 'Søk i serier',
@@ -186,21 +195,26 @@ class _HomePageState extends State<HomePage> {
   Widget _sections(bool icons) => SegmentedButton<_Section>(
         showSelectedIcon: false,
         segments: [
-          ButtonSegment(value: _Section.tv, icon: icons ? const Icon(Icons.live_tv) : null, label: const Text('TV')),
-          ButtonSegment(
-              value: _Section.guide,
-              icon: icons ? const Icon(Icons.view_timeline_outlined) : null,
-              label: const Text('TV-guide')),
-          ButtonSegment(
-              value: _Section.movies, icon: icons ? const Icon(Icons.movie_outlined) : null, label: const Text('Filmer')),
-          ButtonSegment(
-              value: _Section.series,
-              icon: icons ? const Icon(Icons.video_library_outlined) : null,
-              label: const Text('Serier')),
+          for (final x in _sectionList)
+            ButtonSegment(value: x, icon: icons ? Icon(_sectionIcon(x)) : null, label: Text(_sectionName(x))),
         ],
-        selected: {_section},
+        selected: {_current},
         onSelectionChanged: (v) => _setSection(v.first),
       );
+
+  static String _sectionName(_Section x) => switch (x) {
+        _Section.tv => 'TV',
+        _Section.guide => 'TV-guide',
+        _Section.movies => 'Filmer',
+        _Section.series => 'Serier',
+      };
+
+  static IconData _sectionIcon(_Section x) => switch (x) {
+        _Section.tv => Icons.live_tv,
+        _Section.guide => Icons.view_timeline_outlined,
+        _Section.movies => Icons.movie_outlined,
+        _Section.series => Icons.video_library_outlined,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -209,6 +223,8 @@ class _HomePageState extends State<HomePage> {
     final list = _visible;
     final content = _content(list);
     final home = _filter == 'home' && _query.isEmpty;
+    final section = _current;
+    final sections = _sectionList;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
@@ -259,6 +275,7 @@ class _HomePageState extends State<HomePage> {
               if (v == 'reload') unawaited(s.load(force: true));
               if (v == 'languages') unawaited(showLanguageDialog(context, s));
               if (v == 'update') unawaited(_checkUpdates());
+              if (v == 'update-server') unawaited(_editUpdateServer());
               if (v == 'logout') unawaited(s.logout());
             },
             itemBuilder: (context) => [
@@ -272,8 +289,17 @@ class _HomePageState extends State<HomePage> {
                   subtitle: s.languages.isEmpty ? null : Text(s.languages.summary),
                 ),
               ),
-              if (widget.updater?.enabled ?? false)
+              if (widget.updater?.enabled ?? false) ...[
                 const PopupMenuItem<String>(value: 'update', child: Text('Se etter oppdateringer')),
+                PopupMenuItem<String>(
+                  value: 'update-server',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Oppdateringsserver …'),
+                    subtitle: Text(s.updateServer ?? 'Ikke valgt'),
+                  ),
+                ),
+              ],
               const PopupMenuItem<String>(value: 'logout', child: Text('Logg ut')),
               const PopupMenuDivider(),
               PopupMenuItem<String>(
@@ -297,8 +323,8 @@ class _HomePageState extends State<HomePage> {
                 SmoothSwitch(
                   slide: false,
                   child: KeyedSubtree(
-                    key: ValueKey(_section),
-                    child: switch (_section) {
+                    key: ValueKey(section),
+                    child: switch (section) {
                       _Section.guide => GuideView(
                           key: const ValueKey('guide'), session: s, query: _query, onPlay: _openPlayer),
                       _Section.movies =>
@@ -353,21 +379,28 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: wide
           ? null
           : NavigationBar(
-              selectedIndex: _section.index,
-              onDestinationSelected: (i) => _setSection(_Section.values[i]),
-              destinations: const [
-                NavigationDestination(icon: Icon(Icons.live_tv), label: 'TV'),
-                NavigationDestination(icon: Icon(Icons.view_timeline_outlined), label: 'TV-guide'),
-                NavigationDestination(icon: Icon(Icons.movie_outlined), label: 'Filmer'),
-                NavigationDestination(icon: Icon(Icons.video_library_outlined), label: 'Serier'),
+              selectedIndex: sections.indexOf(section),
+              onDestinationSelected: (i) => _setSection(sections[i]),
+              destinations: [
+                for (final x in sections) NavigationDestination(icon: Icon(_sectionIcon(x)), label: _sectionName(x)),
               ],
             ),
     );
   }
 
+  /// Repoet er privat, så nye versjoner hentes via Fyrlys-serveren (Docker-versjonen) som har nøkkelen.
+  Future<void> _editUpdateServer() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => _UpdateServerDialog(session: s),
+    );
+    if (saved == true && mounted && s.updateServer != null) await _checkUpdates();
+  }
+
   Future<void> _checkUpdates() async {
     final u = widget.updater;
     if (u == null) return;
+    if (s.updateServer == null) return _editUpdateServer();
     final messenger = ScaffoldMessenger.of(context);
     try {
       final info = await u.check(manual: true);
@@ -702,4 +735,66 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+/// Adressen til Fyrlys-serveren som har de nye versjonene. Tomt felt: ingen oppdateringer.
+class _UpdateServerDialog extends StatefulWidget {
+  const _UpdateServerDialog({required this.session});
+
+  final Session session;
+
+  @override
+  State<_UpdateServerDialog> createState() => _UpdateServerDialogState();
+}
+
+class _UpdateServerDialogState extends State<_UpdateServerDialog> {
+  late final _address = TextEditingController(text: widget.session.updateServer ?? '');
+  String? _error;
+
+  @override
+  void dispose() {
+    _address.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    try {
+      await widget.session.saveUpdateServer(_address.text);
+      if (mounted) Navigator.of(context).pop(true);
+    } on SourceException catch (e) {
+      setState(() => _error = e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Oppdateringsserver'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Nye versjoner av Fyrlys hentes via Fyrlys-serveren din (Docker-versjonen). '
+                'Den brukes bare til dette, ikke til TV. La feltet stå tomt for å slå av oppdateringene.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _address,
+                autofocus: true,
+                autocorrect: false,
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(labelText: 'Adresse', hintText: 'http://192.168.1.10:8766', errorText: _error),
+                onSubmitted: (_) => unawaited(_save()),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Avbryt')),
+          FilledButton(onPressed: () => unawaited(_save()), child: const Text('Lagre')),
+        ],
+      );
 }

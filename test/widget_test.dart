@@ -1,25 +1,98 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/app.dart';
 import 'package:fyrlys/core/session.dart';
+import 'package:fyrlys/core/updater.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fakes.dart';
 
 void main() {
-  testWidgets('innloggingen har begge måtene å koble til på', (tester) async {
+  testWidgets('innloggingen: M3U-lenke eller Xtream Codes', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final session = Session(await SharedPreferences.getInstance());
     await session.restore();
     await tester.pumpWidget(FyrlysApp(session: session));
     await tester.pump();
 
-    expect(find.text('Fyrlys-server'), findsOneWidget);
-    expect(find.text('Adresse'), findsOneWidget);
-    await tester.tap(find.text('IPTV-leverandør'));
+    // M3U-lenke først: lenken og en valgfri EPG-lenke
+    expect(find.text('M3U-lenke'), findsNWidgets(2));
+    expect(find.text('EPG-lenke (valgfri)'), findsOneWidget);
+    expect(find.text('Brukernavn'), findsNothing);
+    expect(find.textContaining('Fyrlys-server'), findsNothing);
+    await tester.tap(find.text('Xtream Codes'));
     await tester.pump();
     expect(find.text('Brukernavn'), findsOneWidget);
     expect(find.text('Passord'), findsOneWidget);
+    expect(find.text('EPG-lenke (valgfri)'), findsNothing);
+  });
+
+  testWidgets('en M3U-liste har ikke filmer og serier: bare TV og TV-guide', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
+    final session =
+        Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource(hasVod: false));
+    await session.restore();
+    await tester.pumpWidget(FyrlysApp(session: session));
+    await tester.pumpAndSettle();
+    expect(find.text('TV-guide'), findsOneWidget);
+    expect(find.text('Filmer'), findsNothing);
+    expect(find.text('Serier'), findsNothing);
+
+    // telefon: fanene nederst
+    tester.view.physicalSize = const Size(400, 800);
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationDestination), findsNWidgets(2));
+  });
+
+  testWidgets('oppdateringsserveren velges i menyen, og det ses etter oppdateringer der', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final dir = Directory.systemTemp.createTempSync('fyrlys-server');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
+    final session = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource());
+    await session.restore();
+    final asked = <String>[];
+    final u = Updater(
+      client: MockClient((r) async {
+        asked.add('${r.url}');
+        return http.Response('{"error": "ingen release"}', 404);
+      }),
+      currentBuild: 5,
+      assetSuffix: '-windows.zip',
+      workDir: dir.path,
+      canInstall: false,
+    )..serverBase = () => session.updateServer;
+    await tester.pumpWidget(FyrlysApp(session: session, updater: u));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Meny'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ikke valgt'), findsOneWidget);
+    await tester.tap(find.text('Oppdateringsserver …'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Adresse'), 'http://');
+    await tester.tap(find.text('Lagre'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ugyldig adresse'), findsOneWidget);
+    expect(session.updateServer, isNull);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Adresse'), '192.168.1.10:8766/');
+    await tester.tap(find.text('Lagre'));
+    await tester.pumpAndSettle();
+    expect(session.updateServer, 'http://192.168.1.10:8766');
+    expect(asked, ['http://192.168.1.10:8766/api/app/release']);
+    expect(find.textContaining('Du har siste versjon'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('TV-siden: kanaler, eventkanaler, favoritter og søk', (tester) async {
