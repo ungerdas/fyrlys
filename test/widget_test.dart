@@ -86,7 +86,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Meny'));
     await tester.pumpAndSettle();
-    expect(find.text('Ikke valgt'), findsOneWidget);
+    expect(find.text('Rett fra GitHub'), findsOneWidget);
     await tester.tap(find.text('Oppdateringsserver …'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Adresse'), 'http://');

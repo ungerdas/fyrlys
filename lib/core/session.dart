@@ -79,12 +79,9 @@ class Session extends ChangeNotifier {
         final saved = (jsonDecode(raw) as Map).map((k, v) => MapEntry('$k', '$v'));
         final base = saved['base'];
         if (saved['kind'] == 'fyrlys') {
-          // Innlogging mot Fyrlys-serveren finnes ikke lenger (2.1.6): adressen brukes bare til oppdateringene, og
-          // du logger inn med M3U-lenken eller Xtream Codes.
-          if (base != null) {
-            if (updateServer == null) await _prefs.setString('update_server', base);
-            await _importServerFavorites(base);
-          }
+          // Innlogging mot Fyrlys-serveren finnes ikke lenger (2.1.6): du logger inn med M3U-lenken eller Xtream
+          // Codes, og oppdateringene hentes rett fra GitHub (repoet er offentlig). Favorittene tas med.
+          if (base != null) await _importServerFavorites(base);
           await _prefs.remove('source');
         } else {
           final factory = sourceFactory;
@@ -173,7 +170,7 @@ class Session extends ChangeNotifier {
   Future<void> loginXtream(String server, String user, String password) async =>
       _use(await XtreamSource.login(server, user, password));
 
-  /// Fyrlys-serveren oppdateringene på Windows hentes fra (repoet er privat); null: ingen
+  /// serveren oppdateringene på Windows hentes via (Fyrlys-serveren); null: rett fra GitHub
   String? get updateServer => _prefs.getString('update_server');
 
   /// [address] tom: ingen oppdateringsserver. Kaster SourceException ved en ugyldig adresse.

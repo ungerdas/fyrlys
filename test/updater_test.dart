@@ -91,7 +91,7 @@ void main() {
       expect(u.state, UpdateState.idle);
       await expectLater(
         u.check(manual: true),
-        throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('privat'))),
+        throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('ikke testbyggene'))),
       );
       // fra oppdateringsserveren: forklaringen derfra
       final server = MockClient((r) async => http.Response('{"error": "Fant ikke testbyggene på GitHub"}', 404));

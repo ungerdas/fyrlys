@@ -39,7 +39,7 @@ Future<void> main() async {
     // uten disk
   }
   final session = Session(await SharedPreferences.getInstance(), listCache: lists);
-  // Repoet er privat: byggene hentes via Fyrlys-serveren (oppdateringsserveren i menyen), som har en lesenøkkel.
+  // Nye versjoner rett fra GitHub, eller via oppdateringsserveren i menyen om den er valgt.
   updater.serverBase = () => session.updateServer;
   runApp(FyrlysApp(session: session, updater: updater));
   unawaited(session.restore().then((_) => updater.start()));

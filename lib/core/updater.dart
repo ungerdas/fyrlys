@@ -78,9 +78,9 @@ UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
 
 enum UpdateState { idle, checking, available, downloading, ready, failed }
 
-/// Oppdaterer appen fra testbyggene (releasen «testbygg», som CI lager ved hver endring på main). Repoet er
-/// privat, så byggene hentes via Fyrlys-serveren (oppdateringsserveren i menyen; serveren har en lesenøkkel til
-/// GitHub); uten den spørres GitHub direkte, som bare virker om repoet er offentlig.
+/// Oppdaterer appen fra testbyggene (releasen «testbygg», som CI lager ved hver endring på main), rett fra GitHub.
+/// Med en oppdateringsserver i menyen (Fyrlys-serveren, som har en lesenøkkel til GitHub) hentes de via den i
+/// stedet; det trengs bare om repoet er privat.
 /// Ser etter nye bygg ved oppstart og hver 6. time, laster ned i bakgrunnen og legger inn når appen lukkes
 /// (eller med «Start på nytt nå»). Ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
 /// starter. Bare på Windows, og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
@@ -122,7 +122,7 @@ class Updater extends ChangeNotifier {
   /// en kort beskjed i banneret, f.eks. at appen nettopp ble oppdatert
   String? notice;
 
-  /// adressen til Fyrlys-serveren byggene hentes fra (null: spør GitHub direkte)
+  /// adressen til serveren byggene hentes via (null: rett fra GitHub)
   String? Function()? serverBase;
 
   /// hvem vi spør, til feilmeldingene
@@ -163,7 +163,7 @@ class Updater extends ChangeNotifier {
     _timer = Timer.periodic(const Duration(hours: 6), (_) => unawaited(check()));
   }
 
-  /// Spør Fyrlys-serveren (eller GitHub) etter siste testbygg. Er det nyere, lastes det ned med en gang (Windows).
+  /// Spør GitHub (eller oppdateringsserveren) etter siste testbygg. Er det nyere, lastes det ned med en gang (Windows).
   /// Med [manual] kastes en [UpdateException] med forklaringen når det ikke går; ellers prøves det igjen senere.
   Future<UpdateInfo?> check({bool manual = false}) async {
     if (!enabled || state == UpdateState.checking || state == UpdateState.downloading) return available;
@@ -184,7 +184,7 @@ class Updater extends ChangeNotifier {
       if (r.statusCode == 404) {
         throw UpdateException(_serverError(r) ??
             (server == null
-                ? 'GitHub viser ikke testbyggene (repoet er privat). Velg oppdateringsserver i menyen.'
+                ? 'GitHub viser ikke testbyggene (er repoet privat?). Velg oppdateringsserver i menyen.'
                 : 'Fant ikke oppdateringene på $server (HTTP 404). Er adressen riktig?'));
       }
       if (r.statusCode != 200) throw UpdateException(_serverError(r) ?? '$_via svarte ${r.statusCode}');

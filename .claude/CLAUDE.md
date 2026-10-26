@@ -4,10 +4,13 @@ Egen app for Fyrlys, Pål-Eriks IPTV-spiller: Flutter med media_kit (mpv) som av
 Android og Android TV (senere macOS, Linux og iOS). Den kommer **i tillegg til** Docker-versjonen
 (nettside + server med ffmpeg) i det private repoet `ungerdas/peagstreams`, som kjører på hjemmeserveren hans.
 Fra 2.1.6 (Pål-Erik 26.10: «Fyrlys server dropper vi») logger appen inn med M3U-lenke eller Xtream Codes og henter
-alt rett fra leverandøren; Fyrlys-serveren brukes bare som oppdateringsserver (`/api/app/release`).
-Ikke bland inn endringer der herfra. Repoet er **privat** (Pål-Erik valgte 25.10 å beholde det slik), men hold
-det fritt for detaljer om hjemmenettet hans, verken i koden, testene eller disse notatene, i tilfelle det blir
-offentlig (eksempeladresser som 192.168.1.10 er greit).
+alt rett fra leverandøren; Fyrlys-serveren trengs ikke (den kan være valgfri oppdateringsserver).
+Ikke bland inn endringer der herfra. Repoet er **offentlig** (Pål-Erik åpnet det 26.10, så oppdateringene kommer
+rett fra GitHub): hold det fritt for detaljer om hjemmenettet hans, hemmeligheter og e-postadressen hans, verken i
+koden, testene, commit-meldingene eller disse notatene (eksempeladresser som 192.168.1.10 er greit). Noen gamle
+commits har en lokal adresse og et maskinnavn; historikken skrives ikke om. Repo-innstillinger (beskrivelse, emner)
+kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det under «About» på GitHub.
+`README.md` er forsiden på GitHub: skrevet for andre brukere, uten utviklernotater (de står her).
 
 ## Arbeidsmåte
 - Svar alltid på **norsk**. Commit-meldinger på norsk med prefikset `Fyrlys:`. Push rett til `main`.
@@ -35,9 +38,9 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   byggnummeret (det brukes bare av oppdateringen). Skriv avsnittet i `CHANGELOG.md`. GitHub-release (workflowen)
   bare når han ber om det. Hver push oppdaterer releasen
   `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, navnet «Fyrlys X · bygg N (sha)»
-  settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra via oppdateringsserveren.
-  Privat repo: 2000 gratis Actions-minutter i måneden på gratiskontoen, og hver push bruker rundt 25 (Windows
-  teller dobbelt). Bruk `[skip ci]` når en endring bare gjelder notater. Versjon, byggnummer
+  settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra (rett fra GitHub).
+  Offentlig repo: Actions-minuttene er gratis; et bygg tar rundt 10 minutter. Bruk `[skip ci]` når en endring
+  bare gjelder notater eller README. Versjon, byggnummer
   og commit står nederst i menyen (`--dart-define` FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`).
 - Release: oppdater `version` i pubspec.yaml, push, og start
   `gh workflow run build.yml --repo ungerdas/fyrlys -f release=vX.Y.Z`. Jobben `release` lager taggen og en
@@ -75,8 +78,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
   `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene; `cleanEpg` i `models.dart` slår sammen
   doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt), «sist sett», lys/mørk,
-  oppdateringsserveren (`updateServer`/`saveUpdateServer`, `update_server` i shared_preferences; en lagret
-  innlogging med `kind: fyrlys` fra før 2.1.6 blir dit ved `restore`, og favorittene hentes én gang fra
+  oppdateringsserveren (`updateServer`/`saveUpdateServer`, `update_server` i shared_preferences, valgfri; en lagret
+  innlogging med `kind: fyrlys` fra før 2.1.6 fjernes ved `restore`, og favorittene hentes da én gang fra
   `/api/streams/favs` når appen ikke har egne), og «fortsett der du
   slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
   `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken). Språkene (`languages`/`saveLanguages`,
@@ -86,7 +89,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
 - `ui/login_page.dart` (to valg: «M3U-lenke» med valgfri EPG-lenke, og «Xtream Codes»), `ui/home_page.dart`
   (TV/TV-guide/Filmer/Serier, de to siste bare med `hasVod` (`_sectionList`/`_current`): SegmentedButton i toppen
   ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; «Oppdateringsserver …» i menyen (`_UpdateServerDialog`,
-  bare når oppdateringen er på; «Se etter oppdateringer» uten server åpner den); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
+  bare når oppdateringen er på; tom = rett fra GitHub); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
   på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå).
 - `ui/start_view.dart` – Hjem (filteret `home`, valgt når appen starter, 26.10 for 2.0.3; Pål-Erik ville ha vekt på TV,
   ikke filmer/serier): hilsen og dato/klokke, `LastWatchedCard` (siste i «sist sett», nå/etterpå, «Se videre»), eller
@@ -155,12 +158,11 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   (et spor valgt for hånd står ellers i mpv til neste fil; samme adresse, f.eks. etter spoling, beholder det).
   `tracks()` leser `aid`/`sid` fra mpv (media_kit vet bare om spor valgt via `setAudioTrack`). Bildeundertekster
   (PGS/DVB) vises ikke: media_kit tegner tekstundertekster selv (`sub-visibility=no` uten libass).
-- `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer). Repoet er
-  privat, så med en oppdateringsserver (`serverBase` = `Session.updateServer`, `normalizeServerAddress`) spør den
-  `<server>/api/app/release` (Fyrlys-serveren har en
-  lesenøkkel i `data/github.json` og svarer i GitHubs form, med relative adresser `download/<fil>` som løses
-  mot release-adressen); ellers `api.github.com/repos/<repo>/releases/tags/testbygg` (virker bare om repoet er
-  offentlig). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
+- `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer), rett fra
+  `api.github.com/repos/<repo>/releases/tags/testbygg`. Med en oppdateringsserver (`serverBase` =
+  `Session.updateServer`, `normalizeServerAddress`; trengs bare om repoet blir privat igjen) spør den
+  `<server>/api/app/release` i stedet (Fyrlys-serveren har en lesenøkkel i `data/github.json` og svarer i GitHubs
+  form, med relative adresser `download/<fil>` som løses mot release-adressen). 404 = feil med forklaring (2.1.7). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
   `-windows.zip` lastes ned til `%LOCALAPPDATA%\Fyrlys\oppdatering\bygg-N` (størrelsen sjekkes),
   så `klar.json`. Legges inn når appen lukkes (`didRequestAppExit` i `app.dart`), med «Start på nytt nå», eller
   før appen vises neste gang (`beforeStart` i `main.dart`). Et PowerShell-skript (bare ASCII) venter på prosessen,
@@ -230,4 +232,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   XMLTV fra leverandøren hans er ikke prøvd.
 - 26.10.2026: 2.1.7: 404 fra GitHub/oppdateringsserveren er en feil med forklaring, ikke «du har siste versjon»
   (Pål-Erik sto på 2.1.4 med den meldingen mens 2.1.6 var ute; serveren svarer nå 502 i det tilfellet).
+- 26.10.2026: repoet gjort offentlig (Pål-Erik), README skrevet om som forside. 2.1.8: oppdateringene rett fra
+  GitHub (oppdateringsserveren valgfri, ikke lenger satt av seg selv fra en gammel innlogging). Notatene flyttet til
+  `.claude/CLAUDE.md`.
 - Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.

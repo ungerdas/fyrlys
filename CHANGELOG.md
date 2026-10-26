@@ -1,6 +1,9 @@
 # Endringer
 
-Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
+## v2.1.8
+
+- **Oppdateringene kommer rett fra GitHub.** Du trenger ingen oppdateringsserver lenger. Har du valgt en i menyen,
+  brukes den fortsatt; tøm feltet for å hente rett fra GitHub.
 
 ## v2.1.7
 

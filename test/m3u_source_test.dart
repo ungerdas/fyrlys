@@ -220,7 +220,7 @@ void main() {
       next.source!.dispose();
     });
 
-    test('innlogging mot Fyrlys-serveren fra før: adressen blir oppdateringsserver, og favorittene tas med', () async {
+    test('innlogging mot Fyrlys-serveren fra før: favorittene tas med, og du logger inn på nytt', () async {
       final asked = <String>[];
       final s = await session(
         {'source': jsonEncode({'kind': 'fyrlys', 'base': 'http://192.168.1.10:8766', 'client': 'abc'})},
@@ -238,7 +238,8 @@ void main() {
         }),
       );
       expect(s.source, isNull);
-      expect(s.updateServer, 'http://192.168.1.10:8766');
+      // oppdateringene kommer rett fra GitHub
+      expect(s.updateServer, isNull);
       expect(asked, ['http://192.168.1.10:8766/api/streams/favs']);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('source'), isNull);

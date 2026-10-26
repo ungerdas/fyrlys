@@ -296,7 +296,7 @@ class _HomePageState extends State<HomePage> {
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Oppdateringsserver …'),
-                    subtitle: Text(s.updateServer ?? 'Ikke valgt'),
+                    subtitle: Text(s.updateServer ?? 'Rett fra GitHub'),
                   ),
                 ),
               ],
@@ -388,7 +388,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Repoet er privat, så nye versjoner hentes via Fyrlys-serveren (Docker-versjonen) som har nøkkelen.
+  /// Nye versjoner hentes rett fra GitHub, eller via en server (Fyrlys-serveren) om du har valgt det.
   Future<void> _editUpdateServer() async {
     final saved = await showDialog<bool>(
       context: context,
@@ -400,7 +400,6 @@ class _HomePageState extends State<HomePage> {
   Future<void> _checkUpdates() async {
     final u = widget.updater;
     if (u == null) return;
-    if (s.updateServer == null) return _editUpdateServer();
     final messenger = ScaffoldMessenger.of(context);
     try {
       final info = await u.check(manual: true);
@@ -737,7 +736,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// Adressen til Fyrlys-serveren som har de nye versjonene. Tomt felt: ingen oppdateringer.
+/// Adressen til en server (Fyrlys-serveren) som har de nye versjonene. Tomt felt: rett fra GitHub.
 class _UpdateServerDialog extends StatefulWidget {
   const _UpdateServerDialog({required this.session});
 
@@ -776,8 +775,8 @@ class _UpdateServerDialogState extends State<_UpdateServerDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Nye versjoner av Fyrlys hentes via Fyrlys-serveren din (Docker-versjonen). '
-                'Den brukes bare til dette, ikke til TV. La feltet stå tomt for å slå av oppdateringene.',
+                'Nye versjoner av Fyrlys hentes rett fra GitHub. Har du en Fyrlys-server (Docker-versjonen), kan de '
+                'hentes via den i stedet. La feltet stå tomt for å hente dem fra GitHub.',
               ),
               const SizedBox(height: 16),
               TextField(
