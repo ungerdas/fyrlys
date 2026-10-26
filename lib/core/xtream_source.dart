@@ -97,6 +97,33 @@ List<VodItem> parseVodItems(VodKind kind, Object? raw) => [
                 ),
     ];
 
+/// Det første bakgrunnsbildet (backdrop_path er en liste hos de fleste, en tekst hos noen).
+String? firstBackdrop(Map<Object?, Object?> info) {
+  final b = info['backdrop_path'];
+  if (b is List) {
+    for (final u in b) {
+      final url = _url(u);
+      if (url != null) return url;
+    }
+    return null;
+  }
+  return _url(b);
+}
+
+/// Kvaliteten leverandøren oppgir for en fil (video/audio i get_vod_info).
+MediaTech mediaTech(Map<Object?, Object?> info) {
+  final v = info['video'] is Map ? info['video'] as Map : const <Object?, Object?>{};
+  final a = info['audio'] is Map ? info['audio'] as Map : const <Object?, Object?>{};
+  final transfer = _text(v['color_transfer']).toLowerCase();
+  return MediaTech(
+    height: _number(v['height'])?.toInt() ?? 0,
+    videoCodec: _text(v['codec_name']),
+    hdr: transfer == 'smpte2084' || transfer == 'arib-std-b67',
+    audioCodec: _text(a['codec_name']),
+    channels: _number(a['channels'])?.toInt() ?? 0,
+  );
+}
+
 /// get_series_info: sesongene kommer som et kart (sesong → episoder) eller, hos noen, som en liste av lister.
 SeriesInfo parseSeriesInfo(Object? d) {
   if (d is! Map) throw const SourceException('Fant ikke serien');
@@ -125,6 +152,7 @@ SeriesInfo parseSeriesInfo(Object? d) {
                 image: e['info'] is Map ? _url((e['info'] as Map)['movie_image']) : null,
                 plot: e['info'] is Map ? _text((e['info'] as Map)['plot']) : '',
                 duration: e['info'] is Map ? _text((e['info'] as Map)['duration']) : '',
+                seconds: e['info'] is Map ? (_number((e['info'] as Map)['duration_secs'])?.toInt() ?? 0) : 0,
               ),
         ],
       ));
@@ -134,6 +162,10 @@ SeriesInfo parseSeriesInfo(Object? d) {
   return SeriesInfo(
     name: _text(info['name']),
     cover: _url(info['cover']),
+    backdrop: firstBackdrop(info),
+    cast: _text(info['cast']),
+    director: _text(info['director']),
+    trailer: _text(info['youtube_trailer']),
     plot: _text(info['plot']),
     genre: _text(info['genre']),
     year: year.length >= 4 ? year.substring(0, 4) : year,
@@ -382,8 +414,15 @@ class XtreamSource implements TvSource {
       genre: _text(info['genre']),
       year: year.length >= 4 ? year.substring(0, 4) : year,
       duration: _text(info['duration']),
-      cast: _text(info['cast']),
+      seconds: _number(info['duration_secs'])?.toInt() ?? 0,
+      cast: _text(info['cast'] ?? info['actors']),
       director: _text(info['director']),
+      name: _text(info['name']),
+      backdrop: firstBackdrop(info),
+      age: _text(info['age'] ?? info['mpaa_rating']),
+      country: _text(info['country']),
+      trailer: _text(info['youtube_trailer']),
+      tech: mediaTech(info),
     );
   }
 

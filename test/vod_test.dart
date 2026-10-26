@@ -65,7 +65,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('En film om et fyr.'), findsOneWidget);
     expect(find.text('Skuespillere: Kari Nordmann'), findsOneWidget);
-    expect(find.textContaining('01:45:00'), findsOneWidget);
+    expect(find.text('1 t 45 min'), findsOneWidget);
+    expect(find.text('Mer fra Action'), findsOneWidget);
+    expect(find.text('Havet'), findsOneWidget);
 
     await tester.tap(find.text('Spill av'));
     await _settle(tester);

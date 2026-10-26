@@ -87,14 +87,144 @@ class MovieInfo {
     this.duration = '',
     this.cast = '',
     this.director = '',
+    this.name = '',
+    this.backdrop,
+    this.seconds = 0,
+    this.age = '',
+    this.country = '',
+    this.trailer = '',
+    this.tech = const MediaTech(),
   });
 
   final String plot;
   final String genre;
   final String year;
+
+  /// «02:06:07» slik leverandøren skriver den; [seconds] når den er oppgitt
   final String duration;
+  final int seconds;
   final String cast;
   final String director;
+
+  /// navnet hos leverandørens filmdatabase, ofte uten merker som «[PRE]»
+  final String name;
+
+  /// stort bakgrunnsbilde (liggende)
+  final String? backdrop;
+
+  /// aldersgrense («12», «PG-13»)
+  final String age;
+  final String country;
+
+  /// YouTube-id
+  final String trailer;
+  final MediaTech tech;
+}
+
+/// Kvaliteten leverandøren oppgir for en fil (tomt når den ikke sier noe).
+class MediaTech {
+  const MediaTech({this.height = 0, this.videoCodec = '', this.hdr = false, this.audioCodec = '', this.channels = 0});
+
+  final int height;
+  final String videoCodec;
+  final bool hdr;
+  final String audioCodec;
+  final int channels;
+
+  /// «4K», «HDR», «H.265», «5.1» …
+  List<String> get badges => [
+        if (height >= 2000)
+          '4K'
+        else if (height >= 1000)
+          '1080p'
+        else if (height >= 700)
+          '720p'
+        else if (height > 0)
+          'SD',
+        if (hdr) 'HDR',
+        if (videoCodec.isNotEmpty) codecLabel(videoCodec),
+        if (channels >= 8)
+          '7.1'
+        else if (channels >= 6)
+          '5.1'
+        else if (channels == 2)
+          'Stereo',
+        if (audioCodec.isNotEmpty && audioCodec.toLowerCase() != 'aac') codecLabel(audioCodec),
+      ];
+}
+
+/// Kodeknavn slik folk kjenner dem.
+String codecLabel(String codec) => switch (codec.trim().toLowerCase()) {
+      'h264' || 'avc' => 'H.264',
+      'hevc' || 'h265' => 'H.265',
+      'av1' => 'AV1',
+      'vp9' => 'VP9',
+      'mpeg2video' => 'MPEG-2',
+      'ac3' => 'Dolby Digital',
+      'eac3' => 'Dolby Digital+',
+      'truehd' => 'Dolby TrueHD',
+      'dts' => 'DTS',
+      'aac' => 'AAC',
+      'mp3' => 'MP3',
+      'flac' => 'FLAC',
+      'opus' => 'Opus',
+      final other => other.toUpperCase(),
+    };
+
+/// «2 t 6 min», «43 min»: fra sekunder, eller fra «02:06:07» når sekundene mangler.
+String runtimeText(int seconds, [String duration = '']) {
+  var s = seconds;
+  if (s <= 0) {
+    final parts = duration.trim().split(':').map(int.tryParse).toList();
+    if (parts.isNotEmpty && parts.every((p) => p != null)) {
+      for (final p in parts) {
+        s = s * 60 + p!;
+      }
+    }
+  }
+  if (s <= 0) return duration.trim();
+  final minutes = (s / 60).round();
+  if (minutes < 60) return '$minutes min';
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  return m == 0 ? '$h t' : '$h t $m min';
+}
+
+final _endTag = RegExp(r'\s*[\[(]([^\[\]()]{1,24})[\])]\s*$');
+final _yearOnly = RegExp(r'^(19|20)\d{2}$');
+
+/// «Matchbox the Movie [PRE] [2026]» → tittel «Matchbox the Movie», merker [«PRE»] og året 2026.
+({String title, List<String> tags, String? year}) cleanTitle(String raw) {
+  var t = raw.trim();
+  final tags = <String>[];
+  String? year;
+  while (true) {
+    final m = _endTag.firstMatch(t);
+    if (m == null || m.start == 0) break;
+    final v = m.group(1)!.trim();
+    if (_yearOnly.hasMatch(v)) {
+      year ??= v;
+    } else if (v.isNotEmpty) {
+      tags.insert(0, v);
+    }
+    t = t.substring(0, m.start).trim();
+  }
+  return (title: t.isEmpty ? raw.trim() : t, tags: tags, year: year);
+}
+
+final _codeInTitle = RegExp(r'^.*?\bS\d{1,2}\s*E\d{1,3}\b[\s\-–:|.]*', caseSensitive: false);
+
+/// «9-1-1 - S01E01 - Pilot» → «Pilot» (koden står ved siden av); tomt når det bare var koden.
+String episodeTitle(String raw, {String series = ''}) {
+  final t = raw.trim();
+  final m = _codeInTitle.firstMatch(t);
+  if (m != null) return t.substring(m.end).trim();
+  final name = series.trim();
+  if (name.isNotEmpty && t.toLowerCase().startsWith(name.toLowerCase())) {
+    final rest = t.substring(name.length).replaceFirst(RegExp(r'^[\s\-–:|.]+'), '').trim();
+    if (rest.isNotEmpty) return rest;
+  }
+  return t;
 }
 
 class Episode {
@@ -106,6 +236,7 @@ class Episode {
     this.image,
     this.plot = '',
     this.duration = '',
+    this.seconds = 0,
   });
 
   final String id;
@@ -115,6 +246,7 @@ class Episode {
   final String? image;
   final String plot;
   final String duration;
+  final int seconds;
 }
 
 class Season {
@@ -129,19 +261,29 @@ class SeriesInfo {
   const SeriesInfo({
     required this.name,
     this.cover,
+    this.backdrop,
     this.plot = '',
     this.genre = '',
     this.year = '',
     this.rating,
+    this.cast = '',
+    this.director = '',
+    this.trailer = '',
     this.seasons = const [],
   });
 
   final String name;
   final String? cover;
+
+  /// stort bakgrunnsbilde (liggende)
+  final String? backdrop;
   final String plot;
   final String genre;
   final String year;
   final double? rating;
+  final String cast;
+  final String director;
+  final String trailer;
   final List<Season> seasons;
 }
 

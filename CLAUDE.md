@@ -85,8 +85,12 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   med 350 ms pause; «Fortsett å se» øverst når det ikke er søk/kategori: `Session.continueItems` (`continue` i
   shared_preferences, `ContinueItem` i `vod.dart`, maks 50), oppdatert av filmspilleren via `VodPlayItem.continueAs`:
   filmer til de er sett (> 95 %), serier med episoden du er på, eller den neste når en er sett ferdig;
-  `playContinue` spiller rett, serier via `seriesInfo`), `ui/vod_detail_page.dart` (film: spill av / fortsett / fra begynnelsen; serie: sesonger
-  og episoder med sett-strek; `Poster`), `ui/vod_player_page.dart` (egen spiller for filer: tidslinje, ±10 s,
+  `playContinue` spiller rett, serier via `seriesInfo`), `ui/vod_detail_page.dart` (`_Hero`: bakgrunnsbilde fra
+  `backdrop_path` eller uskarp plakat, tonet mot bakgrunnen, plakat, tittel uten merker (`cleanTitle`: «[PRE]» blir
+  merke, «[2026]» år), merker for år/sjanger/spilletid (`runtimeText`)/vurdering/alder/land/kvalitet
+  (`MediaTech.badges` fra `video`/`audio` i get_vod_info); film: spill av / fortsett / fra begynnelsen og «Mer fra
+  <kategori>»; serie: sesonger og episoder i rutenett (to kolonner på brede skjermer), `episodeTitle` fjerner
+  «Serie - S01E01 - », bakgrunnsbildet med nummeret når episoden mangler bilde; `Poster`), `ui/vod_player_page.dart` (egen spiller for filer: tidslinje, ±10 s,
   neste/forrige episode, volum, spor, fullskjerm; lagrer hvor du er hvert 10. s og når du går ut, starter med
   `Media(start:)`, går til neste episode 1,5 s etter slutten).
 - `ui/player_page.dart` – som spilleren på nettsiden (alltid mørk): bildet med kontroller og programinfo under,

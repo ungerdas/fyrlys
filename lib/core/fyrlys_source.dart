@@ -354,8 +354,21 @@ class FyrlysSource implements TvSource {
       genre: _text(m['genre']),
       year: _text(m['year']),
       duration: _text(m['duration']),
+      seconds: _intOrNull(m['seconds']) ?? 0,
       cast: _text(m['cast']),
       director: _text(m['director']),
+      name: _text(m['name']),
+      backdrop: _url(m['backdrop']),
+      age: _text(m['age']),
+      country: _text(m['country']),
+      trailer: _text(m['trailer']),
+      tech: MediaTech(
+        height: _intOrNull(m['height']) ?? 0,
+        videoCodec: _text(m['vcodec']),
+        hdr: m['hdr'] == true,
+        audioCodec: _text(m['acodec']),
+        channels: _intOrNull(m['channels']) ?? 0,
+      ),
     );
   }
 
@@ -367,10 +380,14 @@ class FyrlysSource implements TvSource {
     return SeriesInfo(
       name: _text(d['name']),
       cover: _url(d['cover']),
+      backdrop: _url(d['backdrop']),
       plot: _text(d['plot']),
       genre: _text(d['genre']),
       year: _text(d['year']),
       rating: _double(d['rating']),
+      cast: _text(d['cast']),
+      director: _text(d['director']),
+      trailer: _text(d['trailer']),
       seasons: [
         for (final s in seasons is List ? seasons : const [])
           if (s is Map)
@@ -387,6 +404,7 @@ class FyrlysSource implements TvSource {
                       image: _url(e['img']),
                       plot: _text(e['plot']),
                       duration: _text(e['duration']),
+                      seconds: _intOrNull(e['seconds']) ?? 0,
                     ),
               ],
             ),

@@ -45,6 +45,33 @@ void main() {
       expect(c.total, 3);
     });
 
+    test('titler uten merker, episodetitler uten koden, spilletid og kvalitet', () {
+      final c = cleanTitle('Matchbox the Movie [PRE] [2026]');
+      expect(c.title, 'Matchbox the Movie');
+      expect(c.tags, ['PRE']);
+      expect(c.year, '2026');
+      expect(cleanTitle('Fyrlyset').title, 'Fyrlyset');
+      expect(cleanTitle('[4K]').title, '[4K]');
+      expect(cleanTitle('Film (2019) [MULTI]').tags, ['MULTI']);
+
+      expect(episodeTitle('9-1-1 - S01E01 - Pilot'), 'Pilot');
+      expect(episodeTitle('S01E02 Let Go'), 'Let Go');
+      expect(episodeTitle('9-1-1 - S01E03'), '');
+      expect(episodeTitle('Kystvakten - Første', series: 'Kystvakten'), 'Første');
+      expect(episodeTitle('Første'), 'Første');
+
+      expect(runtimeText(7567), '2 t 6 min');
+      expect(runtimeText(0, '00:43:11'), '43 min');
+      expect(runtimeText(0, '02:00:00'), '2 t');
+      expect(runtimeText(0, ''), '');
+
+      expect(const MediaTech(height: 2160, videoCodec: 'hevc', hdr: true, audioCodec: 'eac3', channels: 6).badges,
+          ['4K', 'HDR', 'H.265', '5.1', 'Dolby Digital+']);
+      expect(const MediaTech(height: 1080, videoCodec: 'h264', audioCodec: 'aac', channels: 2).badges,
+          ['1080p', 'H.264', 'Stereo']);
+      expect(const MediaTech().badges, isEmpty);
+    });
+
     test('episodekode og vurdering', () {
       expect(episodeCode('1', 2), 'S01E02');
       expect(episodeCode('Spesial', 2), '');
@@ -146,6 +173,29 @@ void main() {
       ]);
       expect(series.single.year, '2021');
       expect(series.single.icon, 'http://img/s.jpg');
+    });
+
+    test('filminfo og serieinfo med bakgrunnsbilde og kvalitet', () {
+      final info = {
+        'backdrop_path': ['', 'https://img/bak.jpg'],
+        'video': {'codec_name': 'hevc', 'height': 2160, 'color_transfer': 'smpte2084'},
+        'audio': {'codec_name': 'eac3', 'channels': 6},
+      };
+      expect(firstBackdrop(info), 'https://img/bak.jpg');
+      expect(firstBackdrop({'backdrop_path': 'http://img/b.jpg'}), 'http://img/b.jpg');
+      expect(firstBackdrop({}), isNull);
+      expect(mediaTech(info).badges, ['4K', 'HDR', 'H.265', '5.1', 'Dolby Digital+']);
+      final series = parseSeriesInfo({
+        'info': {'name': 'S', 'backdrop_path': ['http://img/s.jpg'], 'cast': 'A', 'director': 'B'},
+        'episodes': {
+          '1': [
+            {'id': '1', 'episode_num': 1, 'title': 'S - S01E01 - Pilot', 'info': {'duration_secs': 2591}},
+          ],
+        },
+      });
+      expect(series.backdrop, 'http://img/s.jpg');
+      expect(series.cast, 'A');
+      expect(series.seasons.single.episodes.single.seconds, 2591);
     });
 
     test('sesonger som kart eller som liste', () {
