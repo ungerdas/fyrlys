@@ -1,5 +1,10 @@
 # Endringer
 
+## v2.1.10
+
+- Første vanlige release: hver versjon ligger nå under Releases på GitHub, og lenkene på forsiden gir alltid siste
+  versjon. «Testbygg» er borte.
+
 ## v2.1.9
 
 - Versjonen vises uten byggnummer og kode, i menyen og på GitHub. Teksten til hver versjon på GitHub er nå det som
