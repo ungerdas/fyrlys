@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/core/failure.dart';
+import 'package:fyrlys/ui/playback.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -13,6 +14,22 @@ void main() {
     expect(refusedText(503), 'Feil hos leverandøren (HTTP 503). Prøv igjen om litt.');
     expect(refusedText(407), startsWith('Leverandøren avviser denne kanalen (HTTP 407).'));
     expect(refusedText(407, channel: false), 'Leverandøren avviser avspillingen (HTTP 407). Prøv igjen senere.');
+  });
+
+  test('meldingen fra avspilleren i parentes: uten punktum til slutt', () {
+    expect(plainMessage('Failed to recognize file format.'), 'Failed to recognize file format');
+    expect(plainMessage(' Error while decoding frame! '), 'Error while decoding frame');
+    expect(plainMessage('HTTP 509'), 'HTTP 509');
+  });
+
+  test('bare feil i åpningen og nettet stopper avspillingen, ikke feil i dekoderen', () {
+    expect(mpvErrorIsFatal('cplayer', 'error', 'Failed to recognize file format.'), isTrue);
+    expect(mpvErrorIsFatal('stream', 'error', 'Failed to open http://example/1.ts.'), isTrue);
+    expect(mpvErrorIsFatal('ffmpeg', 'error', 'tcp: Connection refused'), isTrue);
+    expect(mpvErrorIsFatal('vd', 'error', 'Error while decoding frame!'), isFalse);
+    expect(mpvErrorIsFatal('ad', 'error', 'Error decoding audio.'), isFalse);
+    expect(mpvErrorIsFatal('ffmpeg/video', 'error', 'h264: decode_slice_header error'), isFalse);
+    expect(mpvErrorIsFatal('cplayer', 'warn', 'Something'), isFalse);
   });
 
   test('HTTP-koden fra leverandøren, med User-Agent', () async {

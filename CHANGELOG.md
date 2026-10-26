@@ -1,5 +1,13 @@
 # Endringer
 
+## v2.1.22
+
+- Rettet: TV-arkivet og «Se fra start» ga «Kunne ikke spille av» for mange programmer. Et opptak fra arkivet begynner
+  ofte midt i et bilde, og avspilleren sier fra om det de første sekundene. Det ble tatt som en feil, så Fyrlys ga
+  opp før bildet kom. Nå er det bare feil som stopper avspillingen (ikke åpnet, ikke gjenkjent, nettet), som teller.
+- Advarsler og feil fra avspilleren kommer med i feilrapporten.
+- Feilmeldingen fra avspilleren står uten dobbelt punktum.
+
 ## v2.1.21
 
 - **English:** Fyrlys is now available in English. It follows the Windows language; change it under the gear →

@@ -265,7 +265,7 @@ class _MultiviewState extends State<_Multiview> {
     unawaited(() async {
       await s.pb.stop();
       final text = await explainFailure(s.source, url,
-          fallback: tr('Kanalen kunne ikke spilles ({message}).', {'message': message}));
+          fallback: tr('Kanalen kunne ikke spilles ({message}).', {'message': plainMessage(message)}));
       if (my != s.seq) return;
       _set(() {
         s.error = text;

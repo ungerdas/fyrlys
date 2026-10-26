@@ -287,7 +287,7 @@ class _VodPlayerState extends State<_VodPlayer> {
     }
     final at = _index;
     final url = _clip != null && _urls.isNotEmpty ? _urls[_urlIndex] : _item.url;
-    final fallback = tr('Kunne ikke spille av ({message}).', {'message': message});
+    final fallback = tr('Kunne ikke spille av ({message}).', {'message': plainMessage(message)});
     _set(() {
       _status = fallback;
       _buffering = false;

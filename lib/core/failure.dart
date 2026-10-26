@@ -20,6 +20,9 @@ Future<int?> httpStatus(http.Client client, String url, Map<String, String> head
   }
 }
 
+/// En melding fra avspilleren uten punktum eller utropstegn til slutt, så den kan stå i parentes i en setning.
+String plainMessage(String text) => text.trim().replaceFirst(RegExp(r'[.!\s]+$'), '');
+
 /// Feilmeldingen når leverandøren svarer [code] (400 og over); [channel]: en direktesending (ellers en film, en
 /// episode eller et program i arkivet).
 String refusedText(int code, {bool channel = true}) {

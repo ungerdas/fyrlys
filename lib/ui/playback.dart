@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
@@ -94,14 +95,45 @@ abstract class Playback {
 /// Avspilleren appen bruker. Testene setter en falsk her (mpv finnes ikke i testene).
 Playback Function() playbackFactory = MpvPlayback.new;
 
+/// Om en feilmelding fra mpv betyr at det som åpnes, ikke kan spilles (ikke åpnet, ikke gjenkjent, nettet). Feil i
+/// dekoderne (vd/ad, «Error while decoding frame!») teller ikke: de kommer gjerne i starten av et opptak fra
+/// TV-arkivet, som begynner midt i et bilde, og går over av seg selv. media_kit gir dem som feil.
+bool mpvErrorIsFatal(String prefix, String level, String text) {
+  if (level != 'error') return false;
+  return switch (prefix) {
+    'cplayer' || 'stream' || 'file' => true,
+    'ffmpeg' => text.startsWith('tcp:'),
+    _ => false,
+  };
+}
+
 /// mpv via media_kit.
 class MpvPlayback implements Playback {
   MpvPlayback() {
     _video = VideoController(_player);
+    _logs = _player.stream.log.listen(_onLog);
   }
 
-  final Player _player = Player();
+  // advarsler og feil fra mpv: i loggen (til feilrapporten), og de som betyr noe, som feil
+  final Player _player = Player(configuration: const PlayerConfiguration(logLevel: MPVLogLevel.warn));
   late final VideoController _video;
+  late final StreamSubscription<PlayerLog> _logs;
+  final _errors = StreamController<String>.broadcast();
+
+  /// når det samme sist ble skrevet i loggen (dekoderen kan si det samme mange ganger i sekundet)
+  final _logged = <String, DateTime>{};
+
+  void _onLog(PlayerLog log) {
+    final now = DateTime.now();
+    final key = '${log.prefix}|${log.text}';
+    final last = _logged[key];
+    if (last == null || now.difference(last) > const Duration(seconds: 30)) {
+      if (_logged.length > 200) _logged.clear();
+      _logged[key] = now;
+      debugPrint('mpv ${log.level} ${log.prefix}: ${log.text}');
+    }
+    if (mpvErrorIsFatal(log.prefix, log.level, log.text) && !_errors.isClosed) _errors.add(log.text);
+  }
 
   @override
   Stream<bool> get playingStream => _player.stream.playing;
@@ -113,7 +145,7 @@ class MpvPlayback implements Playback {
   Stream<Duration> get positionStream => _player.stream.position;
 
   @override
-  Stream<String> get errorStream => _player.stream.error;
+  Stream<String> get errorStream => _errors.stream;
 
   @override
   Stream<bool> get completedStream => _player.stream.completed;
@@ -396,7 +428,11 @@ class MpvPlayback implements Playback {
       );
 
   @override
-  Future<void> dispose() => _player.dispose();
+  Future<void> dispose() async {
+    await _logs.cancel();
+    await _player.dispose();
+    await _errors.close();
+  }
 }
 
 /// «8,1 Mbit/s» (eller «850 kbit/s») fra bit per sekund; desimalpunktum på engelsk

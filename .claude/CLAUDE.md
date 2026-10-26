@@ -204,7 +204,14 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `startFull` tar ikke vinduet ut av fullskjerm når den lukkes, og `WindowFullscreen.set` gjør ingenting når vinduet
   alt er slik (`_on`), så `_wasMaximized` ikke overskrives (2.1.15, funnet i gjennomlesing).
 - `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene (`playbackFactory`
-  byttes ut i testene for sider som lager avspilleren selv). Fullskjerm for begge spillerne:
+  byttes ut i testene for sider som lager avspilleren selv). Feil (2.1.22): `errorStream` er ikke media_kits
+  `stream.error`, men lages fra `stream.log` (`PlayerConfiguration(logLevel: MPVLogLevel.warn)`) med
+  `mpvErrorIsFatal`: bare `error` fra cplayer/stream/file og ffmpeg `tcp:`. media_kit gir også vd/ad-feil
+  («Error while decoding frame!») som feil, og de kommer i starten av opptak fra TV-arkivet, som begynner midt i en
+  TS-pakke (et par hundre byte før første 0x47) og midt i en GOP; da ga spillerne opp (eieren 27.10: «Failed to
+  recognize file format» på «Se fra start»; en test mot leverandøren viste at både .m3u8 og .ts virker i mpv på Linux,
+  og at tidssonen i adressen stemmer). Alle advarsler og feil fra mpv går i loggen (samme melding høyst hvert 30. s).
+  Fullskjerm for begge spillerne:
   `WindowFullscreen` i `ui/window_effects.dart`. Språk: `setLanguages` setter `alang`/`slang` og
   `subs-with-matching-audio=no` når undertekstspråk er valgt; ved ny adresse settes `aid=auto` og `sid=auto`/`no`
   (et spor valgt for hånd står ellers i mpv til neste fil; samme adresse, f.eks. etter spoling, beholder det).
@@ -367,6 +374,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   GitHub-saker. Testet med tester; mpv-egenskapene, minivinduet og Utforsker/nettleser fra appen er ikke prøvd på Windows.
 - 26.10.2026: 2.1.21: engelsk (eierens valg 3), oversatt av fem agenter i hver sin del av lib/ og sett over etterpå.
   Testet med tester (bl.a. at alt er oversatt og at språket byttes i innstillingene).
+- 27.10.2026: 2.1.22: TV-arkivet ga opp på grunn av dekoderfeil i starten (se `ui/playback.dart`). Ikke bekreftet på
+  Windows ennå; virker det ikke, står mpv sine egne feil i feilrapporten.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

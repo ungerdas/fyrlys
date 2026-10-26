@@ -326,7 +326,7 @@ class _PlayerState extends State<_Player> {
       if (!mounted || my != _seq || _started || _status != null) return;
       await _pb.stop();
       final src = _source;
-      final fallback = tr('Kanalen kunne ikke spilles ({message}).', {'message': message});
+      final fallback = tr('Kanalen kunne ikke spilles ({message}).', {'message': plainMessage(message)});
       // alle tilkoblingene i bruk, eller leverandøren avviser kanalen (med HTTP-koden)
       final text = src == null ? fallback : await explainFailure(src, url, fallback: fallback);
       if (!mounted || my != _seq || _started || _status != null) return;
