@@ -162,13 +162,13 @@ class _SettingsPageState extends State<SettingsPage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
-              _Section(title: 'Innlogging', children: _logins()),
-              _Section(title: 'Utseende', children: [_theme(), _language()]),
-              _Section(title: 'Avspilling', children: _playback()),
-              _Section(title: 'Kanaler og TV-guide', children: [_lists()]),
+              _Section(title: tr('Innlogging'), children: _logins()),
+              _Section(title: tr('Utseende'), children: [_theme(), _language()]),
+              _Section(title: tr('Avspilling'), children: _playback()),
+              _Section(title: tr('Kanaler og TV-guide'), children: [_lists()]),
               if (u != null && u.enabled)
                 _Section(
-                  title: 'Oppdateringer',
+                  title: tr('Oppdateringer'),
                   children: [ListenableBuilder(listenable: u, builder: (context, _) => _updates(u))],
                 ),
               _Section(title: tr('Hjelp'), children: _help()),
@@ -201,7 +201,7 @@ class _SettingsPageState extends State<SettingsPage> {
               return ListTile(
                 leading: Icon(Icons.check_circle, color: scheme.primary),
                 title: Text(l.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text([l.kindName, 'i bruk', if (extra.isNotEmpty) extra].join(' · ')),
+                subtitle: Text([l.kindName, tr('i bruk'), if (extra.isNotEmpty) extra].join(' · ')),
                 trailing: _loginMenu(l),
               );
             },
