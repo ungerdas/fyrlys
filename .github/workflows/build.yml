@@ -1,10 +1,11 @@
-# Analyse og tester ved hver endring, og bygg for Windows og Android, med versjon og byggnummer i appen.
+# Analyse og tester ved hver endring, og bygg for Windows og Linux (x64), med versjon og byggnummer i appen.
+# Android er lagt bort inntil videre (jobben finnes i historikken, før 2.1.12; android/ ligger fortsatt i repoet).
 # Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-windows.zip og
-# Fyrlys-android-<abi>.apk, faste navn), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og
+# Fyrlys-linux-x64.tar.gz, faste navn), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og
 # byggnummeret står skjult i den (<!-- bygg N -->); Fyrlys på Windows ser etter nye versjoner der og oppdaterer seg selv.
 # Er versjonen ikke endret, byttes filene i releasen den har fra før.
 # Plattformmappene lages av «flutter create» her; i repoet ligger bare det vi har tilpasset
-# (AndroidManifest, ikoner, TV-banner og Windows-ikonet), og det skrives ikke over.
+# (Windows-ikonet, linux/pakke/ og Android-filene), og det skrives ikke over.
 # Feiler et steg, legges slutten av loggen som merknad på kjøringen (kan leses med
 # «gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations»).
 name: Bygg
@@ -79,52 +80,48 @@ jobs:
             echo "::error title=$f::$msg"
           done
 
-  android:
-    name: Android
+  linux:
+    name: Linux
     needs: test
-    runs-on: ubuntu-latest
+    # libmpv.so.2 (som Fedora, Ubuntu 24.04 og Debian 12 har); bygget på et eldre system krever det libmpv.so.1
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
+      - name: Byggeverktøy, GTK og libmpv
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            libmpv-dev libepoxy-dev 2>&1 | tail -n 3
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - name: Lag resten av Android-oppsettet
-        run: flutter create --org no.peag --project-name fyrlys --platforms=android . 2>&1 | tee create.log
+      - name: Lag resten av Linux-oppsettet
+        run: |
+          flutter create --org no.peag --project-name fyrlys --platforms=linux . 2>&1 | tee create.log
+          # vindustittelen
+          f=$(find linux -name my_application.cc | head -n 1)
+          sed -i 's/"fyrlys"/"Fyrlys"/g' "$f"
+          grep -n '"Fyrlys"' "$f"
       - name: Versjon og byggnummer til appen (vises i menyen)
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
           echo "DEFINES=--build-number=${{ github.run_number }} --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
-      - run: flutter build apk --release --split-per-abi $DEFINES 2>&1 | tee build.log
-      # Med Fyrlys-nøkkelen (hemmelighetene ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD og ANDROID_KEY_ALIAS,
-      # se README) kan nye APK-er installeres oppå de gamle. Uten den signeres hvert bygg med en ny, tilfeldig
-      # debug-nøkkel, og appen må avinstalleres før et nytt bygg kan legges inn.
-      - name: Signer med Fyrlys-nøkkelen
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
-          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      - run: flutter build linux --release $DEFINES 2>&1 | tee build.log
+      # mappen «Fyrlys» i pakken (tar tar vare på at fyrlys er kjørbar; det gjør ikke artefaktene)
+      - name: Pakk Fyrlys-linux-x64.tar.gz
         run: |
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "::warning title=Android::Ingen Fyrlys-nøkkel (ANDROID_KEYSTORE_B64): APK-ene har en tilfeldig debug-nøkkel"
-            exit 0
-          fi
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fyrlys.jks"
-          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          for f in build/app/outputs/flutter-apk/*-release.apk; do
-            "$bt/apksigner" sign --ks "$RUNNER_TEMP/fyrlys.jks" --ks-pass env:KS_PASS --key-pass env:KS_PASS \
-              --ks-key-alias "${KEY_ALIAS:-fyrlys}" "$f"
-            "$bt/apksigner" verify --print-certs "$f" | head -2
-          done 2>&1 | tee sign.log
-          rm -f "$RUNNER_TEMP/fyrlys.jks"
+          mkdir -p out/Fyrlys
+          cp -a build/linux/x64/release/bundle/. out/Fyrlys/
+          cp assets/fyrlys.png out/Fyrlys/fyrlys.png
+          install -m 755 linux/pakke/lag-snarvei.sh out/Fyrlys/lag-snarvei.sh
+          tar -czf Fyrlys-linux-x64.tar.gz -C out Fyrlys
+          tar -tzvf Fyrlys-linux-x64.tar.gz | head -n 20
+          ldd out/Fyrlys/lib/libmedia_kit_video_plugin.so | grep -E 'mpv|epoxy' || true
       - uses: actions/upload-artifact@v5
         with:
-          name: Fyrlys-android
-          path: build/app/outputs/flutter-apk/*-release.apk
+          name: Fyrlys-linux
+          path: Fyrlys-linux-x64.tar.gz
       - name: Vis feilen som merknad
         if: failure()
         run: |
@@ -137,7 +134,7 @@ jobs:
   release:
     name: Release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [windows, android]
+    needs: [windows, linux]
     runs-on: ubuntu-latest
     # to pusher rett etter hverandre skal ikke oppdatere releasene samtidig
     concurrency:
@@ -157,54 +154,29 @@ jobs:
           # faste filnavn, så «releases/latest/download/Fyrlys-windows.zip» alltid gir siste versjon
           mkdir -p out
           (cd dist/Fyrlys-windows && zip -qr ../../out/Fyrlys-windows.zip .)
-          for f in dist/Fyrlys-android/*.apk; do
-            abi=$(basename "$f" | sed 's/^app-//; s/-release\.apk$//')
-            cp "$f" "out/Fyrlys-android-${abi}.apk"
-          done
+          cp dist/Fyrlys-linux/Fyrlys-linux-x64.tar.gz out/
           ls -la out
           awk -v v="## v${version}" 'index($0, v) == 1 {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > changes.md || true
           [ -s changes.md ] || echo "Fyrlys ${version}" > changes.md
-          # Bro: apper til og med 2.1.8 ser bare etter releasen «testbygg» og leser byggnummeret i navnet. 2.1.9 legges
-          # ut der en siste gang (med «bygg N» i navnet); 2.1.9 og nyere ser etter siste release (og «testbygg» som
-          # reserve), så fra 2.1.10 er alt vanlige releaser, og «testbygg» slettes.
-          if [ "$version" = "2.1.9" ]; then
-            echo "TAG=testbygg" >> "$GITHUB_ENV"
-            echo "TITLE=Fyrlys $version · bygg $build" | tee -a "$GITHUB_ENV"
-            cp changes.md notes.md
-          else
-            echo "TAG=v$version" >> "$GITHUB_ENV"
-            echo "TITLE=Fyrlys $version" | tee -a "$GITHUB_ENV"
-            { cat changes.md; printf '\n<!-- bygg %s -->\n' "$build"; } > notes.md
-          fi
+          # byggnummeret skjult i teksten: appen leser det for å se om releasen er nyere enn den selv
+          { cat changes.md; printf '\n<!-- bygg %s -->\n' "$build"; } > notes.md
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+          echo "TITLE=Fyrlys $version" | tee -a "$GITHUB_ENV"
           cat notes.md
       - name: Legg ut releasen
         run: |
-          if [ "$TAG" = "testbygg" ]; then
-            git tag -f testbygg "$GITHUB_SHA"
-            git push -f origin refs/tags/testbygg
-          fi
           if gh release view "$TAG" > /dev/null 2>&1; then
-            # Filer med andre navn (f.eks. de gamle «Fyrlys-testbygg-…») fjernes først: appen tar den første fila som
-            # slutter på «-windows.zip», og den skal ikke være et gammelt bygg.
+            # Samme versjon på nytt: filer med andre navn fjernes først (appen tar den første fila som slutter på
+            # «-windows.zip» eller «-linux-x64.tar.gz», og den skal ikke være et gammelt bygg).
             gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r a; do
               [ -f "out/$a" ] || gh release delete-asset "$TAG" "$a" -y
             done
             # filene først, så teksten med byggnummeret: appen tror ikke at et nytt bygg er klart før filene er der
             gh release upload "$TAG" out/* --clobber
-            if [ "$TAG" = "testbygg" ]; then
-              gh release edit testbygg --title "$TITLE" --notes-file notes.md
-            else
-              gh release edit "$TAG" --title "$TITLE" --notes-file notes.md --latest
-            fi
-          elif [ "$TAG" = "testbygg" ]; then
-            gh release create testbygg out/* --title "$TITLE" --notes-file notes.md --prerelease --verify-tag
+            gh release edit "$TAG" --title "$TITLE" --notes-file notes.md --latest
           else
             # gh lager den som utkast til filene er lastet opp, og publiserer den så
             gh release create "$TAG" out/* --target "$GITHUB_SHA" --title "$TITLE" --notes-file notes.md --latest
-          fi
-          # «testbygg» er historie fra 2.1.10
-          if [ "$TAG" != "testbygg" ] && gh release view testbygg > /dev/null 2>&1; then
-            gh release delete testbygg -y --cleanup-tag
           fi
       - name: Vis feilen som merknad
         if: failure()

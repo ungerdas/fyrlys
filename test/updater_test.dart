@@ -19,7 +19,7 @@ Map<String, Object?> _release(int build, {int size = 4}) => {
       // byggnummeret står skjult (vises ikke på GitHub)
       'body': 'Siste endringer:\n- volum\n\n<!-- bygg $build -->',
       'assets': [
-        {'name': 'Fyrlys-android-arm64-v8a.apk', 'browser_download_url': 'https://example/a.apk', 'size': 10},
+        {'name': 'Fyrlys-linux-x64.tar.gz', 'browser_download_url': 'https://example/l.tar.gz', 'size': 10},
         {'name': 'Fyrlys-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': size},
       ],
     };
@@ -44,6 +44,10 @@ void main() {
     expect(old.label, 'Fyrlys 2.1.8');
     expect(parseRelease({'name': 'Fyrlys v0.1.0', 'assets': <Object>[]}, '-windows.zip'), isNull);
     expect(parseRelease(_release(7), '-macos.zip'), isNull);
+    // Linux: tar.gz-pakken
+    final linux = parseRelease(_release(7), '-linux-x64.tar.gz')!;
+    expect(linux.url, 'https://example/l.tar.gz');
+    expect(linux.size, 10);
   });
 
   group('Updater', () {
@@ -119,6 +123,26 @@ void main() {
       expect(info?.build, 9);
       expect(info?.label, 'Fyrlys 2.1.9');
       expect(paths, ['/repos/ungerdas/fyrlys/releases/latest', '/repos/ungerdas/fyrlys/releases/tags/testbygg']);
+    });
+
+    test('Linux: tar.gz-pakken lastes ned', () async {
+      final client = MockClient((r) async => r.url.host == 'api.github.com'
+          ? http.Response(jsonEncode(_release(7)), 200, headers: _json)
+          : http.Response.bytes(List.filled(10, 1), 200));
+      final u = Updater(
+        client: client,
+        currentBuild: 5,
+        assetSuffix: '-linux-x64.tar.gz',
+        workDir: dir.path,
+        canInstall: false,
+        repo: 'ungerdas/fyrlys',
+      );
+      expect((await u.check())?.url, 'https://example/l.tar.gz');
+      await u.download();
+      expect(u.state, UpdateState.ready);
+      final ready = jsonDecode(File('${dir.path}/klar.json').readAsStringSync()) as Map;
+      expect('${ready['zip']}', endsWith('Fyrlys.tar.gz'));
+      expect(File('${ready['zip']}').lengthSync(), 10);
     });
 
     test('samme eller eldre bygg: ingenting å gjøre', () async {

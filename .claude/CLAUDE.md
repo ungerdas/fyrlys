@@ -1,7 +1,8 @@
 # Fyrlys-appen – arbeidsnotater for Claude
 
-Egen app for Fyrlys, Pål-Eriks IPTV-spiller: Flutter med media_kit (mpv) som avspiller, for Windows,
-Android og Android TV (senere macOS, Linux og iOS). Den kommer **i tillegg til** Docker-versjonen
+Egen app for Fyrlys, Pål-Eriks IPTV-spiller: Flutter med media_kit (mpv) som avspiller, for **Windows og Linux**
+(Pål-Erik 26.10: «La oss droppe Android for nå. Vi fokuserer fullt og helt på Windows/Linux»; Android-jobben er
+tatt ut av workflowen fra 2.1.12, men `android/` og den Android-spesifikke koden ligger der fortsatt). Den kommer **i tillegg til** Docker-versjonen
 (nettside + server med ffmpeg) i det private repoet `ungerdas/peagstreams`, som kjører på hjemmeserveren hans.
 Fra 2.1.6 (Pål-Erik 26.10: «Fyrlys server dropper vi») logger appen inn med M3U-lenke eller Xtream Codes og henter
 alt rett fra leverandøren, og oppdateringene rett fra GitHub (fra 2.1.11 uten valg av oppdateringsserver); appen
@@ -23,10 +24,16 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   feiler, legger workflowen slutten av loggen som merknad; les den med
   `gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations` (jobb-id fra `gh run view <id> --json jobs`).
 - Plattformmappene lages av `flutter create --org no.peag --project-name fyrlys` i hvert bygg. I repoet
-  ligger bare det som er tilpasset, og det skrives ikke over: `android/app/src/main/AndroidManifest.xml`
-  (INTERNET, cleartext, Android TV med leanback og banner), ikonene i `android/.../res/`
-  (adaptivt ikon, `drawable-xhdpi/banner.png`), `windows/runner/resources/app_icon.ico`. Vindustittelen og
-  filinfo på Windows settes med `sed` i workflowen. Ikonene er tegnet fra `fyrlys.svg` i nettversjonen.
+  ligger bare det som er tilpasset, og det skrives ikke over: `windows/runner/resources/app_icon.ico`,
+  `linux/pakke/lag-snarvei.sh` (legger `no.peag.fyrlys.desktop` og ikonet i `~/.local/share`, sier fra om libmpv
+  mangler) og Android-filene (manifest med leanback/banner, ikoner; ikke i bruk nå). Vindustittelen settes med
+  `sed` i workflowen (Windows: `main.cpp`/`Runner.rc`; Linux: `"fyrlys"` → `"Fyrlys"` i `my_application.cc`;
+  app-id `no.peag.fyrlys` = WM_CLASS). Ikonene er tegnet fra `fyrlys.svg` i nettversjonen.
+- **Linux-bygget** (2.1.12): `ubuntu-24.04` med `libmpv-dev`/`libepoxy-dev` (media_kit_video lenker mot libmpv via
+  pkg-config, så bygget krever `libmpv.so.2`: Fedora `mpv-libs`, Ubuntu 24.04+/Debian 12+ `libmpv2`; et eldre
+  byggsystem ville gitt `libmpv.so.1`). Pakken `Fyrlys-linux-x64.tar.gz` har mappen `Fyrlys/` (bundle,
+  `fyrlys.png`, `lag-snarvei.sh`), laget med tar i Linux-jobben (artefakter mister kjørbar-biten). Ikke prøvd på en
+  ekte Linux-maskin ennå.
 - Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva Pål-Erik må
   prøve på Windows-PC-en sin, telefon eller TV.
 - Flutter- og media_kit-kildene kan hentes for å sjekke API-er (github.com er åpent for git):
@@ -39,21 +46,20 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   byggnummer eller commit (Pål-Erik 26.10: «bygg 30 sånt kan du droppe»). Skriv avsnittet `## vX.Y.Z` i
   `CHANGELOG.md` før push: det blir teksten i releasen.
 - **Releaser** (Pål-Erik 26.10: «vi er ferdige med testbygg»): jobben `release` legger hver versjon ut som en vanlig
-  GitHub-release `vX.Y.Z` («Fyrlys X.Y.Z», blir «Latest»), med `Fyrlys-windows.zip` og `Fyrlys-android-<abi>.apk`
-  (faste navn, så `releases/latest/download/<fil>` alltid er siste versjon), teksten fra CHANGELOG.md og
+  GitHub-release `vX.Y.Z` («Fyrlys X.Y.Z», blir «Latest»), med `Fyrlys-windows.zip` og `Fyrlys-linux-x64.tar.gz`
+  (faste navn, så `releases/latest/download/<fil>` alltid er siste versjon; v2.1.10–v2.1.11 har også APK-er), teksten fra CHANGELOG.md og
   byggnummeret skjult som `<!-- bygg N -->` (appen leser det). Finnes releasen alt (samme versjon på nytt), byttes
   filene (andre filnavn slettes først) og teksten. Appen (2.1.9+) spør `releases/latest`, med `releases/tags/testbygg`
   som reserve når siste release ikke har byggnummer.
-  **Broen:** apper til og med 2.1.8 kjenner bare releasen `testbygg` og leser byggnummeret i navnet, så 2.1.9 legges
-  ut der én gang til («Fyrlys 2.1.9 · bygg N», fast i workflowen). Fra 2.1.10 er alt vanlige releaser, og
-  `testbygg` slettes av workflowen (2.1.10 ble sendt da Pål-Erik hadde 2.1.9). README-lenkene går til
+  Broen fra `testbygg` (apper til og med 2.1.8 leste byggnummeret i navnet på den releasen) er ferdig: 2.1.9 ble
+  lagt ut der, `testbygg` er slettet, og bro-koden er tatt ut av workflowen (2.1.12). README-lenkene går til
   `releases/latest/download/…`.
   Gamle releaser: v0.1.0 (forhåndsutgivelse) og v2.0.0 (andre filnavn, ingen byggnummer) ligger der fortsatt.
   Offentlig repo: Actions-minuttene er gratis; et bygg tar rundt 10 minutter. Bruk `[skip ci]` når en endring
   bare gjelder notater eller README. Versjonen står nederst i menyen (`appBuildLabel`; `--dart-define`
   FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`); byggnummeret (`--build-number`, også versionCode på
   Android) er `github.run_number`. Kjøringer kan avbrytes med `gh run cancel <id> --repo ungerdas/fyrlys`.
-- Android-signering: med hemmelighetene `ANDROID_KEYSTORE_B64`/`ANDROID_KEYSTORE_PASSWORD`/`ANDROID_KEY_ALIAS`
+- Android-signering (Android er lagt bort; jobben finnes i historikken før 2.1.12): med hemmelighetene `ANDROID_KEYSTORE_B64`/`ANDROID_KEYSTORE_PASSWORD`/`ANDROID_KEY_ALIAS`
   signeres APK-ene på nytt med `apksigner` etter bygget (README forklarer hvordan nøkkelen lages); uten dem har
   hvert bygg en tilfeldig debug-nøkkel. Hemmeligheter kan ikke leses eller settes fra Claude-økta (Actions-API-et
   er stengt i proxyen), så Pål-Erik må legge dem inn selv.
@@ -161,18 +167,21 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   (et spor valgt for hånd står ellers i mpv til neste fil; samme adresse, f.eks. etter spoling, beholder det).
   `tracks()` leser `aid`/`sid` fra mpv (media_kit vet bare om spor valgt via `setAudioTrack`). Bildeundertekster
   (PGS/DVB) vises ikke: media_kit tegner tekstundertekster selv (`sub-visibility=no` uten libass).
-- `core/updater.dart` – oppdatering fra siste release (bare Windows, bare bygg med byggnummer), rett fra
+- `core/updater.dart` – oppdatering fra siste release (Windows og Linux x64, bare bygg med byggnummer), rett fra
   `api.github.com/repos/<repo>/releases/latest` (`_release`; uten byggnummer der: `releases/tags/testbygg` som
   reserve; 404 på begge = privat repo, feil med forklaring). Blir repoet privat igjen, virker ikke oppdateringen
   (2.1.6–2.1.10 kunne gå via Fyrlys-serveren, `/api/app/release`; fjernet i 2.1.11, finnes i historikken). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
-  `-windows.zip` lastes ned til `%LOCALAPPDATA%\Fyrlys\oppdatering\bygg-N` (størrelsen sjekkes),
-  så `klar.json`. Legges inn når appen lukkes (`didRequestAppExit` i `app.dart`), med «Start på nytt nå», eller
+  `-windows.zip` lastes ned til `%LOCALAPPDATA%\Fyrlys\oppdatering\bygg-N` (Linux: `-linux-x64.tar.gz` til
+  `~/.local/share/fyrlys/oppdatering/bygg-N`, valgt med `Platform.version` «linux_x64»; størrelsen sjekkes),
+  så `klar.json`. Linux (2.1.12): `oppdater.sh` (`_shScript`, bash, startet `detached`) gjør det samme som
+  PowerShell-skriptet: venter på prosessen (og på andre Fyrlys etter `/proc/*/exe`), pakker ut `Fyrlys/` fra
+  pakken, kopierer over med `cp -a` etter en sikkerhetskopi, `resultat.txt`, start igjen med `setsid`. Skriptet er
+  prøvd i Claude-økta med en falsk app (ok og ødelagt pakke), ikke på en ekte Linux-maskin. Legges inn når appen lukkes (`didRequestAppExit` i `app.dart`), med «Start på nytt nå», eller
   før appen vises neste gang (`beforeStart` i `main.dart`). Et PowerShell-skript (bare ASCII) venter på prosessen,
   pakker ut og kopierer med robocopy, skriver `resultat.txt` (vises i banneret) og `oppdatering.log`.
   `klar.json` slettes før skriptet startes, og `i-gang.txt` (90 s) hindrer at appen starter midt i, så det
   aldri blir en løkke. Krever at Fyrlys-mappen er skrivbar (ikke Programfiler). Banner og «Se etter
-  oppdateringer» i `home_page.dart`. Android oppdaterer seg ikke selv ennå (trenger fast signeringsnøkkel og
-  installasjon av APK).
+  oppdateringer» i `home_page.dart`.
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
 - Tester i `test/`: navn, Xtream-kilden, M3U-kilden og innloggingen (`m3u_source_test.dart`, med MockClient og
   `http.runWithClient`), oppdateringen (`updater_test.dart`),
@@ -242,4 +251,6 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 - 26.10.2026: 2.1.10: første vanlige release (`v2.1.10`), `testbygg` slettet.
 - 26.10.2026: 2.1.11: «Oppdateringsserver» fjernet fra menyen (Pål-Erik: trengs ikke), oppdateringene bare fra
   GitHub.
-- Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.
+- 26.10.2026: 2.1.12: Android droppet inntil videre (Pål-Erik), Linux-bygg (`Fyrlys-linux-x64.tar.gz`) med
+  selvoppdatering og `lag-snarvei.sh`. Ikke prøvd på ekte Linux.
+- Ideer senere: AppImage/Flatpak for Linux (med libmpv inni), Linux arm64, bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.
