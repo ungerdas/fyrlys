@@ -89,7 +89,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Innstillinger'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Meld fra om en feil'));
+    await tester.scrollUntilVisible(find.text('Meld fra om en feil'), 200, scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     expect(find.text('HJELP'), findsOneWidget);
     expect(find.text('Lagre feilrapport'), findsOneWidget);

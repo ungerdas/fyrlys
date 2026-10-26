@@ -42,8 +42,10 @@ jobs:
           for f in *.log; do
             [ -f "$f" ] || continue
             if [ "$f" = test.log ] && grep -q '❌' "$f"; then
-              # bare testene som feilet (lange linjer, som advarsler om trykk, tas ikke med)
-              body=$(awk '/::group::❌/{on=1} on && length($0) < 400 {print} /::endgroup::/{on=0}' "$f" | head -n 80)
+              # alle testene som feilet, så detaljene (lange linjer, som advarsler om trykk, tas ikke med)
+              names=$(grep '::group::❌' "$f" | sed 's/.*::group::❌ //' | head -n 40)
+              details=$(awk '/::group::❌/{on=1} on && length($0) < 400 {print} /::endgroup::/{on=0}' "$f" | head -n 80)
+              body=$(printf 'Feilet:\n%s\n\n%s' "$names" "$details")
             else
               body=$(tail -n 60 "$f")
             fi

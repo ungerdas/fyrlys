@@ -91,7 +91,7 @@ void main() {
     await tester.tap(find.byTooltip('Innstillinger'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Oppdateringsserver'), findsNothing);
-    await tester.ensureVisible(find.text('Se etter oppdateringer'));
+    await tester.scrollUntilVisible(find.text('Se etter oppdateringer'), 200, scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Se etter oppdateringer'));
     await tester.pumpAndSettle();
@@ -125,21 +125,21 @@ void main() {
     await tester.tap(find.text('Lyst'));
     await tester.pumpAndSettle();
     expect(session.themeMode, ThemeMode.light);
-    await tester.tap(find.text('Som Windows'));
+    await tester.tap(find.text('Som Windows').first);
     await tester.pumpAndSettle();
     expect(session.themeMode, ThemeMode.system);
     expect((await SharedPreferences.getInstance()).getString('theme'), 'system');
 
     // radene lenger ned rulles fram først (siden er høyere enn vinduet)
     expect(session.picture.smooth, isFalse);
-    await tester.ensureVisible(find.text('Jevn bevegelse (prøve)'));
+    await tester.scrollUntilVisible(find.text('Jevn bevegelse (prøve)'), 200, scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Jevn bevegelse (prøve)'));
     await tester.pumpAndSettle();
     expect(session.picture.smooth, isTrue);
     expect(session.picture.deinterlace, isTrue);
 
-    await tester.ensureVisible(find.text('Hent listene på nytt'));
+    await tester.scrollUntilVisible(find.text('Hent listene på nytt'), 200, scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Hent listene på nytt'));
     await tester.pumpAndSettle();
