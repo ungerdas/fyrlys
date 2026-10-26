@@ -116,8 +116,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     expect(p.urls.last, '$debatt/1.ts');
     expect(find.text('1:10'), findsOneWidget);
+    // (pump med tid: posisjonen fra avspilleren kommer før bildet tegnes)
     p.moveTo(const Duration(seconds: 1));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(find.text('1:01'), findsOneWidget);
     p.cache = (back: const Duration(seconds: 1), ahead: const Duration(seconds: 30));
     await tester.pump(const Duration(milliseconds: 600));
@@ -125,9 +126,9 @@ void main() {
 
     // ferdig: husket som sett, og videre til neste program (det som går nå, fra start)
     p.moveTo(const Duration(minutes: 59));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     p.finish();
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(find.text('Neste: Dagsrevyen'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
     await _settle(tester);
