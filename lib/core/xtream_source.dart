@@ -221,9 +221,6 @@ class XtreamSource implements TvSource {
   Map<String, String> get httpHeaders => const {'User-Agent': xtreamUserAgent};
 
   @override
-  bool get sharedFavorites => false;
-
-  @override
   bool get hasVod => true;
 
   Future<Object?> _api(String? action, [Map<String, String> params = const {}, Duration timeout = const Duration(seconds: 60)]) async {
@@ -255,9 +252,6 @@ class XtreamSource implements TvSource {
     final ui = info is Map ? info['user_info'] : null;
     return ui is Map ? ui : null;
   }
-
-  @override
-  Future<void> prepare() async {}
 
   @override
   Future<Account> account() async {
@@ -346,21 +340,12 @@ class XtreamSource implements TvSource {
   String? logoUrl(String? icon) => icon;
 
   @override
-  Future<PlayTarget> open(Channel channel, {bool takeOver = false}) async {
+  Future<PlayTarget> open(Channel channel) async {
     // HLS fra leverandøren starter ved direktepunktet; MPEG-TS er reserven
     final base = '$server/live/$_creds/${channel.id}';
     // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
     return PlayTarget(['$base.m3u8', '$base.ts'], localShift: true);
   }
-
-  @override
-  Future<void> close(Channel channel) async {}
-
-  @override
-  Future<Favorites?> loadFavorites() async => null;
-
-  @override
-  Future<Favorites?> changeFavorites(Map<String, Object?> change) async => null;
 
   // ── filmer og serier: hele lista hentes (mellomlagret 30 min), og appen filtrerer og deler i sider ──
 

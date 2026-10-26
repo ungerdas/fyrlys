@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/core/m3u_source.dart';
+import 'package:fyrlys/core/secrets.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/core/source.dart';
 import 'package:http/http.dart' as http;
@@ -162,9 +163,9 @@ void main() {
   });
 
   group('innloggingen', () {
-    Future<Session> session([Map<String, Object> prefs = const {}, http.Client? client]) async {
+    Future<Session> session([Map<String, Object> prefs = const {}, SecretCodec? secrets]) async {
       SharedPreferences.setMockInitialValues(prefs);
-      final s = Session(await SharedPreferences.getInstance(), httpClient: client);
+      final s = Session(await SharedPreferences.getInstance(), secrets: secrets);
       await s.restore();
       return s;
     }
@@ -220,31 +221,63 @@ void main() {
       next.source!.dispose();
     });
 
-    test('innlogging mot Fyrlys-serveren fra før: favorittene tas med, og du logger inn på nytt', () async {
-      final asked = <String>[];
-      final s = await session(
-        {'source': jsonEncode({'kind': 'fyrlys', 'base': 'http://192.168.1.10:8766', 'client': 'abc'})},
-        MockClient((r) async {
-          asked.add('${r.url}');
-          return http.Response(
-            jsonEncode({
-              'favs': [
-                {'id': 101, 'name': 'NRK 1 HD', 'icon': 'http://logo.example/nrk1.png', 'num': 1, 'cat': '5'},
-              ],
-              'cats': ['5', '7'],
-            }),
-            200,
-          );
-        }),
+    test('innloggingen lagres kryptert, og en lagret i klartekst fra før krypteres', () async {
+      final secrets = _ReversedCodec();
+      final link = 'http://iptv.example/get.php?username=kari&password=hemmelig&type=m3u_plus';
+      final s = await session(const {}, secrets);
+      await http.runWithClient(
+        () => s.loginM3u(link),
+        () => MockClient((r) async => r.url.path.endsWith('get.php')
+            ? http.Response.bytes(utf8.encode(_m3u), 200)
+            : http.Response('mangler', 404)),
       );
-      expect(s.source, isNull);
-      expect(asked, ['http://192.168.1.10:8766/api/streams/favs']);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('source'), isNull);
-      final favs = jsonDecode(prefs.getString('favorites')!) as List;
-      expect(favs.single, containsPair('id', '101'));
-      expect(favs.single, containsPair('num', '1'));
-      expect(prefs.getStringList('favoriteCategories'), ['5', '7']);
+      final stored = prefs.getString('source_protected')!;
+      expect(stored, isNot(contains('hemmelig')));
+      expect(jsonDecode(secrets.unprotect(stored)!), containsPair('url', link));
+
+      // neste gang: leses tilbake
+      final next = Session(prefs, secrets: secrets);
+      await next.restore();
+      expect((next.source! as M3uSource).url, link);
+      next.source!.dispose();
+
+      // fra før 2.1.13: i klartekst, krypteres når appen starter
+      final old = await session({'source': jsonEncode({'kind': 'm3u', 'url': link, 'epg': ''})}, secrets);
+      expect(old.source, isA<M3uSource>());
+      final after = await SharedPreferences.getInstance();
+      expect(after.getString('source'), isNull);
+      expect(after.getString('source_protected'), isNotNull);
+      old.source!.dispose();
+    });
+
+    test('virker ikke krypteringen, lagres innloggingen som før', () async {
+      final s = await session(const {}, const NoSecretCodec());
+      await http.runWithClient(
+        () => s.loginM3u('http://iptv.example/liste.m3u'),
+        () => MockClient((r) async => http.Response.bytes(utf8.encode(_m3u), 200)),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('source_protected'), isNull);
+      expect(jsonDecode(prefs.getString('source')!), containsPair('url', 'http://iptv.example/liste.m3u'));
+      await s.logout();
+      expect(prefs.getString('source'), isNull);
     });
   });
+}
+
+/// En kryptering for testene: snur teksten og koder den.
+class _ReversedCodec extends SecretCodec {
+  @override
+  String? protect(String text) => base64Encode(utf8.encode(String.fromCharCodes(text.runes.toList().reversed)));
+
+  @override
+  String? unprotect(String protected) {
+    try {
+      return String.fromCharCodes(utf8.decode(base64Decode(protected)).runes.toList().reversed);
+    } on FormatException {
+      return null;
+    }
+  }
 }

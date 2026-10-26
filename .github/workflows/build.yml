@@ -1,7 +1,7 @@
 # Analyse og tester ved hver endring, og bygg for Windows, med versjon og byggnummer i appen. Fyrlys er bare for
 # Windows (fra 2.1.12; Android- og Linux-byggene finnes i historikken).
-# Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-windows.zip, fast navn),
-# som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og
+# Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-oppsett.exe og
+# Fyrlys-windows.zip, faste navn; appen oppdaterer seg selv fra zip-fila), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og
 # byggnummeret står skjult i den (<!-- bygg N -->); Fyrlys på Windows ser etter nye versjoner der og oppdaterer seg selv.
 # Er versjonen ikke endret, byttes filene i releasen den har fra før.
 # Windows-mappen lages av «flutter create» her; i repoet ligger bare ikonet, og det skrives ikke over.
@@ -27,7 +27,7 @@ jobs:
     name: Analyse og tester
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -50,7 +50,7 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -66,10 +66,24 @@ jobs:
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
           echo "DEFINES=--build-number=${{ github.run_number }} --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
       - run: flutter build windows --release $DEFINES 2>&1 | tee build.log
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: Fyrlys-windows
           path: build/windows/x64/runner/Release/
+      # Fyrlys-oppsett.exe: installerer for brukeren i %LOCALAPPDATA%\Programs\Fyrlys (windows/installer/fyrlys.iss)
+      - name: Installasjonsprogrammet (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)').Matches[0].Groups[1].Value
+          & $iscc "/DAppVersion=$version" "/DSource=$PWD\build\windows\x64\runner\Release" "/DOutputDir=$PWD\installer-out" windows\installer\fyrlys.iss 2>&1 | Tee-Object -FilePath iscc.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item installer-out\Fyrlys-oppsett.exe | Format-List Name, Length
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Fyrlys-oppsett
+          path: installer-out/Fyrlys-oppsett.exe
       - name: Vis feilen som merknad
         if: failure()
         run: |
@@ -91,12 +105,16 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # med navn og mappe: er det bare én artefakt og ingen navn, pakkes den rett i «dist» uten egen mappe
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: Fyrlys-windows
           path: dist/Fyrlys-windows
+      - uses: actions/download-artifact@v8
+        with:
+          name: Fyrlys-oppsett
+          path: dist/Fyrlys-oppsett
       - name: Pakk filene og skriv teksten
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
@@ -104,6 +122,7 @@ jobs:
           # faste filnavn, så «releases/latest/download/Fyrlys-windows.zip» alltid gir siste versjon
           mkdir -p out
           (cd dist/Fyrlys-windows && zip -qr ../../out/Fyrlys-windows.zip .)
+          cp dist/Fyrlys-oppsett/Fyrlys-oppsett.exe out/
           ls -la out
           awk -v v="## v${version}" 'index($0, v) == 1 {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > changes.md || true
           [ -s changes.md ] || echo "Fyrlys ${version}" > changes.md

@@ -32,15 +32,6 @@ void main() {
     expect(info.url, 'https://example/w.zip');
     expect(info.size, 4);
     expect(info.notes, 'Siste endringer:\n- volum');
-    // releaser fra før 2.1.10 hadde byggnummeret i navnet
-    final old = parseRelease({
-      'name': 'Fyrlys 2.1.8 · bygg 31 (abc1234)',
-      'assets': [
-        {'name': 'Fyrlys-testbygg-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': 4},
-      ],
-    }, '-windows.zip')!;
-    expect(old.build, 31);
-    expect(old.label, 'Fyrlys 2.1.8');
     expect(parseRelease({'name': 'Fyrlys v0.1.0', 'assets': <Object>[]}, '-windows.zip'), isNull);
     expect(parseRelease(_release(7), '-macos.zip'), isNull);
   });
@@ -85,39 +76,6 @@ void main() {
       await again.check();
       expect(again.state, UpdateState.ready);
       expect(downloads, 1);
-    });
-
-    test('siste release uten byggnummer (før 2.1.10): releasen «testbygg» er reserven', () async {
-      final paths = <String>[];
-      final client = MockClient((r) async {
-        paths.add(r.url.path);
-        if (r.url.path.endsWith('/latest')) {
-          return http.Response(
-            jsonEncode({
-              'name': 'Fyrlys v2.0.0',
-              'assets': [
-                {'name': 'Fyrlys-v2.0.0-windows.zip', 'browser_download_url': 'https://example/old.zip', 'size': 4},
-              ],
-            }),
-            200,
-            headers: _json,
-          );
-        }
-        return http.Response(
-          jsonEncode({
-            'name': 'Fyrlys 2.1.9 · bygg 9',
-            'assets': [
-              {'name': 'Fyrlys-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': 4},
-            ],
-          }),
-          200,
-          headers: _json,
-        );
-      });
-      final info = await updater(5, client).check();
-      expect(info?.build, 9);
-      expect(info?.label, 'Fyrlys 2.1.9');
-      expect(paths, ['/repos/ungerdas/fyrlys/releases/latest', '/repos/ungerdas/fyrlys/releases/tags/testbygg']);
     });
 
     test('samme eller eldre bygg: ingenting å gjøre', () async {

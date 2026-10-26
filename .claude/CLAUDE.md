@@ -24,7 +24,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   feiler, legger workflowen slutten av loggen som merknad; les den med
   `gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations` (jobb-id fra `gh run view <id> --json jobs`).
 - Windows-mappen lages av `flutter create --org no.peag --project-name fyrlys --platforms=windows` i hvert bygg. I
-  repoet ligger bare `windows/runner/resources/app_icon.ico`, og det skrives ikke over. Vindustittelen og filinfo
+  repoet ligger bare `windows/runner/resources/app_icon.ico` og `windows/installer/fyrlys.iss` (2.1.13, Inno Setup:
+  `Fyrlys-oppsett.exe`, per bruker uten administrator i `{autopf}` = `%LOCALAPPDATA%\Programs\Fyrlys`, snarveier,
+  norsk; AppId `{6E2B8C41-…}` må aldri endres, oppdater.ps1 setter `DisplayVersion` under den; ISCC fra choco hvis
+  den mangler på løperen), og det skrives ikke over. Vindustittelen og filinfo
   settes med `sed` i workflowen (`main.cpp`/`Runner.rc`). Ikonet er tegnet fra `fyrlys.svg` i nettversjonen.
 - Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva Pål-Erik må
   prøve på Windows-PC-en sin.
@@ -38,14 +41,12 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   byggnummer eller commit (Pål-Erik 26.10: «bygg 30 sånt kan du droppe»). Skriv avsnittet `## vX.Y.Z` i
   `CHANGELOG.md` før push: det blir teksten i releasen.
 - **Releaser** (Pål-Erik 26.10: «vi er ferdige med testbygg»): jobben `release` legger hver versjon ut som en vanlig
-  GitHub-release `vX.Y.Z` («Fyrlys X.Y.Z», blir «Latest»), med `Fyrlys-windows.zip` (fast navn, så
-  `releases/latest/download/Fyrlys-windows.zip` alltid er siste versjon; v2.1.10–v2.1.11 har også APK-er), teksten fra CHANGELOG.md og
+  GitHub-release `vX.Y.Z` («Fyrlys X.Y.Z», blir «Latest»), med `Fyrlys-oppsett.exe` og `Fyrlys-windows.zip` (faste
+  navn, så `releases/latest/download/<fil>` alltid er siste versjon; appen oppdaterer seg fra zip-fila; v2.1.10–
+  v2.1.11 har også APK-er; artefaktene hentes med navn, actions checkout@v7, upload-artifact@v7, download-artifact@v8), teksten fra CHANGELOG.md og
   byggnummeret skjult som `<!-- bygg N -->` (appen leser det). Finnes releasen alt (samme versjon på nytt), byttes
-  filene (andre filnavn slettes først) og teksten. Appen (2.1.9+) spør `releases/latest`, med `releases/tags/testbygg`
-  som reserve når siste release ikke har byggnummer.
-  Broen fra `testbygg` (apper til og med 2.1.8 leste byggnummeret i navnet på den releasen) er ferdig: 2.1.9 ble
-  lagt ut der, `testbygg` er slettet, og bro-koden er tatt ut av workflowen (2.1.12). README-lenkene går til
-  `releases/latest/download/…`.
+  filene (andre filnavn slettes først) og teksten. Appen spør `releases/latest`. (Fram til 2.1.9 lå versjonene i
+  releasen `testbygg` med byggnummeret i navnet; den er slettet, og reservene for den er fjernet i 2.1.13.)
   Gamle releaser: v0.1.0 (forhåndsutgivelse) og v2.0.0 (andre filnavn, ingen byggnummer) ligger der fortsatt.
   Offentlig repo: Actions-minuttene er gratis; et bygg tar rundt 10 minutter. Bruk `[skip ci]` når en endring
   bare gjelder notater eller README. Versjonen står nederst i menyen (`appBuildLabel`; `--dart-define`
@@ -71,12 +72,13 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   og `ImageStore` (bildene i `getApplicationCacheDirectory()/bilder`, filnavn `stableHash(url)`, fornyes etter 14 dager,
   det gamle brukes når nettet feiler, 404 huskes i 10 min, `prune()` ved start holder det under 300 MB). Settes opp i
   `main.dart` (path_provider); uten dem (testene) hentes alt som før.
-- `core/session.dart` – tilstanden (ChangeNotifier): innlogging (lagres i shared_preferences, også
-  Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
+- `core/session.dart` – tilstanden (ChangeNotifier): innlogging (`toPrefs()` som JSON, kryptert med DPAPI i
+  `source_protected` via `core/secrets.dart` (`SecretCodec`; `DpapiCodec` = CryptProtectData/CryptUnprotectData med
+  FFI; `NoSecretCodec` utenfor Windows, og i testene en egen); lagres bare kryptert når det kan leses tilbake, ellers
+  i klartekst i `source` som før 2.1.13, og `restore` krypterer det som ligger i klartekst), lister, EPG-mellomlager (5 min, 4 om gangen),
   `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene; `cleanEpg` i `models.dart` slår sammen
-  doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt), «sist sett», lys/mørk
-  (`restore` rydder: en innlogging med `kind: fyrlys` fra før 2.1.6 fjernes, og favorittene hentes da én gang fra
-  `/api/streams/favs` når appen ikke har egne; `update_server` fra 2.1.6–2.1.10 slettes), og «fortsett der du
+  doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt, `favorites` og
+  `favoriteCategories`), «sist sett», lys/mørk, og «fortsett der du
   slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
   `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken). Språkene (`languages`/`saveLanguages`,
   `lang_audio`/`lang_subs` i shared_preferences; `LanguagePrefs` og kodene i `core/languages.dart`). Lista fra
@@ -154,8 +156,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `tracks()` leser `aid`/`sid` fra mpv (media_kit vet bare om spor valgt via `setAudioTrack`). Bildeundertekster
   (PGS/DVB) vises ikke: media_kit tegner tekstundertekster selv (`sub-visibility=no` uten libass).
 - `core/updater.dart` – oppdatering fra siste release (bare bygg med byggnummer), rett fra
-  `api.github.com/repos/<repo>/releases/latest` (`_release`; uten byggnummer der: `releases/tags/testbygg` som
-  reserve; 404 på begge = privat repo, feil med forklaring). Blir repoet privat igjen, virker ikke oppdateringen
+  `api.github.com/repos/<repo>/releases/latest` (`_latest`/`_release`; byggnummeret fra `<!-- bygg N -->`; 404 =
+  privat repo, feil med forklaring). Blir repoet privat igjen, virker ikke oppdateringen
   (2.1.6–2.1.10 kunne gå via Fyrlys-serveren, `/api/app/release`; fjernet i 2.1.11, finnes i historikken). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
   `-windows.zip` lastes ned til `%LOCALAPPDATA%\Fyrlys\oppdatering\bygg-N` (størrelsen sjekkes),
   så `klar.json`. Legges inn når appen lukkes (`didRequestAppExit` i `app.dart`), med «Start på nytt nå», eller
@@ -164,9 +166,16 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `klar.json` slettes før skriptet startes, og `i-gang.txt` (90 s) hindrer at appen starter midt i, så det
   aldri blir en løkke. Krever at Fyrlys-mappen er skrivbar (ikke Programfiler). Banner og «Se etter
   oppdateringer» i `home_page.dart`.
+- `core/single_instance.dart` (2.1.13) – bare én Fyrlys: `SingleInstance.isSecond` lytter på 127.0.0.1:47853; en ny
+  start sender `fyrlys:vis`, får `fyrlys:ok` og avslutter (`main.dart`, rett etter `beforeStart`, før mpv-bufferet
+  ryddes), og den første henter vinduet fram (`_bringToFront`). Svarer noe annet på porten, starter appen som vanlig.
+- `ui/window_memory.dart` (2.1.13) – `WindowMemory.restore` før `runApp`: størrelse/plass (`window` i
+  shared_preferences, bare når tittellinja ligger på en skjerm, `screen_retriever`) og maksimert; lagres 600 ms etter
+  flytting/endring, ikke i fullskjerm eller minimert (maksimert beholder den vanlige størrelsen).
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
 - Tester i `test/`: navn, Xtream-kilden, M3U-kilden og innloggingen (`m3u_source_test.dart`, med MockClient og
-  `http.runWithClient`), oppdateringen (`updater_test.dart`),
+  `http.runWithClient`; også krypteringen av innloggingen), oppdateringen (`updater_test.dart`), vinduet og én Fyrlys
+  (`window_test.dart`, ekte lokal port),
   widget-tester for TV-siden og spilleren (`player_test.dart`, tilbakespoling i `timeshift_test.dart`) med falsk
   kilde og avspiller (`fakes.dart`),
   filmer og serier (`vod_source_test.dart`: kildene og lister; `vod_test.dart`: fanene, detaljsiden, spilleren,
@@ -236,4 +245,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 - 26.10.2026: 2.1.12: bare Windows (Pål-Erik). Android-bygget, `android/`, `lib/platform.dart` (`isDesktop`) og
   telefon-/TV-greinene i spillerne (immersive, `_suspended`/livssyklus, telefon på tvers) er fjernet. Et Linux-bygg
   med selvoppdatering ble laget samme kveld, men aldri lagt ut (kjøringen ble stoppet; koden er i commit ecaf411).
-- Ideer senere: bildeundertekster (DVB/PGS) med libass, signering av exe-en.
+- 26.10.2026: 2.1.13 (Pål-Eriks valg 1–6): installasjonsprogram, innloggingen kryptert (DPAPI), vinduet husker seg,
+  bare én Fyrlys, død kode fjernet («Ta over»/`BusyException`, delte favoritter og meldingsstrømmen, `prepare`/`close`
+  i `TvSource`, testbygg-reserver, flyttingen fra Fyrlys-serveren), nye versjoner av actions. Testet med tester;
+  DPAPI, installasjonsprogrammet, vinduet og én-om-gangen er ikke prøvd på ekte Windows.
+- Ideer senere: minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeundertekster
+  (DVB/PGS) med libass, signering av exe-en.

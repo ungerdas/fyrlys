@@ -11,9 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fakes.dart';
 
-Future<(Session, FakeSource)> _session({Set<String> busy = const {}}) async {
+Future<(Session, FakeSource)> _session({Set<String> failing = const {}}) async {
   SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
-  final source = FakeSource(busy: busy);
+  final source = FakeSource()..failing.addAll(failing);
   final session = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => source);
   await session.restore();
   await session.load();
@@ -80,7 +80,7 @@ void main() {
   });
 
   testWidgets('spilleren: bildet, programinfo under og kanallista ved siden av', (tester) async {
-    final (session, source) = await _session();
+    final (session, _) = await _session();
     final playback = await _openPlayer(tester, session);
 
     expect(playback.urls, ['http://example/101.ts']);
@@ -102,7 +102,6 @@ void main() {
     await _settle(tester);
     expect(playback.urls.last, 'http://example/102.ts');
     expect(find.text('2  TV 2 HD'), findsOneWidget);
-    expect(source.closed, ['101']);
 
     // ▼▼ blar to kanaler fram i kanalinfoen, og bare den du stopper på, startes
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
@@ -233,25 +232,27 @@ void main() {
     await _close(tester);
   });
 
-  testWidgets('alle tilkoblinger i bruk: ta over', (tester) async {
-    final (session, _) = await _session(busy: {'101'});
+  testWidgets('kanalen svarer ikke: kortet med «Prøv igjen»', (tester) async {
+    final (session, source) = await _session(failing: {'101'});
     final playback = await _openPlayer(tester, session);
     expect(playback.urls, isEmpty);
-    expect(find.text('Stopp NRK 1 HD og se her'), findsOneWidget);
+    expect(find.text('Kanalen svarer ikke'), findsOneWidget);
 
-    await tester.tap(find.text('Stopp NRK 1 HD og se her'));
+    source.failing.clear();
+    await tester.tap(find.text('Prøv igjen'));
     await _settle(tester);
     expect(playback.urls, ['http://example/101.ts']);
-    expect(find.text('Stopp NRK 1 HD og se her'), findsNothing);
+    expect(find.text('Prøv igjen'), findsNothing);
 
     await _close(tester);
   });
 
-  testWidgets('fjernkontroll: OK på kortet tar over tilkoblingen', (tester) async {
-    final (session, _) = await _session(busy: {'101'});
+  testWidgets('Enter på kortet prøver igjen', (tester) async {
+    final (session, source) = await _session(failing: {'101'});
     final playback = await _openPlayer(tester, session);
-    expect(find.text('Stopp NRK 1 HD og se her'), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    expect(find.text('Prøv igjen'), findsOneWidget);
+    source.failing.clear();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await _settle(tester);
     expect(playback.urls, ['http://example/101.ts']);
 

@@ -32,12 +32,6 @@ class _FyrlysAppState extends State<FyrlysApp> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // tilbake i appen: favorittene kan være endret på en annen enhet imens
-    if (state == AppLifecycleState.resumed) widget.session.refreshFavorites();
-  }
-
-  @override
   Future<AppExitResponse> didRequestAppExit() async {
     // en nedlastet oppdatering legges inn når du lukker appen (skriptet venter til den er lukket)
     final updater = widget.updater;

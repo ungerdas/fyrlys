@@ -139,9 +139,3 @@ class Account {
   final int activeConnections;
 }
 
-class Favorites {
-  const Favorites({required this.channels, required this.categories});
-
-  final List<Channel> channels;
-  final List<String> categories;
-}

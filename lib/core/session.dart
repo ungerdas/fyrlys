@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cache.dart';
@@ -12,6 +11,7 @@ import 'm3u_source.dart';
 import 'models.dart';
 import 'names.dart';
 import 'picture.dart';
+import 'secrets.dart';
 import 'source.dart';
 import 'vod.dart';
 import 'xtream_source.dart';
@@ -20,8 +20,9 @@ typedef SourceFactory = Future<TvSource?> Function(Map<String, String> saved);
 
 /// Tilstanden i appen: kilden du er logget inn på, kanallista, favoritter, «sist sett» og lys/mørk.
 class Session extends ChangeNotifier {
-  Session(this._prefs, {this.sourceFactory, this.listCache, this.httpClient})
-      : themeMode = _themeFrom(_prefs.getString('theme'));
+  Session(this._prefs, {this.sourceFactory, this.listCache, SecretCodec? secrets})
+      : _secrets = secrets ?? SecretCodec.platform(),
+        themeMode = _themeFrom(_prefs.getString('theme'));
 
   final SharedPreferences _prefs;
 
@@ -31,8 +32,8 @@ class Session extends ChangeNotifier {
   /// kanallista fra sist (null: hentes hver gang, som i testene)
   final ListCache? listCache;
 
-  /// for testene (flyttingen fra Fyrlys-serveren)
-  final http.Client? httpClient;
+  /// krypterer innloggingen (DPAPI på Windows)
+  final SecretCodec _secrets;
 
   TvSource? source;
   bool restoring = true;
@@ -48,18 +49,11 @@ class Session extends ChangeNotifier {
   List<String> favoriteCategories = const [];
   List<Channel> recent = const [];
 
-  final _messages = StreamController<String>.broadcast();
-
-  /// korte beskjeder til brukeren, vises nederst på skjermen
-  Stream<String> get messages => _messages.stream;
-
   Map<String, Channel> _byId = const {};
   final Map<String, List<Channel>> _filtered = {};
   final Map<String, _EpgHit> _epg = {};
   int _epgBusy = 0;
   final Queue<Completer<void>> _epgWaiting = Queue();
-  Future<void> _favQueue = Future.value();
-  int _favPending = 0;
 
   static ThemeMode _themeFrom(String? s) => switch (s) {
         'light' => ThemeMode.light,
@@ -69,29 +63,30 @@ class Session extends ChangeNotifier {
 
   // ── innlogging ──
 
+  // Innloggingen lagres kryptert i 'source_protected' (2.1.13); 'source' er klartekst (før 2.1.13, eller når
+  // krypteringen ikke virker).
+  static const _plainKey = 'source';
+  static const _protectedKey = 'source_protected';
+
   /// Kobler til igjen med det som ble lagret sist.
   Future<void> restore() async {
-    final raw = _prefs.getString('source');
+    String? raw;
+    final protected = _prefs.getString(_protectedKey);
+    if (protected != null) raw = _secrets.unprotect(protected);
+    final plain = raw == null ? _prefs.getString(_plainKey) : null;
+    raw ??= plain;
     TvSource? src;
     if (raw != null) {
       try {
         final saved = (jsonDecode(raw) as Map).map((k, v) => MapEntry('$k', '$v'));
-        final base = saved['base'];
-        if (saved['kind'] == 'fyrlys') {
-          // Innlogging mot Fyrlys-serveren finnes ikke lenger (2.1.6): du logger inn med M3U-lenken eller Xtream
-          // Codes, og oppdateringene hentes rett fra GitHub (repoet er offentlig). Favorittene tas med.
-          if (base != null) await _importServerFavorites(base);
-          await _prefs.remove('source');
-        } else {
-          final factory = sourceFactory;
-          src = factory != null ? await factory(saved) : _fromPrefs(saved);
-        }
+        final factory = sourceFactory;
+        src = factory != null ? await factory(saved) : _fromPrefs(saved);
+        // lagret i klartekst fra før: krypteres nå
+        if (src != null && plain != null) await _saveSource(raw);
       } on Object {
         src = null;
       }
     }
-    // oppdateringsserveren fra 2.1.6–2.1.10 brukes ikke lenger: nye versjoner kommer rett fra GitHub
-    await _prefs.remove('update_server');
     recent = _readChannels('recent');
     restoring = false;
     if (src != null) {
@@ -101,38 +96,15 @@ class Session extends ChangeNotifier {
     }
   }
 
-  /// Favorittene lå bare på Fyrlys-serveren. De tas med over (samme kanal-id-er hos Xtream Codes), når appen
-  /// ikke har egne fra før.
-  Future<void> _importServerFavorites(String base) async {
-    if (_prefs.getString('favorites') != null) return;
-    final client = httpClient ?? http.Client();
-    try {
-      final r = await client.get(Uri.parse('$base/api/streams/favs')).timeout(const Duration(seconds: 4));
-      if (r.statusCode != 200) return;
-      final d = jsonDecode(utf8.decode(r.bodyBytes, allowMalformed: true));
-      if (d is! Map) return;
-      final favs = d['favs'];
-      final cats = d['cats'];
-      if (favs is List) {
-        final list = [
-          for (final f in favs)
-            if (f is Map && f['id'] != null)
-              Channel(
-                id: '${f['id']}',
-                name: '${f['name'] ?? ''}',
-                categoryId: '${f['cat'] ?? ''}',
-                icon: f['icon'] is String ? f['icon'] as String : null,
-                number: f['num']?.toString(),
-                hasEpg: f['epg'] != false,
-              ).toJson(),
-        ];
-        await _prefs.setString('favorites', jsonEncode(list));
-      }
-      if (cats is List) await _prefs.setStringList('favoriteCategories', [for (final c in cats) '$c']);
-    } on Object {
-      // serveren svarer ikke: uten favorittene, da
-    } finally {
-      if (httpClient == null) client.close();
+  /// Kryptert når det går (og bare når det kan leses igjen); ellers i klartekst som før.
+  Future<void> _saveSource(String json) async {
+    final protected = _secrets.protect(json);
+    if (protected != null && _secrets.unprotect(protected) == json) {
+      await _prefs.setString(_protectedKey, protected);
+      await _prefs.remove(_plainKey);
+    } else {
+      await _prefs.setString(_plainKey, json);
+      await _prefs.remove(_protectedKey);
     }
   }
 
@@ -172,7 +144,7 @@ class Session extends ChangeNotifier {
       _use(await XtreamSource.login(server, user, password));
 
   Future<void> _use(TvSource src) async {
-    await _prefs.setString('source', jsonEncode(src.toPrefs()));
+    await _saveSource(jsonEncode(src.toPrefs()));
     _attach(src);
   }
 
@@ -186,16 +158,10 @@ class Session extends ChangeNotifier {
     _filtered.clear();
     _epg.clear();
     error = null;
-    if (src.sharedFavorites) {
-      favorites = const [];
-      favoriteCategories = const [];
-    } else {
-      favorites = _readChannels('favorites');
-      favoriteCategories = _prefs.getStringList('favoriteCategories') ?? const [];
-    }
+    favorites = _readChannels('favorites');
+    favoriteCategories = _prefs.getStringList('favoriteCategories') ?? const [];
     notifyListeners();
     unawaited(_startLists(src));
-    unawaited(refreshFavorites());
   }
 
   /// Lista fra sist vises med en gang, og den nye hentes i bakgrunnen.
@@ -218,7 +184,8 @@ class Session extends ChangeNotifier {
   Future<void> logout() async {
     source?.dispose();
     source = null;
-    await _prefs.remove('source');
+    await _prefs.remove(_plainKey);
+    await _prefs.remove(_protectedKey);
     categories = const [];
     channels = const [];
     categoryCounts = const {};
@@ -240,7 +207,6 @@ class Session extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      await src.prepare();
       final cats = await src.categories(force: force);
       final chans = await src.channels(force: force);
       if (source != src) return;
@@ -362,20 +328,7 @@ class Session extends ChangeNotifier {
     final on = !isFavorite(ch.id);
     favorites = on ? [...favorites, ch] : [for (final c in favorites) if (c.id != ch.id) c];
     notifyListeners();
-    final src = source;
-    if (src != null && src.sharedFavorites) {
-      await _change(
-        src,
-        on
-            ? {
-                'op': 'add',
-                'fav': {'id': ch.id, 'name': ch.name, 'icon': ch.icon, 'num': int.tryParse(ch.number ?? '') ?? ch.number},
-              }
-            : {'op': 'remove', 'id': ch.id},
-      );
-    } else {
-      await _saveLocal();
-    }
+    await _saveFavorites();
     return on;
   }
 
@@ -383,12 +336,7 @@ class Session extends ChangeNotifier {
     final on = !isFavoriteCategory(id);
     favoriteCategories = on ? [...favoriteCategories, id] : [for (final c in favoriteCategories) if (c != id) c];
     notifyListeners();
-    final src = source;
-    if (src != null && src.sharedFavorites) {
-      await _change(src, {'op': on ? 'cat_add' : 'cat_remove', 'cat': id});
-    } else {
-      await _saveLocal();
-    }
+    await _saveFavorites();
     return on;
   }
 
@@ -402,63 +350,12 @@ class Session extends ChangeNotifier {
     list[j] = moved;
     favoriteCategories = list;
     notifyListeners();
-    final src = source;
-    if (src != null && src.sharedFavorites) {
-      await _change(src, {'op': 'cat_move', 'cat': id, 'step': step});
-    } else {
-      await _saveLocal();
-    }
+    await _saveFavorites();
   }
 
-  Future<void> _saveLocal() async {
+  Future<void> _saveFavorites() async {
     await _prefs.setString('favorites', jsonEncode([for (final c in favorites) c.toJson()]));
     await _prefs.setStringList('favoriteCategories', favoriteCategories);
-  }
-
-  /// Endringene sendes én om gangen. Svaret er lista slik serveren har den, også med det andre enheter har
-  /// endret, og tas i bruk når køen er tom.
-  Future<void> _change(TvSource src, Map<String, Object?> change) {
-    _favPending++;
-    final run = _favQueue.then((_) async {
-      var failed = false;
-      try {
-        final f = await src.changeFavorites(change);
-        if (_favPending == 1 && f != null && source == src) _adopt(f);
-      } on SourceException catch (e) {
-        failed = true;
-        _messages.add(e.message);
-      } on Object {
-        failed = true;
-        _messages.add('Klarte ikke å lagre favorittene');
-      } finally {
-        _favPending--;
-      }
-      // Feilet en endring, eller er du logget inn på nytt imens (da hoppet den nye kilden over hentingen fordi
-      // køen ikke var tom): hent lista slik serveren har den, så det du ser, stemmer.
-      if (_favPending == 0 && (failed || source != src)) unawaited(refreshFavorites());
-    });
-    _favQueue = run;
-    return run;
-  }
-
-  /// Henter favorittene på nytt (når appen kommer fram igjen): de kan være endret på en annen enhet.
-  Future<void> refreshFavorites() async {
-    final src = source;
-    if (src == null || !src.sharedFavorites || _favPending > 0) return;
-    try {
-      final f = await src.loadFavorites();
-      if (f != null && source == src && _favPending == 0) _adopt(f);
-    } on SourceException {
-      // beholder det vi har
-    }
-  }
-
-  void _adopt(Favorites f) {
-    favorites = [for (final c in f.channels) _byId[c.id] ?? c];
-    favoriteCategories = f.categories;
-    notifyListeners();
-    // favorittene fra serveren kom etter lista: programinfoen deres med en gang (det som alt er hentet, gjenbrukes)
-    _prefetchEpg();
   }
 
   void addRecent(Channel ch) {
@@ -634,7 +531,6 @@ class Session extends ChangeNotifier {
   @override
   void dispose() {
     source?.dispose();
-    unawaited(_messages.close());
     super.dispose();
   }
 }

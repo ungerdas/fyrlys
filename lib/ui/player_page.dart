@@ -111,7 +111,6 @@ class _PlayerState extends State<_Player> {
   bool _controls = true;
   PointerDeviceKind _pointer = PointerDeviceKind.mouse;
   String? _status;
-  BusyException? _busy;
   List<EpgEntry> _epg = const [];
   int? _height;
   String _tech = '';
@@ -209,9 +208,6 @@ class _PlayerState extends State<_Player> {
     _digitTimer?.cancel();
     _zapTimer?.cancel();
     _bannerTimer?.cancel();
-    final ch = _opened;
-    final src = _source;
-    if (ch != null && src != null) unawaited(src.close(ch));
     unawaited(_pb.dispose());
     _focus.dispose();
     _searchFocus.dispose();
@@ -237,21 +233,18 @@ class _PlayerState extends State<_Player> {
     await _open();
   }
 
-  Future<void> _open({bool takeOver = false}) async {
+  Future<void> _open() async {
     final src = _source;
     if (src == null || !mounted) return;
     final my = ++_seq;
     final ch = _channel;
-    final prev = _opened;
     _opened = ch;
-    if (prev != null && prev.id != ch.id) unawaited(src.close(prev));
     _session.addRecent(ch);
     _loadEpg(ch);
     _probeTimer?.cancel();
     _target = null;
     _set(() {
       _status = null;
-      _busy = null;
       _started = false;
       _buffering = true;
       _userPaused = false;
@@ -261,23 +254,15 @@ class _PlayerState extends State<_Player> {
     _lastMove = DateTime.now();
     _resetShift();
     try {
-      final t = await src.open(ch, takeOver: takeOver);
+      final t = await src.open(ch);
       if (my != _seq || !mounted) return;
       _target = t;
       _url = 0;
       await _pb.open(t.urls.first, src.httpHeaders);
-    } on BusyException catch (e) {
-      if (my != _seq || !mounted) return;
-      await _pb.stop();
-      // byttet kanal mens avspilleren stoppet: ikke vis den gamle kanalens beskjed på den nye
-      if (my != _seq || !mounted) return;
-      _set(() {
-        _busy = e;
-        _buffering = false;
-      });
     } on SourceException catch (e) {
       if (my != _seq || !mounted) return;
       await _pb.stop();
+      // byttet kanal mens avspilleren stoppet: ikke vis den gamle kanalens beskjed på den nye
       if (my != _seq || !mounted) return;
       _set(() {
         _status = e.message;
@@ -300,12 +285,12 @@ class _PlayerState extends State<_Player> {
     // mpv sier «Failed to open <hele adressen>»: rett mot leverandøren står brukernavn og passord i den
     final message = _source?.redact(raw) ?? raw;
     debugPrint('mpv: $message');
-    if (!mounted || _started || _busy != null || _status != null || _target == null) return;
+    if (!mounted || _started || _status != null || _target == null) return;
     if (_nextUrl()) return;
     // Siste adresse: mpv kan fortsatt komme seg, så vent litt før feilen vises.
     final my = _seq;
     Timer(const Duration(seconds: 8), () {
-      if (!mounted || my != _seq || _started || _status != null || _busy != null) return;
+      if (!mounted || my != _seq || _started || _status != null) return;
       unawaited(_pb.stop());
       _set(() {
         _status = 'Kanalen kunne ikke spilles ($message).';
@@ -338,7 +323,7 @@ class _PlayerState extends State<_Player> {
   /// på (pause og tilbakespoling).
   void _check() {
     final t = _target;
-    if (!mounted || _status != null || _busy != null || t == null) return;
+    if (!mounted || _status != null || t == null) return;
     if (t.localShift && (_started || _userPaused)) unawaited(_pollCache());
     final now = DateTime.now();
     final pos = _pb.position;
@@ -401,7 +386,7 @@ class _PlayerState extends State<_Player> {
     _hideTimer?.cancel();
     if (!_controls) _set(() => _controls = true);
     _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (_playing && _status == null && _busy == null && !_sideOpen && !_dragging) _set(() => _controls = false);
+      if (_playing && _status == null && !_sideOpen && !_dragging) _set(() => _controls = false);
     });
   }
 
@@ -421,7 +406,7 @@ class _PlayerState extends State<_Player> {
   /// En direktesending der avspilleren har sagt hva den har tatt vare på: da går det an å spole i det.
   bool get _canShift {
     final t = _target;
-    return t != null && t.localShift && _cache != null && _liveAhead != null && _busy == null && _status == null;
+    return t != null && t.localShift && _cache != null && _liveAhead != null && _status == null;
   }
 
   /// Hvor langt bak direkte du er: hvor mye mer avspilleren har hentet foran enn når du ser direkte (og på pause
@@ -618,7 +603,7 @@ class _PlayerState extends State<_Player> {
         _index = index;
       });
       // samme kanal: prøv igjen hvis den hadde stoppet
-      if (_status != null || _busy != null) _retry();
+      if (_status != null) _retry();
       return;
     }
     _last = (list: _list, index: _index);
@@ -673,7 +658,7 @@ class _PlayerState extends State<_Player> {
   }
 
   bool get _bannerVisible =>
-      _busy == null && _status == null && (_pendingZap != null || _bannerOn || (_switching && !_started));
+      _status == null && (_pendingZap != null || _bannerOn || (_switching && !_started));
 
   void _lastChannel() {
     final last = _last;
@@ -708,9 +693,9 @@ class _PlayerState extends State<_Player> {
     }
   }
 
-  void _retry({bool takeOver = false}) {
+  void _retry() {
     _retries.clear();
-    unawaited(_open(takeOver: takeOver));
+    unawaited(_open());
   }
 
   void _close() {
@@ -733,7 +718,7 @@ class _PlayerState extends State<_Player> {
   void _onStageTap() {
     if (_pointer == PointerDeviceKind.mouse) {
       // med mus: pause, som på nettsiden
-      if (_busy == null && _status == null) _togglePlay();
+      if (_status == null) _togglePlay();
       return;
     }
     if (_controls) {
@@ -828,11 +813,11 @@ class _PlayerState extends State<_Player> {
       } else {
         _close();
       }
-    } else if (_okKeys.contains(key) && _focus.hasPrimaryFocus && (_busy != null || _status != null)) {
-      // OK når kortet med «Ta over» eller «Prøv igjen» vises: knappen på kortet (den får ikke fokus selv)
-      _retry(takeOver: _busy != null);
+    } else if (_okKeys.contains(key) && _focus.hasPrimaryFocus && _status != null) {
+      // OK/Enter når kortet med «Prøv igjen» vises: knappen på kortet (den får ikke fokus selv)
+      _retry();
     } else if (_okKeys.contains(key) && _focus.hasPrimaryFocus) {
-      // OK på fjernkontrollen: fullskjerm, og i fullskjerm kanallista
+      // OK/Enter: fullskjerm, og i fullskjerm kanallista
       if (_fullNow) {
         _toggleSide();
       } else {
@@ -857,7 +842,7 @@ class _PlayerState extends State<_Player> {
 
   String _route() {
     final t = _target;
-    if (t == null || _busy != null) return '';
+    if (t == null) return '';
     final url = t.urls[math.min(_url, t.urls.length - 1)];
     final kind = url.contains('.m3u8') ? 'HLS ' : (url.contains('.ts') ? 'MPEG-TS ' : '');
     return '${kind}rett fra leverandøren';
@@ -966,10 +951,9 @@ class _PlayerState extends State<_Player> {
   /// Bildet med det som ligger over: kontroller, venting, beskjeder. Samme widget i alle oppsett (GlobalKey),
   /// så avspillingen ikke forstyrres når du går inn og ut av fullskjerm.
   Widget _stage({required bool full, required bool compact}) {
-    final busy = _busy;
     final status = _status;
     final flash = _flash;
-    final showBars = _controls || busy != null || status != null;
+    final showBars = _controls || status != null;
     return Listener(
       onPointerDown: (e) {
         _pointer = e.kind;
@@ -989,7 +973,7 @@ class _PlayerState extends State<_Player> {
               onDoubleTap: _toggleFull,
               child: _pb.view(),
             ),
-            if (_buffering && busy == null && status == null)
+            if (_buffering && status == null)
               const IgnorePointer(child: Center(child: CircularProgressIndicator())),
             if (flash != null && _digits.isEmpty)
               Positioned(top: full ? 96 : 16, right: 20, child: IgnorePointer(child: _flashBadge(flash))),
@@ -1033,14 +1017,7 @@ class _PlayerState extends State<_Player> {
                 ),
               ),
             ),
-            if (busy != null)
-              _card(
-                text: '${busy.message}\nNår noen lukker spilleren, blir tilkoblingen ledig.',
-                action: busy.busy.length == 1 ? 'Stopp ${busy.busy.first} og se her' : 'Ta over en av tilkoblingene',
-                onPressed: () => _retry(takeOver: true),
-              )
-            else if (status != null)
-              _card(text: status, action: 'Prøv igjen', onPressed: _retry),
+            if (status != null) _card(text: status, action: 'Prøv igjen', onPressed: _retry),
           ],
         ),
       ),

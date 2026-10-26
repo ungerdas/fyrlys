@@ -254,9 +254,6 @@ class M3uSource implements TvSource {
   Map<String, String> get httpHeaders => const {'User-Agent': xtreamUserAgent};
 
   @override
-  bool get sharedFavorites => false;
-
-  @override
   bool get hasVod => false;
 
   /// EPG-lenkene som brukes: din, eller de lista selv oppgir
@@ -326,9 +323,6 @@ class M3uSource implements TvSource {
   }
 
   @override
-  Future<void> prepare() async {}
-
-  @override
   Future<Account> account() async => Account(host: Uri.tryParse(url)?.host ?? '');
 
   @override
@@ -393,22 +387,13 @@ class M3uSource implements TvSource {
   String? logoUrl(String? icon) => icon;
 
   @override
-  Future<PlayTarget> open(Channel channel, {bool takeOver = false}) async {
+  Future<PlayTarget> open(Channel channel) async {
     await _ensure();
     final e = _entries[channel.id];
     if (e == null) throw const SourceException('Fant ikke kanalen i lista. Hent listene på nytt i menyen.');
     // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
     return PlayTarget([e.url], localShift: true);
   }
-
-  @override
-  Future<void> close(Channel channel) async {}
-
-  @override
-  Future<Favorites?> loadFavorites() async => null;
-
-  @override
-  Future<Favorites?> changeFavorites(Map<String, Object?> change) async => null;
 
   // ── filmer og serier finnes ikke her (fanene skjules) ──
 

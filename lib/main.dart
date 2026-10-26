@@ -10,8 +10,10 @@ import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'core/cache.dart';
 import 'core/session.dart';
+import 'core/single_instance.dart';
 import 'core/updater.dart';
 import 'ui/playback.dart';
+import 'ui/window_memory.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,8 +21,13 @@ Future<void> main() async {
   // den nye utgaven starter av seg selv.
   final updater = Updater();
   if (await updater.beforeStart()) exit(0);
+  // Bare én Fyrlys: starter du den en gang til, kommer vinduet som er åpent fram (før noe ryddes på disken).
+  if (await SingleInstance.isSecond(onShow: () => unawaited(_bringToFront()))) exit(0);
   MediaKit.ensureInitialized();
   await windowManager.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  // samme størrelse og plass som sist, før vinduet vises
+  await WindowMemory.restore(prefs);
   // kanallista fra sist og bildene på disk, så appen er klar med en gang (uten mapper: hentes hver gang)
   ListCache? lists;
   try {
@@ -37,7 +44,18 @@ Future<void> main() async {
   } on Object {
     // uten disk
   }
-  final session = Session(await SharedPreferences.getInstance(), listCache: lists);
+  final session = Session(prefs, listCache: lists);
   runApp(FyrlysApp(session: session, updater: updater));
   unawaited(session.restore().then((_) => updater.start()));
+}
+
+/// Vinduet fram, også når det var minimert.
+Future<void> _bringToFront() async {
+  try {
+    if (await windowManager.isMinimized()) await windowManager.restore();
+    await windowManager.show();
+    await windowManager.focus();
+  } on Object {
+    // ikke klart ennå
+  }
 }

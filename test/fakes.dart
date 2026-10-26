@@ -10,10 +10,7 @@ import 'package:fyrlys/ui/playback.dart';
 
 /// En kilde uten nett, med tre kanaler i to kategorier. NRK 1 har program nå og etterpå.
 class FakeSource implements TvSource {
-  FakeSource({this.busy = const {}, this.localShift = false, this.hasVod = true});
-
-  /// kanaler der alle tilkoblingene er i bruk, til man tar over
-  final Set<String> busy;
+  FakeSource({this.localShift = false, this.hasVod = true});
 
   /// direktesendinger der avspilleren tar vare på det siste (pause og spoling)
   final bool localShift;
@@ -21,7 +18,9 @@ class FakeSource implements TvSource {
   @override
   final bool hasVod;
   final opened = <String>[];
-  final closed = <String>[];
+
+  /// kanaler som ikke svarer (SourceException), til de tas ut igjen
+  final failing = <String>{};
 
   @override
   String get kind => 'fake';
@@ -31,12 +30,6 @@ class FakeSource implements TvSource {
 
   @override
   Map<String, String> get httpHeaders => const {};
-
-  @override
-  bool get sharedFavorites => false;
-
-  @override
-  Future<void> prepare() async {}
 
   @override
   Future<Account> account() async => const Account();
@@ -75,25 +68,14 @@ class FakeSource implements TvSource {
   String? logoUrl(String? icon) => null;
 
   @override
-  Future<PlayTarget> open(Channel channel, {bool takeOver = false}) async {
-    if (busy.contains(channel.id) && !takeOver) {
-      throw const BusyException('Alle tilkoblingene er i bruk.', ['NRK 1 HD']);
-    }
+  Future<PlayTarget> open(Channel channel) async {
+    if (failing.contains(channel.id)) throw const SourceException('Kanalen svarer ikke');
     opened.add(channel.id);
     return PlayTarget(['http://example/${channel.id}.ts'], localShift: localShift);
   }
 
   @override
   String redact(String text) => text.replaceAll('hemmelig', '***');
-
-  @override
-  Future<void> close(Channel channel) async => closed.add(channel.id);
-
-  @override
-  Future<Favorites?> loadFavorites() async => null;
-
-  @override
-  Future<Favorites?> changeFavorites(Map<String, Object?> change) async => null;
 
   // ── filmer og serier ──
 

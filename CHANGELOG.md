@@ -1,5 +1,15 @@
 # Endringer
 
+## v2.1.13
+
+- **Installasjonsprogram:** `Fyrlys-oppsett.exe` installerer Fyrlys for deg (uten administrator), med snarvei i
+  startmenyen og på skrivebordet, og avinstallering under Apper. Fyrlys oppdaterer seg selv som før.
+- **Innloggingen krypteres** med Windows sin egen beskyttelse, så bare din Windows-bruker kan lese passordet eller
+  M3U-lenken. Det skjer av seg selv første gang den nye versjonen starter.
+- **Vinduet husker** størrelsen og plassen sin, og om det var maksimert.
+- **Bare én Fyrlys om gangen:** starter du den igjen, kommer vinduet som er åpent fram.
+- Rydding: kode fra tiden med Fyrlys-serveren og testbyggene er fjernet, og byggeverktøyene er oppdatert.
+
 ## v2.1.12
 
 - Fyrlys er nå bare for Windows. Android-versjonen er lagt ned, og det kommer ingen nye APK-er.

@@ -45,7 +45,6 @@ class _HomePageState extends State<HomePage> {
   String _query = '';
   bool _searching = false;
   Timer? _clock;
-  StreamSubscription<String>? _messages;
 
   /// tall du taster for å gå til en kanal; samles til det har gått 1,4 sekunder uten nye
   String _digits = '';
@@ -58,9 +57,6 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // «nå»-linja og fremdriften på kortene flytter seg
     _clock = Timer.periodic(const Duration(seconds: 30), (_) => setState(() {}));
-    _messages = s.messages.listen((m) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
-    });
     HardwareKeyboard.instance.addHandler(_onKey);
   }
 
@@ -69,7 +65,6 @@ class _HomePageState extends State<HomePage> {
     HardwareKeyboard.instance.removeHandler(_onKey);
     _clock?.cancel();
     _digitTimer?.cancel();
-    unawaited(_messages?.cancel());
     _search.dispose();
     _searchFocus.dispose();
     super.dispose();

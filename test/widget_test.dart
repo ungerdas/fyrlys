@@ -58,7 +58,7 @@ void main() {
     addTearDown(tester.view.reset);
     final dir = Directory.systemTemp.createTempSync('fyrlys-meny');
     addTearDown(() => dir.deleteSync(recursive: true));
-    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}', 'update_server': 'http://192.168.1.10:8766'});
+    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
     final session = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource());
     await session.restore();
     final asked = <String>[];
@@ -85,9 +85,6 @@ void main() {
     );
     await tester.pumpWidget(FyrlysApp(session: session, updater: u));
     await tester.pumpAndSettle();
-    // en oppdateringsserver fra før (2.1.6–2.1.10) er ryddet bort
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('update_server'), isNull);
 
     await tester.tap(find.byTooltip('Meny'));
     await tester.pumpAndSettle();

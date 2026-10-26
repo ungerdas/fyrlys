@@ -37,16 +37,13 @@ class UpdateInfo {
 final _buildComment = RegExp(r'<!--\s*bygg\s+(\d+)\s*-->');
 final _comments = RegExp(r'<!--.*?-->', dotAll: true);
 
-/// Leser releasen (fra GitHub eller Fyrlys-serveren, samme form): byggnummeret står skjult i teksten
-/// (`<!-- bygg N -->`, så det ikke vises på GitHub), eller i navnet («bygg N», før 2.1.10), og fila for denne
-/// plattformen blant vedleggene. Relative adresser (serveren svarer `download/fil.zip`) løses mot [base].
+/// Leser releasen: byggnummeret står skjult i teksten (`<!-- bygg N -->`, så det ikke vises på GitHub), og fila
+/// for Windows blant vedleggene. Relative adresser løses mot [base].
 UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
   if (json is! Map) return null;
   final title = '${json['name'] ?? ''}';
   final body = '${json['body'] ?? ''}';
-  final build = int.tryParse(
-    _buildComment.firstMatch(body)?.group(1) ?? RegExp(r'bygg (\d+)').firstMatch(title)?.group(1) ?? '',
-  );
+  final build = int.tryParse(_buildComment.firstMatch(body)?.group(1) ?? '');
   final assets = json['assets'];
   if (build == null || assets is! List) return null;
   for (final a in assets) {
@@ -70,8 +67,7 @@ UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
 
 enum UpdateState { idle, checking, available, downloading, ready, failed }
 
-/// Oppdaterer appen fra siste release på GitHub (CI lager en for hver versjon på main; før 2.1.10 releasen
-/// «testbygg»).
+/// Oppdaterer appen fra siste release på GitHub (CI lager en for hver versjon på main).
 /// Ser etter nye bygg ved oppstart og hver 6. time, laster ned i bakgrunnen og legger inn når appen lukkes
 /// (eller med «Start på nytt nå»). Ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
 /// starter. Bare på Windows, og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
@@ -156,24 +152,7 @@ class Updater extends ChangeNotifier {
     final before = state;
     _set(UpdateState.checking);
     try {
-      // Siste release. Før 2.1.10 lå versjonene i releasen «testbygg», så den er reserven.
-      final releases = 'https://api.github.com/repos/$repo/releases';
-      UpdateInfo? info;
-      var visible = false;
-      try {
-        info = await _release(Uri.parse('$releases/latest'));
-        visible = true;
-      } on _Missing {
-        // ingen vanlige releaser ennå (eller et privat repo)
-      }
-      if (info == null) {
-        try {
-          info = await _release(Uri.parse('$releases/tags/testbygg'));
-        } on _Missing {
-          // Et privat repo svarer 404 på alt uten nøkkel: ikke «du har siste versjon».
-          if (!visible) throw const UpdateException('GitHub viser ikke de nye versjonene (er repoet privat?)');
-        }
-      }
+      final info = await _latest();
       if (info == null || info.build <= currentBuild!) {
         available = null;
         error = null;
@@ -193,6 +172,16 @@ class Updater extends ChangeNotifier {
       _set(before == UpdateState.checking ? UpdateState.idle : before);
       if (manual) throw UpdateException(_describe(e));
       return null;
+    }
+  }
+
+  /// Siste release på GitHub (null: ingen fil for Windows eller uten byggnummer).
+  Future<UpdateInfo?> _latest() async {
+    try {
+      return await _release(Uri.parse('https://api.github.com/repos/$repo/releases/latest'));
+    } on _Missing {
+      // Et privat repo (eller et uten releaser) svarer 404: ikke «du har siste versjon».
+      throw const UpdateException('GitHub viser ikke de nye versjonene (er repoet privat?)');
     }
   }
 
@@ -293,6 +282,8 @@ class Updater extends ChangeNotifier {
       if (j is! Map) return false;
       final build = j['build'];
       final zip = File('${j['zip']}');
+      // «Fyrlys 2.1.13» → 2.1.13, til Apper i Windows
+      final version = RegExp(r'^Fyrlys (\d+(?:\.\d+)*)').firstMatch('${j['title'] ?? ''}')?.group(1);
       if (build is! int || build <= current || !await zip.exists() || await zip.length() != j['size']) return false;
       final exe = File(Platform.resolvedExecutable);
       final script = File(_path('oppdater.ps1'));
@@ -321,6 +312,7 @@ class Updater extends ChangeNotifier {
           exe.path,
           '-Work',
           workDir,
+          if (version != null) ...['-Version', version],
           if (restart) '-Restart',
         ],
       );
@@ -424,6 +416,7 @@ param(
   [string]$Target,
   [string]$Exe,
   [string]$Work,
+  [string]$Version,
   [switch]$Restart
 )
 $ErrorActionPreference = 'Stop'
@@ -467,6 +460,11 @@ try {
   Remove-Item -LiteralPath $new -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath (Split-Path -Parent $Zip) -Recurse -Force -ErrorAction SilentlyContinue
+  # Installert med Fyrlys-oppsett.exe: den nye versjonen under Apper i Windows (AppId i fyrlys.iss)
+  $uninstall = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{6E2B8C41-3F7A-4D2E-9B15-7C0A2F9D4E63}_is1'
+  if ($Version -and (Test-Path -LiteralPath $uninstall)) {
+    Set-ItemProperty -LiteralPath $uninstall -Name DisplayVersion -Value $Version -ErrorAction SilentlyContinue
+  }
   Set-Content -LiteralPath $result -Value 'ok' -Encoding UTF8
   Write-Log 'Ferdig'
 } catch {
