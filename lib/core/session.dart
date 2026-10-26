@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../l10n/tr.dart';
 import 'cache.dart';
 import 'languages.dart';
 import 'm3u_source.dart';
@@ -45,9 +46,28 @@ class SavedLogin {
 
 /// Tilstanden i appen: kilden du er logget inn på, kanallista, favoritter, «sist sett» og lys/mørk.
 class Session extends ChangeNotifier {
-  Session(this._prefs, {this.sourceFactory, this.listCache, SecretCodec? secrets})
+  Session(this._prefs, {this.sourceFactory, this.listCache, SecretCodec? secrets, this.systemLanguage = 'no'})
       : _secrets = secrets ?? SecretCodec.platform(),
-        themeMode = _themeFrom(_prefs.getString('theme'));
+        themeMode = _themeFrom(_prefs.getString('theme')) {
+    appLanguage = _effectiveLanguage(language);
+  }
+
+  /// språket Windows bruker ('no' eller 'en'); norsk i testene
+  final String systemLanguage;
+
+  /// Språket i appen: 'auto' (som Windows), 'no' eller 'en'.
+  String get language {
+    final v = _prefs.getString('language');
+    return v == 'no' || v == 'en' ? v! : 'auto';
+  }
+
+  String _effectiveLanguage(String value) => value == 'auto' ? systemLanguage : value;
+
+  void setLanguage(String value) {
+    unawaited(_prefs.setString('language', value));
+    appLanguage = _effectiveLanguage(value);
+    notifyListeners();
+  }
 
   final SharedPreferences _prefs;
 
@@ -468,8 +488,10 @@ class Session extends ChangeNotifier {
       unawaited(listCache?.write(_cacheKey(src), categories, channels));
       if (first) _prefetchEpg();
     } on SourceException catch (e) {
+      debugPrint('Listene: ${src.redact(e.message)}');
       if (source == src) error = e.message;
-    } on Object {
+    } on Object catch (e) {
+      debugPrint('Listene: ${src.redact('$e')}');
       // uventet svar (ikke en Xtream-server eller M3U-liste): vis en feil i stedet for en tom liste
       if (source == src) error = 'Uventet svar fra serveren da lista ble hentet';
     } finally {
@@ -676,6 +698,28 @@ class Session extends ChangeNotifier {
     unawaited(_prefs.setBool('deinterlace', prefs.deinterlace));
     unawaited(_prefs.setBool('smooth_motion', prefs.smooth));
     notifyListeners();
+  }
+
+  /// Bildeformatet og lydforsinkelsen for en kanal (huskes per innlogging, for de 300 siste kanalene).
+  ChannelView channelView(String channelId) => ChannelView.fromJson(_channelViews()[channelId]);
+
+  void saveChannelView(String channelId, ChannelView view) {
+    final m = _channelViews()..remove(channelId);
+    if (!view.isDefault) m[channelId] = view.toJson();
+    while (m.length > 300) {
+      m.remove(m.keys.first);
+    }
+    unawaited(_prefs.setString(_k('channel_view'), jsonEncode(m)));
+  }
+
+  Map<String, Object?> _channelViews() {
+    try {
+      final raw = jsonDecode(_prefs.getString(_k('channel_view')) ?? '{}');
+      if (raw is Map) return Map<String, Object?>.from(raw);
+    } on FormatException {
+      // begynner på nytt
+    }
+    return {};
   }
 
   /// Volumet i spilleren (0–100), som sist.

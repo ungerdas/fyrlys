@@ -6,8 +6,10 @@ import 'package:fyrlys/core/picture.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/theme.dart';
 import 'package:fyrlys/ui/channel_card.dart';
+import 'package:fyrlys/ui/mini_player.dart';
 import 'package:fyrlys/ui/playback.dart';
 import 'package:fyrlys/ui/player_page.dart';
+import 'package:fyrlys/ui/window_effects.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fakes.dart';
@@ -90,6 +92,25 @@ void main() {
     await _close(tester);
   });
 
+  testWidgets('leverandøren avviser kanalen: HTTP-koden i forklaringen', (tester) async {
+    final (session, source) = await _session();
+    final playback = await _openPlayer(tester, session);
+    source.streamCode = 407;
+    for (var i = 0; i < 2; i++) {
+      playback.fail('Failed to open http://example/101.ts');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+    }
+    playback.fail('Failed to open http://example/101.ts');
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Leverandøren avviser denne kanalen (HTTP 407)'), findsOneWidget);
+    expect(source.statusAsked, ['http://example/101.ts']);
+    expect(playback.playing, isFalse);
+    await _close(tester);
+  });
+
   testWidgets('bilde: deinterlacing på fra start, jevn bevegelse slås på i menyen og huskes', (tester) async {
     final (session, _) = await _session();
     final playback = await _openPlayer(tester, session);
@@ -109,6 +130,88 @@ void main() {
     await tester.pumpAndSettle();
     expect(playback.pictures.last, const PicturePrefs(deinterlace: false, smooth: true));
     await _close(tester);
+  });
+
+  testWidgets('bildeformat og lydforsinkelse: Z og menyen, huskes for kanalen', (tester) async {
+    final (session, _) = await _session();
+    final playback = await _openPlayer(tester, session);
+    expect(playback.format, PictureFormat.original);
+    expect(playback.audioDelays, isEmpty);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.pump();
+    expect(playback.format, PictureFormat.zoom);
+    expect(find.text('Bildeformat: Fyll skjermen'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Lydspor og undertekster'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bildeformat: Fyll skjermen …'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('format-classic')));
+    await tester.pumpAndSettle();
+    expect(playback.format, PictureFormat.classic);
+
+    await tester.tap(find.byTooltip('Lydspor og undertekster'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lydforsinkelse: 0 ms …'));
+    await tester.pumpAndSettle();
+    expect(find.text('Huskes for denne kanalen.'), findsOneWidget);
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.byTooltip('Senere'));
+      await tester.pump();
+    }
+    expect(tester.widget<Text>(find.byKey(const ValueKey('audio-delay-value'))).data, '+150 ms');
+    expect(playback.audioDelays.last, const Duration(milliseconds: 150));
+    await tester.tap(find.text('Ferdig'));
+    await tester.pumpAndSettle();
+    const nrk = ChannelView(format: PictureFormat.classic, audioDelay: Duration(milliseconds: 150));
+    expect(session.channelView('101'), nrk);
+
+    // en annen kanal: som den sendes; tilbake igjen: som du valgte
+    await tester.tap(find.text('TV 2 HD'));
+    await _settle(tester);
+    expect(playback.urls.last, 'http://example/102.ts');
+    expect(playback.format, PictureFormat.original);
+    expect(playback.audioDelays.last, Duration.zero);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await _settle(tester);
+    expect(playback.urls.last, 'http://example/101.ts');
+    expect(playback.format, PictureFormat.classic);
+    expect(playback.audioDelays.last, const Duration(milliseconds: 150));
+    await _close(tester);
+  });
+
+  testWidgets('minispilleren: I gir bare bildet i et lite vindu, Esc tilbake', (tester) async {
+    final (session, _) = await _session();
+    final playback = await _openPlayer(tester, session);
+    expect(find.text('Søk i lista'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyI);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(MiniWindow.instance.active, isTrue);
+    expect(find.byType(MiniControls), findsOneWidget);
+    expect(find.text('Søk i lista'), findsNothing);
+    expect(find.text('Dagsrevyen'), findsNothing);
+    // lyden av i minispilleren
+    await tester.tap(find.byTooltip('Lyd av (M)'));
+    await tester.pump();
+    expect(playback.volume, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(MiniWindow.instance.active, isFalse);
+    expect(find.byType(MiniControls), findsNothing);
+    expect(find.text('Søk i lista'), findsOneWidget);
+
+    // knappen, og spilleren lukkes mens den er liten: vinduet blir stort igjen
+    await tester.tap(find.byTooltip('Minispiller (I)'));
+    await tester.pump();
+    expect(MiniWindow.instance.active, isTrue);
+    await _close(tester);
+    expect(MiniWindow.instance.active, isFalse);
   });
 
   testWidgets('spilleren: bildet, programinfo under og kanallista ved siden av', (tester) async {

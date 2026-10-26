@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/app.dart';
 import 'package:fyrlys/core/session.dart';
+import 'package:fyrlys/ui/mini_player.dart';
 import 'package:fyrlys/ui/playback.dart';
 import 'package:fyrlys/ui/vod_detail_page.dart';
 import 'package:fyrlys/ui/vod_player_page.dart';
+import 'package:fyrlys/ui/window_effects.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fakes.dart';
@@ -79,6 +81,59 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
     expect(fake.seeks, [const Duration(seconds: 10)]);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('filmen kan ikke spilles: to nye forsøk, så HTTP-koden fra leverandøren', (tester) async {
+    final (session, source) = await _start(tester);
+    final fake = _fakePlayback();
+    source.streamCode = 404;
+    await tester.pumpWidget(MaterialApp(
+      home: VodPlayerPage(
+        session: session,
+        items: const [VodPlayItem(key: 'film:201', title: 'Fyrlyset', url: 'http://example/movie/201.mkv')],
+      ),
+    ));
+    await _settle(tester);
+    for (var i = 0; i < 2; i++) {
+      fake.fail('Failed to open http://example/movie/201.mkv');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+    }
+    expect(fake.urls, hasLength(3));
+    fake.fail('Failed to open http://example/movie/201.mkv');
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Finnes ikke hos leverandøren (HTTP 404)'), findsOneWidget);
+    expect(source.statusAsked, ['http://example/movie/201.mkv']);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('filmspilleren: minispiller med I, tilbake med Esc', (tester) async {
+    final (session, _) = await _start(tester);
+    _fakePlayback();
+    await tester.pumpWidget(MaterialApp(
+      home: VodPlayerPage(
+        session: session,
+        items: const [VodPlayItem(key: 'film:201', title: 'Fyrlyset', url: 'http://example/movie/201.mkv')],
+      ),
+    ));
+    await _settle(tester);
+    expect(find.byTooltip('10 sekunder fram (→)'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyI);
+    await tester.pump();
+    expect(MiniWindow.instance.active, isTrue);
+    expect(find.byType(MiniControls), findsOneWidget);
+    expect(find.byTooltip('10 sekunder fram (→)'), findsNothing);
+    expect(find.text('Fyrlyset'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(MiniWindow.instance.active, isFalse);
+    expect(find.byType(MiniControls), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();

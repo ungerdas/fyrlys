@@ -1,7 +1,9 @@
-import 'dart:ffi';
+import 'dart:ffi' hide Size;
 import 'dart:io';
+import 'dart:ui' show Offset, Rect, Size;
 
 import 'package:ffi/ffi.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 // Windows: animasjonene når vinduet maksimeres og gjenopprettes slås av mens Fyrlys går inn og ut av fullskjerm.
@@ -114,5 +116,81 @@ class WindowFullscreen {
     }
 
     return _queue = _queue.then((_) => withoutWindowAnimations(step));
+  }
+}
+
+/// Minispilleren: vinduet blir lite, uten tittellinje, nederst til høyre på skjermen det står på, og alltid øverst.
+/// Størrelsen og plassen fra før (og om det var maksimert) kommer tilbake etterpå. Ett steg om gangen.
+class MiniWindow {
+  MiniWindow._();
+
+  static final instance = MiniWindow._();
+
+  static const size = Size(480, 270);
+  static const _margin = 24.0;
+
+  /// det vinduet sist ble bedt om (WindowMemory lagrer ikke størrelsen så lenge det er lite)
+  bool get active => _on;
+  bool _on = false;
+
+  Rect? _bounds;
+  bool _wasMaximized = false;
+  Future<void> _queue = Future.value();
+
+  Future<void> set(bool on) {
+    if (on == _on) return _queue;
+    _on = on;
+    Future<void> step() async {
+      try {
+        if (on) {
+          await WindowFullscreen.instance.set(false);
+          _wasMaximized = await windowManager.isMaximized();
+          if (_wasMaximized) await windowManager.unmaximize();
+          final bounds = await windowManager.getBounds();
+          _bounds = bounds;
+          final area = await _workArea(bounds);
+          await windowManager.setTitleBarStyle(TitleBarStyle.hidden, windowButtonVisibility: false);
+          await windowManager.setBounds(Rect.fromLTWH(
+            area.right - size.width - _margin,
+            area.bottom - size.height - _margin,
+            size.width,
+            size.height,
+          ));
+          await windowManager.setAlwaysOnTop(true);
+        } else {
+          await windowManager.setAlwaysOnTop(false);
+          await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+          final bounds = _bounds;
+          if (bounds != null) await windowManager.setBounds(bounds);
+          if (_wasMaximized) {
+            _wasMaximized = false;
+            await windowManager.maximize();
+          }
+        }
+      } on Object {
+        // ikke tilgjengelig her (f.eks. i testene)
+      }
+    }
+
+    return _queue = _queue.then((_) => withoutWindowAnimations(step));
+  }
+
+  /// Skjermen der midten av vinduet er (uten oppgavelinja), ellers hovedskjermen.
+  static Future<Rect> _workArea(Rect window) async {
+    Rect area(Display d) => (d.visiblePosition ?? Offset.zero) & (d.visibleSize ?? d.size);
+    for (final d in await screenRetriever.getAllDisplays()) {
+      final a = area(d);
+      if (a.contains(window.center)) return a;
+    }
+    return area(await screenRetriever.getPrimaryDisplay());
+  }
+}
+
+/// Flytter vinduet med musa (minispilleren har ingen tittellinje).
+void dragWindow() {
+  try {
+    windowManager.startDragging().ignore();
+  } on Object {
+    // ikke tilgjengelig her
   }
 }

@@ -1,0 +1,10 @@
+name: Ønske
+description: Noe Fyrlys burde kunne
+body:
+  - type: textarea
+    id: hva
+    attributes:
+      label: Hva vil du kunne gjøre?
+      description: Og hvorfor, eller når du savner det.
+    validations:
+      required: true

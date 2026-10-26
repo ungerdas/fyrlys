@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
+import 'failure.dart' show httpStatus;
 import 'models.dart';
 import 'source.dart';
 import 'vod.dart';
@@ -536,6 +537,9 @@ class XtreamSource implements TvSource {
 
   /// brukernavn og passord i adressene til strømmene (kodet, så `#`, `/` og mellomrom virker)
   String get _creds => '${Uri.encodeComponent(user)}/${Uri.encodeComponent(password)}';
+
+  @override
+  Future<int?> streamStatus(String url) => httpStatus(_http, url, httpHeaders);
 
   @override
   String redact(String text) {

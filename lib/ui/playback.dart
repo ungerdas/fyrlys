@@ -81,7 +81,11 @@ abstract class Playback {
   /// «H.264 · 50 fps (deinterlacet) · maskinvaredekoding (d3d11va) · 8,1 Mbit/s · AC3 5.1»
   Future<String> describe();
 
-  Widget view();
+  /// Flytter lyden i forhold til bildet (positivt: lyden kommer senere). Gjelder til det settes på nytt.
+  Future<void> setAudioDelay(Duration delay);
+
+  /// bildet, i [format]
+  Widget view({PictureFormat format = PictureFormat.original});
 
   Future<void> dispose();
 }
@@ -364,9 +368,22 @@ class MpvPlayback implements Playback {
   }
 
   @override
-  Widget view() => Video(
+  Future<void> setAudioDelay(Duration delay) async {
+    final p = _player.platform;
+    if (p is! NativePlayer) return;
+    await _try(() => p.setProperty('audio-delay', (delay.inMilliseconds / 1000).toStringAsFixed(3)));
+  }
+
+  @override
+  Widget view({PictureFormat format = PictureFormat.original}) => Video(
         controller: _video,
         controls: NoVideoControls,
+        fit: switch (format) {
+          PictureFormat.zoom => BoxFit.cover,
+          PictureFormat.stretch => BoxFit.fill,
+          _ => BoxFit.contain,
+        },
+        aspectRatio: format.aspectRatio,
         // spilleren gir selv fra seg kanalen når appen legges bort, og starter den igjen etterpå
         pauseUponEnteringBackgroundMode: false,
       );

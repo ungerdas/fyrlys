@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import 'cache.dart' show stableHash;
+import 'failure.dart' show httpStatus;
 import 'models.dart';
 import 'source.dart';
 import 'vod.dart';
@@ -427,6 +428,9 @@ class M3uSource implements TvSource {
   String episodeUrl(Episode episode) => '';
 
   /// Brukernavn og passord i lenken (mange lister har dem) byttes med *** i det som vises eller logges.
+  @override
+  Future<int?> streamStatus(String url) => httpStatus(_http, url, httpHeaders);
+
   @override
   String redact(String text) {
     var out = text;

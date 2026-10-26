@@ -1,5 +1,18 @@
 # Endringer
 
+## v2.1.20
+
+- **Tydeligere feilmeldinger:** kan ikke en kanal (eller film) spilles, står det hvorfor når Fyrlys finner det ut:
+  at alle tilkoblingene i abonnementet er i bruk, eller at leverandøren avviser den, med svaret (HTTP-koden) den ga.
+- **Bildeformat:** original, fyll skjermen, strekk, 16:9 eller 4:3, i menyen for lydspor og undertekster, eller med Z.
+  På TV huskes det for hver kanal.
+- **Lydforsinkelse:** flytt lyden i forhold til bildet (opptil 2 sekunder hver vei) når de ikke går i takt. På TV
+  huskes den for hver kanal.
+- **Minispiller:** et lite vindu nederst til høyre som alltid ligger øverst, med bare bildet (I, eller knappen ved
+  fullskjerm). Dra i bildet for å flytte det; Esc eller dobbeltklikk gir det store vinduet tilbake.
+- **Feilrapport:** Innstillinger → Hjelp → «Lagre feilrapport» lagrer versjonen, innstillingene og loggen i
+  Nedlastinger, uten passord, brukernavn eller leverandøren, til å legge ved når du melder fra om en feil på GitHub.
+
 ## v2.1.19
 
 - Filinfoen i programmet (Egenskaper → Detaljer) sier bare «Fyrlys». Innstillingene og innloggingen ligger der de lå.

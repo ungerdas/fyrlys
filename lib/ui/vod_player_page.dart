@@ -5,12 +5,17 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/failure.dart';
 import '../core/names.dart';
+import '../core/picture.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../core/vod.dart';
+import '../l10n/tr.dart';
 import '../theme.dart';
 import 'language_dialog.dart';
+import 'mini_player.dart';
+import 'picture_dialogs.dart';
 import 'playback.dart';
 import 'window_effects.dart';
 
@@ -195,6 +200,7 @@ class _VodPlayerState extends State<_VodPlayer> {
     _focus.dispose();
     // åpnet fra TV-spilleren i fullskjerm: den fortsetter i fullskjerm, så vinduet blir der
     if (_full && !widget.page.startFull) unawaited(WindowFullscreen.instance.set(false));
+    if (_mini) unawaited(MiniWindow.instance.set(false));
     super.dispose();
   }
 
@@ -215,6 +221,7 @@ class _VodPlayerState extends State<_VodPlayer> {
 
   Future<void> _open({bool resume = true}) async {
     final item = _item;
+    debugPrint('Spiller ${item.key}');
     final start = resume ? _session.resumeAt(item.key) : null;
     if (item.archive != null) {
       if (start != null) _showFlash('Fortsetter fra ${formatDuration(start)}');
@@ -281,10 +288,21 @@ class _VodPlayerState extends State<_VodPlayer> {
       });
       return;
     }
+    final at = _index;
+    final url = _clip != null && _urls.isNotEmpty ? _urls[_urlIndex] : _item.url;
+    final fallback = tr('Kunne ikke spille av ({message}).', {'message': message});
     _set(() {
-      _status = 'Kunne ikke spille av ($message).';
+      _status = fallback;
       _buffering = false;
     });
+    // en bedre forklaring: alle tilkoblingene i bruk, eller leverandøren avviser den (med HTTP-koden)
+    final src = _session.source;
+    if (src == null) return;
+    unawaited(() async {
+      await _pb.stop();
+      final text = await explainFailure(src, url, fallback: fallback, channel: false);
+      if (mounted && at == _index && !_started && _status == fallback) _set(() => _status = text);
+    }());
   }
 
   /// Ferdig: husk at den er sett, og gå videre til neste episode.
@@ -550,6 +568,37 @@ class _VodPlayerState extends State<_VodPlayer> {
     _flashTimer = Timer(const Duration(milliseconds: 1400), () => _set(() => _flash = null));
   }
 
+  /// bildeformatet og lydforsinkelsen, så lenge spilleren er åpen
+  PictureFormat _format = PictureFormat.original;
+  Duration _audioDelay = Duration.zero;
+
+  /// minispilleren: et lite vindu alltid øverst, med bare bildet
+  bool _mini = false;
+
+  /// Minispilleren (I). Fra fullskjerm går det rett dit.
+  Future<void> _setMini(bool on) async {
+    if (on == _mini || !mounted) return;
+    setState(() {
+      _mini = on;
+      if (on) _full = false;
+    });
+    // MiniWindow tar vinduet ut av fullskjerm selv
+    await MiniWindow.instance.set(on);
+    if (!mounted) return;
+    _focus.requestFocus();
+    _wake();
+  }
+
+  void _setFormat(PictureFormat format) {
+    _set(() => _format = format);
+    _showFlash(tr('Bildeformat: {name}', {'name': formatName(format)}));
+  }
+
+  void _setAudioDelay(Duration delay) {
+    _set(() => _audioDelay = delay);
+    unawaited(_pb.setAudioDelay(delay));
+  }
+
   void _wake({bool stay = false}) {
     _hideTimer?.cancel();
     if (!_controls) _set(() => _controls = true);
@@ -560,6 +609,11 @@ class _VodPlayerState extends State<_VodPlayer> {
   }
 
   void _toggleFull() {
+    // minispilleren: tilbake til det store vinduet
+    if (_mini) {
+      unawaited(_setMini(false));
+      return;
+    }
     setState(() => _full = !_full);
     unawaited(WindowFullscreen.instance.set(_full));
     _wake();
@@ -619,12 +673,18 @@ class _VodPlayerState extends State<_VodPlayer> {
       _toggleMute();
     } else if (key == LogicalKeyboardKey.keyF) {
       _toggleFull();
+    } else if (key == LogicalKeyboardKey.keyZ) {
+      _setFormat(_format.next);
     } else if (key == LogicalKeyboardKey.keyN || key == LogicalKeyboardKey.pageDown || key == LogicalKeyboardKey.mediaTrackNext) {
       if (_hasNext) _go(_index + 1);
     } else if (key == LogicalKeyboardKey.keyP || key == LogicalKeyboardKey.pageUp || key == LogicalKeyboardKey.mediaTrackPrevious) {
       if (_hasPrev) _go(_index - 1);
+    } else if (key == LogicalKeyboardKey.keyI) {
+      unawaited(_setMini(!_mini));
     } else if (key == LogicalKeyboardKey.escape) {
-      if (_full) {
+      if (_mini) {
+        unawaited(_setMini(false));
+      } else if (_full) {
         _toggleFull();
       } else {
         _close();
@@ -643,7 +703,7 @@ class _VodPlayerState extends State<_VodPlayer> {
     final flash = _flash;
     final status = _status;
     return PopScope(
-      canPop: !_full,
+      canPop: !_full && !_mini,
       onPopInvokedWithResult: (didPop, _) {
         // lagres med en gang du går ut, så siden du kommer tilbake til («Fortsett fra …») er oppdatert, og strømmen
         // stopper med en gang (TV-spilleren under åpner kanalen igjen, og abonnementet har kanskje bare én tilkobling)
@@ -651,7 +711,7 @@ class _VodPlayerState extends State<_VodPlayer> {
           _save();
           unawaited(_pb.stop());
         }
-        if (!didPop && _full) _toggleFull();
+        if (!didPop && (_full || _mini)) _toggleFull();
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -672,12 +732,14 @@ class _VodPlayerState extends State<_VodPlayer> {
                     behavior: HitTestBehavior.opaque,
                     onTap: _onTap,
                     onDoubleTap: _toggleFull,
-                    child: _pb.view(),
+                    // minispilleren har ingen tittellinje: bildet flytter vinduet
+                    onPanStart: _mini ? (_) => dragWindow() : null,
+                    child: _pb.view(format: _format),
                   ),
                   if (_buffering && status == null) const IgnorePointer(child: Center(child: CircularProgressIndicator())),
                   if (flash != null)
                     Positioned(
-                      top: 96,
+                      top: _mini ? 44 : 96,
                       right: 20,
                       child: IgnorePointer(
                         child: Container(
@@ -695,12 +757,22 @@ class _VodPlayerState extends State<_VodPlayer> {
                       child: AnimatedOpacity(
                         opacity: showBars ? 1 : 0,
                         duration: const Duration(milliseconds: 250),
-                        child: Stack(
-                          children: [
-                            Positioned(left: 0, right: 0, top: 0, child: _topBar()),
-                            Positioned(left: 0, right: 0, bottom: 0, child: _bottomBar(compact: compact)),
-                          ],
-                        ),
+                        child: _mini
+                            ? MiniControls(
+                                title: _item.title,
+                                playing: _playing,
+                                muted: _muted,
+                                onPlayPause: _togglePlay,
+                                onMute: _toggleMute,
+                                onExpand: () => unawaited(_setMini(false)),
+                                onClose: _close,
+                              )
+                            : Stack(
+                                children: [
+                                  Positioned(left: 0, right: 0, top: 0, child: _topBar()),
+                                  Positioned(left: 0, right: 0, bottom: 0, child: _bottomBar(compact: compact)),
+                                ],
+                              ),
                       ),
                     ),
                   ),
@@ -854,6 +926,8 @@ class _VodPlayerState extends State<_VodPlayer> {
                   _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
                   if (!compact) _volumeSlider(volume),
                   _tracksButton(),
+                  if (!compact)
+                    _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
                   _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen, _full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
                       _toggleFull),
                 ],
@@ -912,6 +986,10 @@ class _VodPlayerState extends State<_VodPlayer> {
         session: _session,
         onOpen: () => _hideTimer?.cancel(),
         onClose: _wake,
+        format: _format,
+        onFormat: _setFormat,
+        audioDelay: _audioDelay,
+        onAudioDelay: _setAudioDelay,
       );
 
   Widget _card(String text) {

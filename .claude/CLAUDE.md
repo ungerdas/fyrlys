@@ -227,6 +227,29 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - `ui/window_memory.dart` (2.1.13) – `WindowMemory.restore` før `runApp`: størrelse/plass (`window` i
   shared_preferences, bare når tittellinja ligger på en skjerm, `screen_retriever`) og maksimert; lagres 600 ms etter
   flytting/endring, ikke i fullskjerm eller minimert (maksimert beholder den vanlige størrelsen).
+- `core/failure.dart` (2.1.20) – `explainFailure(src, url, fallback:, channel:)` når en strøm ikke kan spilles etter
+  forsøkene: `busyText` fra `account(fresh: true)` først, ellers `TvSource.streamStatus(url)` (GET, bare svaret leses;
+  `httpStatus` med kildens klient) og `refusedText(kode)` for 400 og over, ellers det mpv sa. Brukes av alle tre
+  spillerne (filmspilleren viser mpv-teksten straks og bytter den ut).
+- Bildeformat og lydforsinkelse (2.1.20, `core/picture.dart`: `PictureFormat` original/zoom/stretch/wide/classic,
+  `ChannelView`, `clampAudioDelay` ±2 s i steg på 50 ms): `Playback.view(format:)` (media_kit `Video(fit:, aspectRatio:)`)
+  og `Playback.setAudioDelay` (mpv `audio-delay`). TV-spilleren husker dem per kanal (`Session.channelView`/
+  `saveChannelView`, `channel_view@<innlogging>`, 300 kanaler), filmspilleren så lenge den er åpen. Valgene ligger i
+  `TracksButton` (`ui/picture_dialogs.dart`: `showFormatDialog`, `showAudioDelayDialog` som gjelder mens du drar), Z blar.
+- Minispiller (2.1.20): `MiniWindow` i `ui/window_effects.dart` (480×270 nederst til høyre på skjermen vinduet står på,
+  `TitleBarStyle.hidden`, `setAlwaysOnTop`; størrelse/maksimert tilbake etterpå; tar vinduet ut av fullskjerm først)
+  og `MiniControls` i `ui/mini_player.dart`. I TV- og filmspilleren (`_mini`, I, knappen ved fullskjerm; Esc,
+  dobbeltklikk og F gir stort vindu; dra i bildet = `dragWindow`). `_away` går ut av minispilleren før arkivet og
+  multiview. `WindowMemory` lagrer ikke mens den er aktiv. Ekte vindu er ikke prøvd.
+- Feilrapport (2.1.20): `core/app_log.dart` (`AppLog` med de 400 siste linjene fra `debugPrint`, `FlutterError` og
+  uventede feil, satt opp i `main.dart`; `scrub` fjerner vertsnavn, IP, `/live|movie|series|timeshift/<bruker>/<passord>`,
+  `username=`/`password=`, e-post og `C:\Users\<navn>`), `core/report.dart` (`buildReport`: versjon, Windows, antall og
+  slag innlogginger (ikke navnene), abonnementet, listene, innstillingene, loggen og slutten av oppdateringsloggen;
+  `saveReport` i Nedlastinger, `showInExplorer`, `openUrl` byttes ut i testene). Innstillinger → Hjelp. Skjemaene for
+  GitHub-saker ligger i `.github/ISSUE_TEMPLATE` (feil, ønske).
+- Språk (grunnlaget i 2.1.20, engelsk i 2.1.21): `l10n/tr.dart` (`tr('norsk tekst', {'navn': verdi})` slår opp i
+  `english` i `l10n/en.dart` når `appLanguage` er 'en'; norsken er nøkkelen), `Session.language` ('auto'/'no'/'en' i
+  `language`) og `systemLanguage` fra Windows (`languageOfLocale`). Nye tekster skrives med `tr()`.
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
 - Tester i `test/`: navn, Xtream-kilden (også arkivet: klokka, tidene, `parseArchive`, adressene), M3U-kilden og
   innloggingen (`m3u_source_test.dart`, med MockClient og `http.runWithClient`; også krypteringen av innloggingen),
@@ -331,6 +354,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   «Fyrlys», kommentarene viser ikke til nettversjonen, notatene uten navn og serverrepo. Git-historikken har fortsatt
   en lokal adresse og et maskinnavn i gamle commits (ingen passord eller leverandør); å fjerne dem krever at
   historikken skrives om.
+- 26.10.2026: 2.1.20 (eierens valg 4, 5, 11 og 13 fra lista over forbedringer; 3, engelsk, kommer i 2.1.21):
+  tydeligere feilmeldinger med HTTP-koden, bildeformat og lydforsinkelse, minispiller, feilrapport og skjemaer for
+  GitHub-saker. Testet med tester; mpv-egenskapene, minivinduet og Utforsker/nettleser fra appen er ikke prøvd på Windows.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

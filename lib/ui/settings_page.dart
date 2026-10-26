@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../build_info.dart';
 import '../core/models.dart';
+import '../core/report.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../core/updater.dart';
+import '../l10n/tr.dart';
 import 'language_dialog.dart';
 import 'login_page.dart';
 import 'motion.dart';
@@ -164,6 +166,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: 'Oppdateringer',
                   children: [ListenableBuilder(listenable: u, builder: (context, _) => _updates(u))],
                 ),
+              _Section(title: tr('Hjelp'), children: _help()),
               Padding(
                 padding: const EdgeInsets.only(top: 24),
                 child: Text(
@@ -293,6 +296,43 @@ class _SettingsPageState extends State<SettingsPage> {
             : null,
         onTap: s.loading ? null : () => unawaited(_reload()),
       );
+
+  // ── hjelp ──
+
+  bool _reporting = false;
+
+  Future<void> _saveReport() async {
+    setState(() => _reporting = true);
+    try {
+      final file = await saveReport(await buildReport(s, updater: widget.updater));
+      if (!mounted) return;
+      _snack(tr('Feilrapporten er lagret: {name}', {'name': file.uri.pathSegments.last}));
+      unawaited(showInExplorer(file.path));
+    } on Object catch (e) {
+      if (mounted) _snack(tr('Fikk ikke lagret feilrapporten ({error}).', {'error': e}));
+    } finally {
+      if (mounted) setState(() => _reporting = false);
+    }
+  }
+
+  List<Widget> _help() => [
+        ListTile(
+          leading: const Icon(Icons.bug_report_outlined),
+          title: Text(tr('Lagre feilrapport')),
+          subtitle: Text(tr('Versjonen, innstillingene og loggen, uten passord og leverandør. Legg den ved når du '
+              'melder fra om en feil.')),
+          trailing: _reporting
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              : null,
+          onTap: _reporting ? null : () => unawaited(_saveReport()),
+        ),
+        ListTile(
+          leading: const Icon(Icons.open_in_new),
+          title: Text(tr('Meld fra om en feil')),
+          subtitle: Text(tr('På GitHub (krever en konto der)')),
+          onTap: () => unawaited(openUrl('https://github.com/$appRepo/issues/new/choose')),
+        ),
+      ];
 
   Widget _updates(Updater u) {
     final info = u.available;

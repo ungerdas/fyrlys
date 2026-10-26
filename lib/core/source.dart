@@ -93,6 +93,9 @@ abstract class TvSource {
   /// Tekst som skal vises eller logges (f.eks. en feil fra mpv med hele adressen): uten brukernavn og passord.
   String redact(String text);
 
+  /// HTTP-koden leverandøren svarer med på en strømadresse (null når ingen svarer), for å forklare en feil
+  Future<int?> streamStatus(String url);
+
   /// det som lagres for å koble til igjen neste gang
   Map<String, String> toPrefs();
 

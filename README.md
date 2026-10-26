@@ -26,6 +26,7 @@ Fyrlys spiller abonnementet ditt hos en IPTV-leverandør, med M3U-lenke eller Xt
 - Filmer og serier med «Fortsett å se» (Xtream Codes)
 - Flere innlogginger, hver med sine egne favoritter, og multiview med en kanal fra hvert abonnement
 - mpv som avspiller: de fleste formater, lydspor og undertekster
+- Minispiller som ligger øverst, bildeformat og lydforsinkelse per kanal
 - Oppdaterer seg selv
 
 ## Kom i gang
@@ -34,6 +35,8 @@ Fyrlys spiller abonnementet ditt hos en IPTV-leverandør, med M3U-lenke eller Xt
    (Windows 10 og 11). Advarer Windows, velg *Mer informasjon → Kjør likevel*.
 2. Logg inn med M3U-lenken eller Xtream-innloggingen fra leverandøren. Den lagres kryptert, bare på PC-en.
 3. Innstillingene ligger under tannhjulet øverst.
+
+Noe som ikke virker? Lagre en feilrapport (tannhjulet → Hjelp) og [meld fra](https://github.com/ungerdas/fyrlys/issues/new/choose).
 
 Vil du ikke installere, kan du bruke [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip) i stedet.
 
@@ -47,8 +50,11 @@ Vil du ikke installere, kan du bruke [`Fyrlys-windows.zip`](https://github.com/u
 | ← / → | 10 sekunder tilbake og fram |
 | Mellomrom | pause |
 | F | fullskjerm |
+| I | minispiller |
+| Z | bildeformat |
 | C | kanallista |
 | A | TV-arkivet |
+| V | multiview |
 | Esc | tilbake |
 
 </details>

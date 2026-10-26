@@ -5,10 +5,12 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/failure.dart';
 import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
 import '../core/source.dart';
+import '../l10n/tr.dart';
 import '../theme.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
@@ -259,16 +261,14 @@ class _MultiviewState extends State<_Multiview> {
       });
       return;
     }
+    final url = t.urls[s.url];
     unawaited(() async {
-      String? busy;
-      try {
-        busy = busyText(await s.source.account(fresh: true).timeout(const Duration(seconds: 8)));
-      } on Object {
-        busy = null;
-      }
+      await s.pb.stop();
+      final text = await explainFailure(s.source, url,
+          fallback: tr('Kanalen kunne ikke spilles ({message}).', {'message': message}));
       if (my != s.seq) return;
       _set(() {
-        s.error = busy ?? 'Kanalen kunne ikke spilles ($message).';
+        s.error = text;
         s.buffering = false;
       });
     }());

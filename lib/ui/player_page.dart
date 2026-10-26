@@ -6,17 +6,22 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/failure.dart';
 import '../core/models.dart';
 import '../core/names.dart';
+import '../core/picture.dart';
 import '../core/session.dart';
 import '../core/source.dart';
+import '../l10n/tr.dart';
 import '../theme.dart';
 import 'archive_page.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
 import 'language_dialog.dart';
+import 'mini_player.dart';
 import 'motion.dart';
 import 'multiview_page.dart';
+import 'picture_dialogs.dart';
 import 'playback.dart';
 import 'side_list.dart';
 import 'vod_player_page.dart';
@@ -89,6 +94,12 @@ class _PlayerState extends State<_Player> {
   /// kanalen du så før denne (⇄ / Backspace)
   ({List<Channel> list, int index})? _last;
   Channel? _opened;
+
+  /// bildeformatet og lydforsinkelsen for kanalen som spilles (huskes per kanal)
+  ChannelView _view = const ChannelView();
+
+  /// minispilleren: et lite vindu alltid øverst, med bare bildet
+  bool _mini = false;
   int _seq = 0;
   PlayTarget? _target;
   int _url = 0;
@@ -221,6 +232,7 @@ class _PlayerState extends State<_Player> {
     _searchFocus.dispose();
     _sideFocus.dispose();
     if (_shownFull == true) unawaited(_windowFull(false));
+    if (_mini) unawaited(MiniWindow.instance.set(false));
     super.dispose();
   }
 
@@ -247,6 +259,9 @@ class _PlayerState extends State<_Player> {
     final my = ++_seq;
     final ch = _channel;
     _opened = ch;
+    final view = _session.channelView(ch.id);
+    if (view.audioDelay != _view.audioDelay) unawaited(_pb.setAudioDelay(view.audioDelay));
+    _view = view;
     _session.addRecent(ch);
     _loadEpg(ch);
     _probeTimer?.cancel();
@@ -264,6 +279,7 @@ class _PlayerState extends State<_Player> {
     try {
       final t = await src.open(ch);
       if (my != _seq || !mounted) return;
+      debugPrint('TV: kanal ${ch.id}');
       _target = t;
       _url = 0;
       await _pb.open(t.urls.first, src.httpHeaders);
@@ -305,27 +321,20 @@ class _PlayerState extends State<_Player> {
       });
       return;
     }
+    final url = _target!.urls[_url];
     Timer(const Duration(seconds: 4), () async {
       if (!mounted || my != _seq || _started || _status != null) return;
-      unawaited(_pb.stop());
-      final busy = await _busy();
+      await _pb.stop();
+      final src = _source;
+      final fallback = tr('Kanalen kunne ikke spilles ({message}).', {'message': message});
+      // alle tilkoblingene i bruk, eller leverandøren avviser kanalen (med HTTP-koden)
+      final text = src == null ? fallback : await explainFailure(src, url, fallback: fallback);
       if (!mounted || my != _seq || _started || _status != null) return;
       _set(() {
-        _status = busy ?? 'Kanalen kunne ikke spilles ($message).';
+        _status = text;
         _buffering = false;
       });
     });
-  }
-
-  /// En forklaring når leverandøren sier at alle tilkoblingene er i bruk (ellers null).
-  Future<String?> _busy() async {
-    final src = _source;
-    if (src == null) return null;
-    try {
-      return busyText(await src.account(fresh: true).timeout(const Duration(seconds: 8)));
-    } on Object {
-      return null;
-    }
   }
 
   /// Strømmen stoppet etter at den hadde startet. Åpne kanalen på nytt via kilden (så «alle tilkoblinger
@@ -585,7 +594,29 @@ class _PlayerState extends State<_Player> {
     _flashTimer = Timer(const Duration(milliseconds: 1200), () => _set(() => _flash = null));
   }
 
+  /// Bildeformatet for kanalen (Z blar gjennom dem).
+  void _setFormat(PictureFormat format) {
+    final ch = _opened;
+    if (ch == null) return;
+    setState(() => _view = _view.copyWith(format: format));
+    _session.saveChannelView(ch.id, _view);
+    _showFlash(tr('Bildeformat: {name}', {'name': formatName(format)}));
+  }
+
+  void _setAudioDelay(Duration delay) {
+    final ch = _opened;
+    if (ch == null) return;
+    _set(() => _view = _view.copyWith(audioDelay: delay));
+    _session.saveChannelView(ch.id, _view);
+    unawaited(_pb.setAudioDelay(delay));
+  }
+
   void _toggleFull() {
+    // minispilleren: tilbake til det store vinduet
+    if (_mini) {
+      unawaited(_setMini(false));
+      return;
+    }
     setState(() {
       _full = !_full;
       if (!_full) _sideOpen = false;
@@ -593,6 +624,34 @@ class _PlayerState extends State<_Player> {
     _focus.requestFocus();
     _wake();
   }
+
+  /// Minispilleren (I): vinduet blir lite og står øverst, med bare bildet. Fra fullskjerm går det rett dit.
+  Future<void> _setMini(bool on) async {
+    if (on == _mini || !mounted) return;
+    setState(() {
+      _mini = on;
+      if (on) {
+        _full = false;
+        _sideOpen = false;
+      }
+    });
+    // MiniWindow tar vinduet ut av fullskjerm selv
+    if (on) _shownFull = false;
+    await MiniWindow.instance.set(on);
+    if (!mounted) return;
+    _focus.requestFocus();
+    _wake();
+  }
+
+  Widget _miniOverlay() => MiniControls(
+        title: _channel.name,
+        playing: _playing,
+        muted: _muted,
+        onPlayPause: _togglePlay,
+        onMute: _toggleMute,
+        onExpand: () => unawaited(_setMini(false)),
+        onClose: _close,
+      );
 
   /// Vinduet følger fullskjermen.
   void _syncFull(bool full) {
@@ -745,6 +804,9 @@ class _PlayerState extends State<_Player> {
   /// Direktesendingen stopper mens du er i arkivet (abonnementet har kanskje bare én tilkobling), og starter igjen
   /// når du kommer tilbake.
   Future<void> _away(Future<void> Function() visit) async {
+    // arkivet og multiview får det store vinduet
+    if (_mini) await _setMini(false);
+    if (!mounted) return;
     _seq++;
     _zapTimer?.cancel();
     _pendingZap = null;
@@ -924,6 +986,8 @@ class _PlayerState extends State<_Player> {
       _toggleMute();
     } else if (key == LogicalKeyboardKey.keyF) {
       _toggleFull();
+    } else if (key == LogicalKeyboardKey.keyZ) {
+      _setFormat(_view.format.next);
     } else if (key == LogicalKeyboardKey.keyC || key == LogicalKeyboardKey.contextMenu) {
       _toggleSide();
     } else if (key == LogicalKeyboardKey.keyA && _hasArchive) {
@@ -932,8 +996,12 @@ class _PlayerState extends State<_Player> {
       unawaited(_openMultiview());
     } else if (key == LogicalKeyboardKey.backspace) {
       _lastChannel();
+    } else if (key == LogicalKeyboardKey.keyI) {
+      unawaited(_setMini(!_mini));
     } else if (key == LogicalKeyboardKey.escape) {
-      if (_sideOpen) {
+      if (_mini) {
+        unawaited(_setMini(false));
+      } else if (_sideOpen) {
         _toggleSide();
       } else if (_full) {
         _toggleFull();
@@ -989,14 +1057,17 @@ class _PlayerState extends State<_Player> {
       });
     }
     final wide = size.width >= 860;
-    final stageWidth = full ? size.width : (wide ? size.width - 404 - pad.horizontal : size.width - pad.horizontal);
+    final stageWidth =
+        full || _mini ? size.width : (wide ? size.width - 404 - pad.horizontal : size.width - pad.horizontal);
     final stage = KeyedSubtree(
       key: _stageKey,
       child: _stage(full: full, compact: stageWidth < 680),
     );
     final scheme = Theme.of(context).colorScheme;
     final Widget body;
-    if (full) {
+    if (_mini) {
+      body = stage;
+    } else if (full) {
       body = Stack(
         fit: StackFit.expand,
         children: [
@@ -1059,14 +1130,16 @@ class _PlayerState extends State<_Player> {
       );
     }
     return PopScope(
-      canPop: !_full && !_sideOpen,
+      canPop: !_full && !_sideOpen && !_mini,
       onPopInvokedWithResult: (didPop, _) {
         // ut av spilleren: strømmen stopper med en gang (ikke først når siden er borte), så tilkoblingen er ledig
         if (didPop) {
           unawaited(_pb.stop());
           return;
         }
-        if (_sideOpen) {
+        if (_mini) {
+          unawaited(_setMini(false));
+        } else if (_sideOpen) {
           _toggleSide();
         } else if (_full) {
           _toggleFull();
@@ -1102,12 +1175,14 @@ class _PlayerState extends State<_Player> {
               behavior: HitTestBehavior.opaque,
               onTap: _onStageTap,
               onDoubleTap: _toggleFull,
-              child: _pb.view(),
+              // minispilleren har ingen tittellinje: bildet flytter vinduet
+              onPanStart: _mini ? (_) => dragWindow() : null,
+              child: _pb.view(format: _view.format),
             ),
             if (_buffering && status == null)
               const IgnorePointer(child: Center(child: CircularProgressIndicator())),
             if (flash != null && _digits.isEmpty)
-              Positioned(top: full ? 96 : 16, right: 20, child: IgnorePointer(child: _flashBadge(flash))),
+              Positioned(top: full ? 96 : (_mini ? 44 : 16), right: 20, child: IgnorePointer(child: _flashBadge(flash))),
             if (_digits.isNotEmpty)
               Positioned(top: full ? 96 : 16, right: 20, child: IgnorePointer(child: NumberBadge(digits: _digits))),
             // kanalinfoen ved bytte, over kontrollene når de vises
@@ -1128,7 +1203,7 @@ class _PlayerState extends State<_Player> {
                       child: child,
                     ),
                   ),
-                  child: _bannerVisible
+                  child: _bannerVisible && !_mini
                       ? KeyedSubtree(
                           key: ValueKey('banner:${(_pendingZap != null ? _list[_pendingZap!] : _channel).id}'),
                           child: _banner(compact: compact),
@@ -1144,7 +1219,7 @@ class _PlayerState extends State<_Player> {
                 child: AnimatedOpacity(
                   opacity: showBars ? 1 : 0,
                   duration: const Duration(milliseconds: 250),
-                  child: _overlay(full: full, compact: compact),
+                  child: _mini ? _miniOverlay() : _overlay(full: full, compact: compact),
                 ),
               ),
             ),
@@ -1298,6 +1373,8 @@ class _PlayerState extends State<_Player> {
                   if (!compact) _volumeSlider(volume),
                   if (full) _ctl(Icons.list, 'Kanaler (C)', _toggleSide, on: _sideOpen),
                   _tracksButton(),
+                  if (!compact || full)
+                    _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
                   _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen, full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
                       _toggleFull),
                 ],
@@ -1468,6 +1545,11 @@ class _PlayerState extends State<_Player> {
           _wake();
           _probe();
         },
+        format: _view.format,
+        onFormat: _setFormat,
+        audioDelay: _view.audioDelay,
+        onAudioDelay: _setAudioDelay,
+        viewNote: tr('Huskes for denne kanalen.'),
       );
 
   /// Kanalinfoen ved bytte, som på en TV-boks: logo, nummer, navn, og programmet nå og etterpå.

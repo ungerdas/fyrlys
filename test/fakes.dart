@@ -99,6 +99,16 @@ class FakeSource implements TvSource {
   @override
   String redact(String text) => text.replaceAll('hemmelig', '***');
 
+  /// det «leverandøren» svarer på strømadressene (null: ingen svar)
+  int? streamCode;
+  final statusAsked = <String>[];
+
+  @override
+  Future<int?> streamStatus(String url) async {
+    statusAsked.add(url);
+    return streamCode;
+  }
+
   // ── TV-arkivet: i går kveld, et program leverandøren ikke har, og det som går nå ──
 
   /// i dag kl. 20 for [daysAgo] dager siden (lokal tid)
@@ -343,8 +353,18 @@ class FakePlayback implements Playback {
   @override
   Future<String> describe() async => 'H.264 · AAC stereo';
 
+  /// lydforsinkelsene som er satt, og formatet bildet sist ble vist i
+  final audioDelays = <Duration>[];
+  PictureFormat? format;
+
   @override
-  Widget view() => const ColoredBox(color: Color(0xFF000000));
+  Future<void> setAudioDelay(Duration delay) async => audioDelays.add(delay);
+
+  @override
+  Widget view({PictureFormat format = PictureFormat.original}) {
+    this.format = format;
+    return const ColoredBox(color: Color(0xFF000000));
+  }
 
   @override
   Future<void> dispose() async {

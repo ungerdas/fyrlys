@@ -8,15 +8,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'build_info.dart';
+import 'core/app_log.dart';
 import 'core/cache.dart';
 import 'core/session.dart';
 import 'core/single_instance.dart';
 import 'core/updater.dart';
+import 'l10n/tr.dart';
 import 'ui/playback.dart';
 import 'ui/window_memory.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _keepLog();
   // En oppdatering som ble lastet ned, men ikke lagt inn da appen ble lukket, legges inn før appen vises;
   // den nye utgaven starter av seg selv.
   final updater = Updater();
@@ -44,9 +48,32 @@ Future<void> main() async {
   } on Object {
     // uten disk
   }
-  final session = Session(prefs, listCache: lists);
+  final session = Session(
+    prefs,
+    listCache: lists,
+    systemLanguage: languageOfLocale(WidgetsBinding.instance.platformDispatcher.locale.languageCode),
+  );
   runApp(FyrlysApp(session: session, updater: updater));
   unawaited(session.restore().then((_) => updater.start()));
+}
+
+/// Loggen til feilrapporten: alt som skrives med debugPrint, og feil ingen tok seg av.
+void _keepLog() {
+  final log = AppLog.instance..add('$appBuildLabel ${Platform.operatingSystemVersion}');
+  final original = debugPrint;
+  debugPrint = (message, {wrapWidth}) {
+    if (message != null) log.add(message);
+    original(message, wrapWidth: wrapWidth);
+  };
+  final flutterError = FlutterError.onError;
+  FlutterError.onError = (details) {
+    log.add('Feil: ${details.exceptionAsString()}');
+    flutterError?.call(details);
+  };
+  WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+    log.add('Feil: $error\n${stack.toString().split('\n').take(8).join('\n')}');
+    return false;
+  };
 }
 
 /// Vinduet fram, også når det var minimert.

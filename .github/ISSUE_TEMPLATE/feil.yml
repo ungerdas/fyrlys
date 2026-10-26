@@ -1,0 +1,34 @@
+name: Feil
+description: Noe virker ikke som det skal
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Takk for at du sier fra! Siden er offentlig: ikke skriv inn passord, M3U-lenker eller adressen til leverandøren.
+  - type: textarea
+    id: hva
+    attributes:
+      label: Hva skjedde?
+      description: Og hva du ventet skulle skje. Skjermbilder hjelper.
+    validations:
+      required: true
+  - type: textarea
+    id: steg
+    attributes:
+      label: Hvordan får man det til?
+      placeholder: |
+        1. Åpne …
+        2. Trykk på …
+  - type: input
+    id: versjon
+    attributes:
+      label: Versjon
+      description: Står nederst i innstillingene (tannhjulet øverst).
+      placeholder: Fyrlys 2.1.20
+  - type: textarea
+    id: rapport
+    attributes:
+      label: Feilrapport
+      description: >-
+        I Fyrlys: tannhjulet → Hjelp → «Lagre feilrapport». Fila havner i Nedlastinger; dra den hit. Den har ikke
+        med passord, brukernavn eller leverandøren, men se gjerne over den først.

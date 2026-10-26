@@ -6,6 +6,8 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'window_effects.dart';
+
 /// Vinduet åpner der det var sist: samme størrelse og plassering, og maksimert hvis det var det. Fullskjerm huskes
 /// ikke (det er noe du velger i spilleren), og et vindu som ville havnet utenfor skjermene, får standardplassen.
 class WindowMemory with WindowListener {
@@ -68,7 +70,8 @@ class WindowMemory with WindowListener {
 
   Future<void> _store() async {
     try {
-      // i fullskjerm og minimert er ikke størrelsen den vanlige
+      // i fullskjerm, minimert og som minispiller er ikke størrelsen den vanlige
+      if (MiniWindow.instance.active) return;
       if (await windowManager.isFullScreen() || await windowManager.isMinimized()) return;
       final maximized = await windowManager.isMaximized();
       // maksimert: behold den vanlige størrelsen fra før, så vinduet blir riktig når det gjøres vanlig igjen

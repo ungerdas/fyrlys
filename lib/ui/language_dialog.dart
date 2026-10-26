@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/languages.dart';
+import '../core/picture.dart';
 import '../core/session.dart';
+import '../l10n/tr.dart';
+import 'picture_dialogs.dart';
 import 'playback.dart';
 
 /// Velg språkene du foretrekker for lydspor og undertekster. Lagres i [session]; svaret er om noe ble lagret.
@@ -116,7 +119,18 @@ class _LanguageDialogState extends State<_LanguageDialog> {
 /// Lydspor og undertekster i spillerne: sporene i det som spilles (det som er valgt nå, er huket av), og
 /// «Foretrukne språk …» nederst.
 class TracksButton extends StatelessWidget {
-  const TracksButton({super.key, required this.playback, required this.session, this.onOpen, this.onClose});
+  const TracksButton({
+    super.key,
+    required this.playback,
+    required this.session,
+    this.onOpen,
+    this.onClose,
+    this.format,
+    this.onFormat,
+    this.audioDelay,
+    this.onAudioDelay,
+    this.viewNote,
+  });
 
   final Playback playback;
   final Session session;
@@ -125,9 +139,20 @@ class TracksButton extends StatelessWidget {
   final VoidCallback? onOpen;
   final VoidCallback? onClose;
 
+  /// bildeformatet og lydforsinkelsen i spilleren (valgene vises bare når de er med)
+  final PictureFormat? format;
+  final ValueChanged<PictureFormat>? onFormat;
+  final Duration? audioDelay;
+  final ValueChanged<Duration>? onAudioDelay;
+
+  /// under lydforsinkelsen, f.eks. at den huskes for kanalen
+  final String? viewNote;
+
   static const _languages = 'språk';
   static const _deinterlace = 'deinterlace';
   static const _smooth = 'jevn';
+  static const _format = 'format';
+  static const _delay = 'lydforsinkelse';
 
   Future<void> _show(BuildContext context) async {
     onOpen?.call();
@@ -169,6 +194,16 @@ class TracksButton extends StatelessWidget {
           checked: picture.smooth,
           child: const Text('Jevn bevegelse (prøve)'),
         ),
+        if (format != null && onFormat != null)
+          PopupMenuItem<Object>(
+            value: _format,
+            child: Text(tr('Bildeformat: {name} …', {'name': formatName(format!)})),
+          ),
+        if (audioDelay != null && onAudioDelay != null)
+          PopupMenuItem<Object>(
+            value: _delay,
+            child: Text(tr('Lydforsinkelse: {value} …', {'value': audioDelayText(audioDelay!)})),
+          ),
       ],
     );
     if (choice is TrackChoice) await playback.selectTrack(choice);
@@ -178,6 +213,13 @@ class TracksButton extends StatelessWidget {
           : picture.copyWith(smooth: !picture.smooth);
       session.savePicture(next);
       await playback.setPicture(next);
+    }
+    if (choice == _format && context.mounted) {
+      final f = await showFormatDialog(context, format!);
+      if (f != null) onFormat?.call(f);
+    }
+    if (choice == _delay && context.mounted) {
+      await showAudioDelayDialog(context, audioDelay!, (d) => onAudioDelay?.call(d), note: viewNote);
     }
     if (choice == _languages) {
       if (!context.mounted) return;
