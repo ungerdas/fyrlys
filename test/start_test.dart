@@ -194,14 +194,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Språk for lyd og undertekster'));
     await tester.pumpAndSettle();
-    // lyd: norsk, så engelsk; undertekster: norsk
-    await tester.tap(find.text('Norsk').first);
+    // lyd: norsk, så engelsk; undertekster: norsk (i dialogen: «Norsk» står også i språkvalget for appen under den)
+    Finder inDialog(String text) => find.descendant(of: find.byType(Dialog), matching: find.text(text));
+    await tester.tap(inDialog('Norsk').first);
     await tester.pump();
-    await tester.tap(find.text('Engelsk').first);
+    await tester.tap(inDialog('Engelsk').first);
     await tester.pump();
     expect(find.text('1. Norsk'), findsOneWidget);
     expect(find.text('2. Engelsk'), findsOneWidget);
-    await tester.tap(find.text('Norsk'));
+    await tester.tap(inDialog('Norsk'));
     await tester.pump();
     expect(find.text('1. Norsk'), findsNWidgets(2));
     await tester.tap(find.text('Lagre'));
