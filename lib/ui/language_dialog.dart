@@ -63,7 +63,7 @@ class _LanguageDialogState extends State<_LanguageDialog> {
     final head = theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700);
     final off = _subs.contains(LanguagePrefs.off);
     return AlertDialog(
-      title: const Text('Språk for lyd og undertekster'),
+      title: Text(tr('Språk for lyd og undertekster')),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -71,16 +71,16 @@ class _LanguageDialogState extends State<_LanguageDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Lydspor', style: head),
+              Text(tr('Lydspor'), style: head),
               const SizedBox(height: 4),
-              Text('Velg i den rekkefølgen du vil ha dem. Uten valg: det filmen eller kanalen selv har først.', style: dim),
+              Text(tr('Velg i den rekkefølgen du vil ha dem. Uten valg: det filmen eller kanalen selv har først.'), style: dim),
               const SizedBox(height: 10),
               _chips(_audio),
               const SizedBox(height: 22),
-              Text('Undertekster', style: head),
+              Text(tr('Undertekster'), style: head),
               const SizedBox(height: 4),
               Text(
-                'Slås på når lyden er på et annet språk. Uten valg: bare når filmen selv slår dem på.',
+                tr('Slås på når lyden er på et annet språk. Uten valg: bare når filmen selv slår dem på.'),
                 style: dim,
               ),
               const SizedBox(height: 10),
@@ -91,7 +91,7 @@ class _LanguageDialogState extends State<_LanguageDialog> {
                   FilterChip(
                     showCheckmark: false,
                     selected: off,
-                    label: const Text('Av'),
+                    label: Text(tr('Av')),
                     onSelected: (_) => setState(() {
                       _subs.clear();
                       if (!off) _subs.add(LanguagePrefs.off);
@@ -106,10 +106,10 @@ class _LanguageDialogState extends State<_LanguageDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Avbryt')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Avbryt'))),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(LanguagePrefs(audio: _audio, subtitles: _subs)),
-          child: const Text('Lagre'),
+          child: Text(tr('Lagre')),
         ),
       ],
     );
@@ -173,26 +173,26 @@ class TracksButton extends StatelessWidget {
       context: context,
       position: position,
       items: [
-        const PopupMenuItem<Object>(enabled: false, child: Text('Lydspor')),
-        if (tracks.audio.isEmpty) const PopupMenuItem<Object>(enabled: false, child: Text('Bare ett')),
+        PopupMenuItem<Object>(enabled: false, child: Text(tr('Lydspor'))),
+        if (tracks.audio.isEmpty) PopupMenuItem<Object>(enabled: false, child: Text(tr('Bare ett'))),
         for (final t in tracks.audio) CheckedPopupMenuItem<Object>(value: t, checked: t.selected, child: Text(t.label)),
         const PopupMenuDivider(),
-        const PopupMenuItem<Object>(enabled: false, child: Text('Undertekster')),
+        PopupMenuItem<Object>(enabled: false, child: Text(tr('Undertekster'))),
         for (final t in tracks.subtitles)
           CheckedPopupMenuItem<Object>(value: t, checked: t.selected, child: Text(t.label)),
         const PopupMenuDivider(),
-        const PopupMenuItem<Object>(value: _languages, child: Text('Foretrukne språk …')),
+        PopupMenuItem<Object>(value: _languages, child: Text(tr('Foretrukne språk …'))),
         const PopupMenuDivider(),
-        const PopupMenuItem<Object>(enabled: false, child: Text('Bilde')),
+        PopupMenuItem<Object>(enabled: false, child: Text(tr('Bilde'))),
         CheckedPopupMenuItem<Object>(
           value: _deinterlace,
           checked: picture.deinterlace,
-          child: const Text('Fjern striper (deinterlacing)'),
+          child: Text(tr('Fjern striper (deinterlacing)')),
         ),
         CheckedPopupMenuItem<Object>(
           value: _smooth,
           checked: picture.smooth,
-          child: const Text('Jevn bevegelse (prøve)'),
+          child: Text(tr('Jevn bevegelse (prøve)')),
         ),
         if (format != null && onFormat != null)
           PopupMenuItem<Object>(
@@ -232,7 +232,7 @@ class TracksButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IconButton(
-        tooltip: 'Lydspor og undertekster',
+        tooltip: tr('Lydspor og undertekster'),
         icon: const Icon(Icons.subtitles_outlined, color: Colors.white),
         onPressed: () => unawaited(_show(context)),
       );

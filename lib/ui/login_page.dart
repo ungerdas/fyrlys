@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/session.dart';
 import '../core/source.dart';
+import '../l10n/tr.dart';
 
 enum _Mode { m3u, xtream }
 
@@ -63,7 +64,7 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _message = 'Kunne ikke koble til. Sjekk lenken eller adressen.';
+          _message = tr('Kunne ikke koble til. Sjekk lenken eller adressen.');
         });
       }
     }
@@ -75,7 +76,7 @@ class _LoginPageState extends State<LoginPage> {
     final scheme = theme.colorScheme;
     final hint = TextStyle(color: scheme.onSurfaceVariant);
     return Scaffold(
-      appBar: widget.adding ? AppBar(title: const Text('Ny innlogging')) : null,
+      appBar: widget.adding ? AppBar(title: Text(tr('Ny innlogging'))) : null,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -100,16 +101,20 @@ class _LoginPageState extends State<LoginPage> {
                   if (widget.adding) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Den lagres ved siden av den du har, og du bytter mellom dem i innstillingene.',
+                      tr('Den lagres ved siden av den du har, og du bytter mellom dem i innstillingene.'),
                       textAlign: TextAlign.center,
                       style: hint,
                     ),
                   ],
                   const SizedBox(height: 24),
                   SegmentedButton<_Mode>(
-                    segments: const [
-                      ButtonSegment(value: _Mode.m3u, label: Text('M3U-lenke'), icon: Icon(Icons.playlist_play)),
-                      ButtonSegment(value: _Mode.xtream, label: Text('Xtream Codes'), icon: Icon(Icons.live_tv_outlined)),
+                    segments: [
+                      ButtonSegment(value: _Mode.m3u, label: Text(tr('M3U-lenke')), icon: const Icon(Icons.playlist_play)),
+                      const ButtonSegment(
+                        value: _Mode.xtream,
+                        label: Text('Xtream Codes'),
+                        icon: Icon(Icons.live_tv_outlined),
+                      ),
                     ],
                     selected: {_mode},
                     onSelectionChanged: _busy
@@ -122,8 +127,8 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 16),
                   if (_mode == _Mode.m3u) ...[
                     Text(
-                      'Lenken til kanallista fra leverandøren. Er det en Xtream-lenke (get.php med brukernavn og passord), '
-                      'får du også filmer og serier.',
+                      tr('Lenken til kanallista fra leverandøren. Er det en Xtream-lenke (get.php med brukernavn og '
+                          'passord), får du også filmer og serier.'),
                       style: hint,
                     ),
                     const SizedBox(height: 12),
@@ -132,7 +137,8 @@ class _LoginPageState extends State<LoginPage> {
                       enabled: !_busy,
                       autocorrect: false,
                       keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(labelText: 'M3U-lenke', hintText: 'http://server.no:8080/get.php?…'),
+                      decoration:
+                          InputDecoration(labelText: tr('M3U-lenke'), hintText: 'http://server.no:8080/get.php?…'),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -141,15 +147,15 @@ class _LoginPageState extends State<LoginPage> {
                       autocorrect: false,
                       keyboardType: TextInputType.url,
                       textInputAction: TextInputAction.go,
-                      decoration: const InputDecoration(
-                        labelText: 'EPG-lenke (valgfri)',
-                        hintText: 'XMLTV, .xml eller .xml.gz',
-                        helperText: 'Står den tom, brukes EPG-lenken i lista',
+                      decoration: InputDecoration(
+                        labelText: tr('EPG-lenke (valgfri)'),
+                        hintText: tr('XMLTV, .xml eller .xml.gz'),
+                        helperText: tr('Står den tom, brukes EPG-lenken i lista'),
                       ),
                       onSubmitted: (_) => _submit(),
                     ),
                   ] else ...[
-                    Text('Innloggingen du har fått fra IPTV-leverandøren (Xtream Codes).', style: hint),
+                    Text(tr('Innloggingen du har fått fra IPTV-leverandøren (Xtream Codes).'), style: hint),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _server,
@@ -164,7 +170,7 @@ class _LoginPageState extends State<LoginPage> {
                       enabled: !_busy,
                       autocorrect: false,
                       autofillHints: const [AutofillHints.username],
-                      decoration: const InputDecoration(labelText: 'Brukernavn'),
+                      decoration: InputDecoration(labelText: tr('Brukernavn')),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -173,7 +179,7 @@ class _LoginPageState extends State<LoginPage> {
                       obscureText: true,
                       autofillHints: const [AutofillHints.password],
                       textInputAction: TextInputAction.go,
-                      decoration: const InputDecoration(labelText: 'Passord'),
+                      decoration: InputDecoration(labelText: tr('Passord')),
                       onSubmitted: (_) => _submit(),
                     ),
                   ],
@@ -182,7 +188,7 @@ class _LoginPageState extends State<LoginPage> {
                     onPressed: _busy ? null : _submit,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text(_busy ? 'Kobler til …' : 'Logg inn'),
+                      child: Text(_busy ? tr('Kobler til …') : tr('Logg inn')),
                     ),
                   ),
                   if (_message != null)

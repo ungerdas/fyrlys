@@ -211,50 +211,50 @@ class _SettingsPageState extends State<SettingsPage> {
             key: ValueKey('innlogging:${l.id}'),
             leading: Icon(Icons.circle_outlined, color: scheme.onSurfaceVariant),
             title: Text(l.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${l.kindName} · trykk for å bytte'),
+            subtitle: Text(tr('{kind} · trykk for å bytte', {'kind': l.kindName})),
             onTap: () => unawaited(_switch(l)),
             trailing: _loginMenu(l),
           ),
       ListTile(
         leading: const Icon(Icons.add),
-        title: const Text('Legg til innlogging'),
-        subtitle: const Text('En annen leverandør eller et annet abonnement'),
+        title: Text(tr('Legg til innlogging')),
+        subtitle: Text(tr('En annen leverandør eller et annet abonnement')),
         onTap: _add,
       ),
       if (current != null)
         ListTile(
           leading: const Icon(Icons.logout),
-          title: Text('Logg ut av ${current.name}'),
+          title: Text(tr('Logg ut av {name}', {'name': current.name})),
           onTap: () => unawaited(_remove(current)),
         ),
     ];
   }
 
   Widget _loginMenu(SavedLogin l) => PopupMenuButton<String>(
-        tooltip: 'Mer om ${l.name}',
+        tooltip: tr('Mer om {name}', {'name': l.name}),
         onSelected: (v) {
           if (v == 'rename') unawaited(_rename(l));
           if (v == 'remove') unawaited(_remove(l));
         },
-        itemBuilder: (context) => const [
-          PopupMenuItem(value: 'rename', child: Text('Gi nytt navn')),
-          PopupMenuItem(value: 'remove', child: Text('Logg ut og fjern')),
+        itemBuilder: (context) => [
+          PopupMenuItem(value: 'rename', child: Text(tr('Gi nytt navn'))),
+          PopupMenuItem(value: 'remove', child: Text(tr('Logg ut og fjern'))),
         ],
       );
 
   Widget _theme() => ListTile(
         leading: const Icon(Icons.brightness_6_outlined),
-        title: const Text('Tema'),
+        title: Text(tr('Tema')),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Align(
             alignment: Alignment.centerLeft,
             child: SegmentedButton<ThemeMode>(
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: ThemeMode.system, label: Text('Som Windows')),
-                ButtonSegment(value: ThemeMode.dark, label: Text('Mørkt')),
-                ButtonSegment(value: ThemeMode.light, label: Text('Lyst')),
+              segments: [
+                ButtonSegment(value: ThemeMode.system, label: Text(tr('Som Windows'))),
+                ButtonSegment(value: ThemeMode.dark, label: Text(tr('Mørkt'))),
+                ButtonSegment(value: ThemeMode.light, label: Text(tr('Lyst'))),
               ],
               selected: {s.themeMode},
               onSelectionChanged: (v) => s.setThemeMode(v.first),
@@ -291,23 +291,23 @@ class _SettingsPageState extends State<SettingsPage> {
     return [
       ListTile(
         leading: const Icon(Icons.translate),
-        title: const Text('Språk for lyd og undertekster'),
-        subtitle: Text(languages.isEmpty ? 'Som filmen eller kanalen har dem' : languages.summary),
+        title: Text(tr('Språk for lyd og undertekster')),
+        subtitle: Text(languages.isEmpty ? tr('Som filmen eller kanalen har dem') : languages.summary),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => unawaited(showLanguageDialog(context, s)),
       ),
       SwitchListTile(
         secondary: const Icon(Icons.deblur_outlined),
-        title: const Text('Fjern striper (deinterlacing)'),
-        subtitle: const Text('For TV-kanaler som sendes interlacet (1080i). Bør stå på.'),
+        title: Text(tr('Fjern striper (deinterlacing)')),
+        subtitle: Text(tr('For TV-kanaler som sendes interlacet (1080i). Bør stå på.')),
         value: picture.deinterlace,
         onChanged: (v) => s.savePicture(picture.copyWith(deinterlace: v)),
       ),
       SwitchListTile(
         secondary: const Icon(Icons.motion_photos_on_outlined),
-        title: const Text('Jevn bevegelse (prøve)'),
-        subtitle: const Text('Tilpasser bildet til skjermens frekvens, så sport og panorering hakker mindre. '
-            'Virker ikke på alle PC-er.'),
+        title: Text(tr('Jevn bevegelse (prøve)')),
+        subtitle: Text(tr('Tilpasser bildet til skjermens frekvens, så sport og panorering hakker mindre. '
+            'Virker ikke på alle PC-er.')),
         value: picture.smooth,
         onChanged: (v) => s.savePicture(picture.copyWith(smooth: v)),
       ),
@@ -316,8 +316,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _lists() => ListTile(
         leading: const Icon(Icons.refresh),
-        title: const Text('Hent listene på nytt'),
-        subtitle: Text(s.loading ? 'Henter …' : 'Kanalene og kategoriene fra leverandøren (${s.channels.length} kanaler)'),
+        title: Text(tr('Hent listene på nytt')),
+        subtitle: Text(s.loading
+            ? tr('Henter …')
+            : s.channels.length == 1
+                ? tr('Kanalene og kategoriene fra leverandøren (1 kanal)')
+                : tr('Kanalene og kategoriene fra leverandøren ({n} kanaler)', {'n': s.channels.length})),
         trailing: s.loading
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
             : null,
@@ -362,21 +366,24 @@ class _SettingsPageState extends State<SettingsPage> {
       ];
 
   Widget _updates(Updater u) {
-    final info = u.available;
+    final label = u.available?.label;
     final subtitle = switch (u.state) {
-      UpdateState.checking => 'Ser etter …',
-      UpdateState.available => 'Ny versjon: ${info?.label ?? ''}',
-      UpdateState.downloading => 'Laster ned ${info?.label ?? 'ny versjon'} … ${(u.progress * 100).round()} %',
-      UpdateState.ready => '${info?.label ?? 'En ny versjon'} legges inn når du lukker Fyrlys',
-      UpdateState.failed => u.error ?? 'Oppdateringen feilet',
-      UpdateState.idle => 'Du har $appBuildLabel. Fyrlys ser selv etter nye versjoner.',
+      UpdateState.checking => tr('Ser etter …'),
+      UpdateState.available => tr('Ny versjon: {name}', {'name': label ?? ''}),
+      UpdateState.downloading => tr('Laster ned {name} … {percent} %',
+          {'name': label ?? tr('ny versjon'), 'percent': (u.progress * 100).round()}),
+      UpdateState.ready => label == null
+          ? tr('En ny versjon legges inn når du lukker Fyrlys')
+          : tr('{name} legges inn når du lukker Fyrlys', {'name': label}),
+      UpdateState.failed => u.error ?? tr('Oppdateringen feilet'),
+      UpdateState.idle => tr('Du har {version}. Fyrlys ser selv etter nye versjoner.', {'version': appBuildLabel}),
     };
     return ListTile(
       leading: const Icon(Icons.system_update_alt),
-      title: const Text('Se etter oppdateringer'),
+      title: Text(tr('Se etter oppdateringer')),
       subtitle: Text(subtitle),
       trailing: u.state == UpdateState.ready
-          ? FilledButton(onPressed: () => unawaited(u.restartNow()), child: const Text('Start på nytt nå'))
+          ? FilledButton(onPressed: () => unawaited(u.restartNow()), child: Text(tr('Start på nytt nå')))
           : null,
       onTap: u.state == UpdateState.checking || u.state == UpdateState.downloading
           ? null
@@ -442,17 +449,17 @@ class _RenameDialogState extends State<_RenameDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Gi nytt navn'),
+      title: Text(tr('Gi nytt navn')),
       content: TextField(
         controller: _text,
         autofocus: true,
         maxLength: 40,
-        decoration: const InputDecoration(labelText: 'Navn', hintText: 'F.eks. Hjemme eller Sport'),
+        decoration: InputDecoration(labelText: tr('Navn'), hintText: tr('F.eks. Hjemme eller Sport')),
         onSubmitted: (_) => _done(),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Avbryt')),
-        FilledButton(onPressed: _done, child: const Text('Lagre')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Avbryt'))),
+        FilledButton(onPressed: _done, child: Text(tr('Lagre'))),
       ],
     );
   }
