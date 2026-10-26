@@ -490,6 +490,7 @@ class _LastWatchedCardState extends State<LastWatchedCard> {
     final next = nn.next;
     if (cur == null) return const SizedBox.shrink();
     final left = cur.stop.difference(now);
+    final remaining = left.inMinutes >= 1 ? tr('{n} min igjen', {'n': left.inMinutes}) : tr('snart slutt');
     final dim = TextStyle(color: scheme.onSurfaceVariant, fontSize: 13.5);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -501,8 +502,7 @@ class _LastWatchedCardState extends State<LastWatchedCard> {
             style: TextStyle(fontSize: wide ? 17 : 15, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         Text(
-          '${hhmm(cur.start)}–${hhmm(cur.stop)}  ·  '
-          '${left.inMinutes >= 1 ? tr('{n} min igjen', {'n': left.inMinutes}) : tr('snart slutt')}',
+          '${hhmm(cur.start)}–${hhmm(cur.stop)}  ·  $remaining',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: dim,

@@ -143,8 +143,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _snack(info == null
           ? tr('Du har siste versjon ({version}).', {'version': appBuildLabel})
           : u.state == UpdateState.ready
-              ? tr('{name} er lastet ned og legges inn når du lukker Fyrlys.', {'name': info.label})
-              : tr('Fant {name}. Den lastes ned nå.', {'name': info.label}));
+              ? tr('{version} er lastet ned og legges inn når du lukker Fyrlys.', {'version': info.label})
+              : tr('Fant {version}. Den lastes ned nå.', {'version': info.label}));
     } on UpdateException catch (e) {
       if (mounted) _snack(tr('Fikk ikke sjekket oppdateringer: {error}', {'error': e.message}));
     }
@@ -369,12 +369,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final label = u.available?.label;
     final subtitle = switch (u.state) {
       UpdateState.checking => tr('Ser etter …'),
-      UpdateState.available => tr('Ny versjon: {name}', {'name': label ?? ''}),
-      UpdateState.downloading => tr('Laster ned {name} … {percent} %',
-          {'name': label ?? tr('ny versjon'), 'percent': (u.progress * 100).round()}),
+      UpdateState.available => tr('Ny versjon: {version}', {'version': label ?? ''}),
+      UpdateState.downloading => tr('Laster ned {version} … {percent} %',
+          {'version': label ?? tr('ny versjon'), 'percent': (u.progress * 100).round()}),
       UpdateState.ready => label == null
           ? tr('En ny versjon legges inn når du lukker Fyrlys')
-          : tr('{name} legges inn når du lukker Fyrlys', {'name': label}),
+          : tr('{version} legges inn når du lukker Fyrlys', {'version': label}),
       UpdateState.failed => u.error ?? tr('Oppdateringen feilet'),
       UpdateState.idle => tr('Du har {version}. Fyrlys ser selv etter nye versjoner.', {'version': appBuildLabel}),
     };

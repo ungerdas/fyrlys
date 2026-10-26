@@ -21,6 +21,9 @@ import 'ui/window_memory.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _keepLog();
+  // Språket fra Windows til Session har lest det du har valgt, så det oppdateringen sier før det, står på det.
+  final systemLanguage = languageOfLocale(WidgetsBinding.instance.platformDispatcher.locale.languageCode);
+  appLanguage = systemLanguage;
   // En oppdatering som ble lastet ned, men ikke lagt inn da appen ble lukket, legges inn før appen vises;
   // den nye utgaven starter av seg selv.
   final updater = Updater();
@@ -51,7 +54,7 @@ Future<void> main() async {
   final session = Session(
     prefs,
     listCache: lists,
-    systemLanguage: languageOfLocale(WidgetsBinding.instance.platformDispatcher.locale.languageCode),
+    systemLanguage: systemLanguage,
   );
   runApp(FyrlysApp(session: session, updater: updater));
   unawaited(session.restore().then((_) => updater.start()));

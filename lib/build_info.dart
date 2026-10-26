@@ -1,5 +1,7 @@
 // Versjon og bygg. GitHub Actions setter dem med --dart-define; tomme når du bygger selv.
 
+import 'l10n/tr.dart';
+
 const String appVersion = String.fromEnvironment('FYRLYS_VERSION');
 const String appBuild = String.fromEnvironment('FYRLYS_BUILD');
 const String appCommit = String.fromEnvironment('FYRLYS_COMMIT');
@@ -10,6 +12,6 @@ const String appRepo = String.fromEnvironment('FYRLYS_REPO', defaultValue: 'unge
 /// «Fyrlys 2.1.9»: bare versjonen. Byggnummeret og commiten brukes bare av oppdateringen og feilsøking.
 String get appBuildLabel {
   final version = appVersion.isEmpty ? '' : ' $appVersion';
-  if (appBuild.isEmpty) return 'Fyrlys$version (eget bygg)';
+  if (appBuild.isEmpty) return 'Fyrlys$version ${tr('(eget bygg)')}';
   return 'Fyrlys$version';
 }
