@@ -96,7 +96,7 @@ class EpgEntry {
 
 /// Leverandørens EPG kan ha samme program to ganger med litt ulike tider (to kilder), og programmer som overlapper.
 /// Samme tittel som overlapper, slås sammen; ellers slutter et program der det neste begynner. Starter to ulike
-/// programmer samtidig, beholdes det lengste. Som `clean_epg` på Fyrlys-serveren.
+/// programmer samtidig, beholdes det lengste.
 List<EpgEntry> cleanEpg(List<EpgEntry> list) {
   String key(String title) => title.trim().toLowerCase().split(RegExp(r'\s+')).join(' ');
   final sorted = [for (final e in list) if (e.stop.isAfter(e.start)) e]

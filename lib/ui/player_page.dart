@@ -22,14 +22,14 @@ import 'side_list.dart';
 import 'vod_player_page.dart';
 import 'window_effects.dart';
 
-/// Spilleren er alltid mørk, som på nettsiden.
+/// Spilleren er alltid mørk.
 final ThemeData _playerTheme = fyrlysTheme(Brightness.dark);
 
 const _ink2 = Color(0xFFB3C1CD);
 const _dim = Color(0xFF9FB0BB);
 const _sideBg = Color(0xF20B111A);
 
-/// Spilleren, som på nettsiden: bildet med kontroller og programinfo under, og kanallista ved siden av
+/// Spilleren: bildet med kontroller og programinfo under, og kanallista ved siden av
 /// (under på smale skjermer). Fullskjerm viser bare bildet, og kanallista kan da legges over det (C).
 /// mpv (via media_kit) spiller strømmen direkte. Brytes den, eller står bildet fast, prøver spilleren på nytt
 /// inntil tre ganger i minuttet. Pause og tilbakespoling i direktesendinger går i avspillerens eget buffer.
@@ -840,7 +840,7 @@ class _PlayerState extends State<_Player> {
 
   void _onStageTap() {
     if (_pointer == PointerDeviceKind.mouse) {
-      // med mus: pause, som på nettsiden
+      // med mus: pause
       if (_status == null) _togglePlay();
       return;
     }

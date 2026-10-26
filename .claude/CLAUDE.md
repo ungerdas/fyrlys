@@ -1,17 +1,19 @@
 # Fyrlys-appen – arbeidsnotater for Claude
 
-Egen app for Fyrlys, Pål-Eriks IPTV-spiller: Flutter med media_kit (mpv) som avspiller, **bare for Windows**
-(Pål-Erik 26.10: «vi kjører kun Windows, fjerner alt Linux og Android»; i 2.1.12 er Android-bygget, `android/`,
+Egen app for Fyrlys, en IPTV-spiller: Flutter med media_kit (mpv) som avspiller, **bare for Windows**
+(eieren 26.10: «vi kjører kun Windows, fjerner alt Linux og Android»; i 2.1.12 er Android-bygget, `android/`,
 telefon-/TV-koden og et Linux-forsøk som aldri ble lagt ut, fjernet; det finnes i historikken). Den kommer **i tillegg til** Docker-versjonen
-(nettside + server med ffmpeg) i det private repoet `ungerdas/peagstreams`, som kjører på hjemmeserveren hans.
-Fra 2.1.6 (Pål-Erik 26.10: «Fyrlys server dropper vi») logger appen inn med M3U-lenke eller Xtream Codes og henter
+(nettside + server med ffmpeg) i et eget, privat repo.
+Fra 2.1.6 (eieren 26.10: «Fyrlys server dropper vi») logger appen inn med M3U-lenke eller Xtream Codes og henter
 alt rett fra leverandøren, og oppdateringene rett fra GitHub (fra 2.1.11 uten valg av oppdateringsserver); appen
 bruker ikke Fyrlys-serveren til noe.
-Ikke bland inn endringer der herfra. Repoet er **offentlig** (Pål-Erik åpnet det 26.10, så oppdateringene kommer
-rett fra GitHub): hold det fritt for detaljer om hjemmenettet hans, hemmeligheter og e-postadressen hans, verken i
-koden, testene, commit-meldingene eller disse notatene (eksempeladresser som 192.168.1.10 er greit). Noen gamle
+Ikke bland inn endringer der herfra. Repoet er **offentlig** (åpnet 26.10, så oppdateringene kommer rett fra
+GitHub), og appen skal kunne deles med andre (eieren 26.10: «Fyrlys på windows er noe jeg vil dele, så der kan det ikke
+være noe personlig»; appen og serverversjonen skal være helt adskilt). Hold appen, koden, testene, commit-meldingene,
+filinfoen i exe-en og disse notatene fri for navn, hjemmenett, maskinnavn, leverandør, brukernavn, hemmeligheter og
+e-postadresser (eksempeladresser som 192.168.1.10 er greit), og ikke vis til serverversjonen i koden. Noen gamle
 commits har en lokal adresse og et maskinnavn; historikken skrives ikke om. Repo-innstillinger (beskrivelse, emner)
-kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det under «About» på GitHub.
+kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under «About» på GitHub.
 `README.md` er forsiden på GitHub: skrevet for andre brukere, uten utviklernotater (de står her).
 
 ## Arbeidsmåte
@@ -23,24 +25,26 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   Loggene og artefaktene kan **ikke** lastes ned herfra (de ligger i blob-lagring som er stengt). Når et steg
   feiler, legger workflowen slutten av loggen som merknad; les den med
   `gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations` (jobb-id fra `gh run view <id> --json jobs`).
-- Windows-mappen lages av `flutter create --org no.peag --project-name fyrlys --platforms=windows` i hvert bygg. I
+- Windows-mappen lages av `flutter create --org no.fyrlys --project-name fyrlys --platforms=windows` i hvert bygg. I
   repoet ligger bare `windows/runner/resources/app_icon.ico` og `windows/installer/fyrlys.iss` (2.1.13, Inno Setup:
   `Fyrlys-oppsett.exe`, per bruker uten administrator i `{autopf}` = `%LOCALAPPDATA%\Programs\Fyrlys`, snarveier,
   norsk; AppId `{6E2B8C41-…}` må aldri endres, oppdater.ps1 setter `DisplayVersion` under den; ISCC fra choco hvis
   den mangler på løperen), og det skrives ikke over. Vindustittelen og filinfo
-  settes med `sed` i workflowen (`main.cpp`/`Runner.rc`). Ikonet er tegnet fra `fyrlys.svg` i nettversjonen.
-- Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva Pål-Erik må
+  settes med `sed` i workflowen (`main.cpp`/`Runner.rc`): alt er «Fyrlys» (2.1.19; før sto organisasjonen fra `--org`
+  i LegalCopyright). CompanyName og ProductName bestemmer mappen innstillingene ligger i (`%APPDATA%\Fyrlys\Fyrlys`),
+  så de må aldri endres; workflowen stopper om de ikke stemmer. Ikonet er tegnet fra `fyrlys.svg` i nettversjonen.
+- Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva eieren må
   prøve på Windows-PC-en sin.
 - Flutter- og media_kit-kildene kan hentes for å sjekke API-er (github.com er åpent for git):
   `git clone --depth 1 --branch stable --filter=blob:none --sparse https://github.com/flutter/flutter.git`
   og `git sparse-checkout set packages/flutter/lib packages/flutter_test/lib` (tilsvarende for media-kit/media-kit).
   `unnecessary_import` er en advarsel og stopper bygget; sjekk hva `material.dart` eksporterer.
-- **Versjoner** (Pål-Erik 26.10): hver oppdatering han får (hver push til main som bygges), får neste
+- **Versjoner** (eieren 26.10): hver oppdatering han får (hver push til main som bygges), får neste
   patch-versjon i pubspec: 2.1.2, 2.1.3, 2.1.4 … Øk før hver push som bygges. Feiler bygget i CI (eller avbrytes
   før releasen), har han ikke fått noe, og rettelsen beholder nummeret. Det er versjonen vi snakker om, aldri
-  byggnummer eller commit (Pål-Erik 26.10: «bygg 30 sånt kan du droppe»). Skriv avsnittet `## vX.Y.Z` i
+  byggnummer eller commit (eieren 26.10: «bygg 30 sånt kan du droppe»). Skriv avsnittet `## vX.Y.Z` i
   `CHANGELOG.md` før push: det blir teksten i releasen.
-- **Releaser** (Pål-Erik 26.10: «vi er ferdige med testbygg»): jobben `release` legger hver versjon ut som en vanlig
+- **Releaser** (eieren 26.10: «vi er ferdige med testbygg»): jobben `release` legger hver versjon ut som en vanlig
   GitHub-release `vX.Y.Z` («Fyrlys X.Y.Z», blir «Latest»), med `Fyrlys-oppsett.exe` og `Fyrlys-windows.zip` (faste
   navn, så `releases/latest/download/<fil>` alltid er siste versjon; appen oppdaterer seg fra zip-fila; v2.1.10–
   v2.1.11 har også APK-er; artefaktene hentes med navn, actions checkout@v7, upload-artifact@v7, download-artifact@v8), teksten fra CHANGELOG.md og
@@ -104,7 +108,7 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `listCache` vises med en gang (`_startLists`), `load` skriver den nye; `_prefetchEpg` henter programinfo for 12
   favoritter og 8 sist sett når lista er klar.
 - `ui/login_page.dart` (to valg: «M3U-lenke» med valgfri EPG-lenke, og «Xtream Codes»; `adding: true` = en til, med
-  AppBar «Ny innlogging», lukkes når den er lagt til), `ui/settings_page.dart` (2.1.16, Pål-Eriks forslag: tannhjulet
+  AppBar «Ny innlogging», lukkes når den er lagt til), `ui/settings_page.dart` (2.1.16, eierens forslag: tannhjulet
   øverst erstatter menyen med tre prikker; seksjonene Innlogging (bytt, «Gi nytt navn», «Logg ut og fjern», «Legg
   til innlogging», «Logg ut av …» med `confirmLogout`; abonnementet fra `account()` via `accountLine`), Utseende
   (`Session.setThemeMode`: som Windows/mørkt/lyst, `theme` = system/dark/light), Avspilling (språkdialogen,
@@ -116,7 +120,7 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; tannhjulet åpner innstillingene (2.1.16; «Se etter
   oppdateringer» står der, oppdateringsserveren er fjernet i 2.1.11); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
   på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå).
-- `ui/start_view.dart` – Hjem (filteret `home`, valgt når appen starter, 26.10 for 2.0.3; Pål-Erik ville ha vekt på TV,
+- `ui/start_view.dart` – Hjem (filteret `home`, valgt når appen starter, 26.10 for 2.0.3; eieren ville ha vekt på TV,
   ikke filmer/serier): hilsen og dato/klokke, `LastWatchedCard` (siste i «sist sett», nå/etterpå, «Se videre»), eller
   velkomst første gang; favoritter (12, med nå og etterpå), resten av «sist sett» bortover, dine kategorier (ellers de
   16 første) som knapper, og «Fortsett å se» lite nederst.
@@ -140,7 +144,7 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `session.epg(id, limit: 14)` etter 150 ms framme (`epgCached` gir det som alt er hentet uten å vente). Trykk på
   det som går nå eller på kanalnavnet = spill; senere/tidligere program = info med «Se kanalen». På PC kan
   guiden dras med musa, og programmene har verktøytips. Kanaler med arkiv har en klokke-knapp («TV-arkiv») ved navnet.
-- `ui/multiview_page.dart` (2.1.17, Pål-Erik: «Hvis man har flere abo så burde man få se multiview») – ett bilde per
+- `ui/multiview_page.dart` (2.1.17, eieren: «Hvis man har flere abo så burde man få se multiview») – ett bilde per
   tilkobling i alle innloggingene (den i bruk først; `account().maxConnections`, 0/ukjent = 1), høyst `multiviewMax` 4:
   to side om side (over hverandre i et høyt vindu), tre–fire i 2×2. Hvert `_Slot` har sin kilde (`Session.sourceFor`:
   den i bruk deles, de andre åpnes og lukkes av siden), avspiller (`setup()` uten det store bufferet), kanal, EPG
@@ -237,31 +241,31 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   fortsett og neste episode), TV-guiden (`guide_test.dart`).
 
 ## Status
-- 25.10.2026: v0.1 skrevet. Pål-Erik prøvde Windows-versjonen og savnet volumkontroll og spilleren slik den er
+- 25.10.2026: v0.1 skrevet. Eieren prøvde Windows-versjonen og savnet volumkontroll og spilleren slik den er
   på nettsiden før fullskjerm. Laget samme dag (spilleren som på nettsiden, volum, byggnummer i menyen), testet med
   widget-tester. Ikke prøvd på ekte enheter ennå; Android TV-navigasjon er helt uprøvd.
-- 25.10.2026: automatisk oppdatering fra releasen `testbygg`. Pål-Erik ville beholde repoet privat, så den går via
-  Fyrlys-serveren (`app/appupdate.py` i peagstreams, nøkkelen i `data/github.json` på serveren). Serverdelen er
+- 25.10.2026: automatisk oppdatering fra releasen `testbygg`. Eieren ville beholde repoet privat, så den går via
+  Fyrlys-serveren (`app/appupdate.py` i server-repoet, nøkkelen i `data/github.json` på serveren). Serverdelen er
   prøvd mot ekte GitHub, appdelen bare med tester. Første bygg med den må lastes ned for hånd.
   Nøkkelen ligger på serveren (virker, 25.10), og bygg 6 kjører på PC-en hans. Bygg 6 → 7 feilet: skriptet
   startet aldri (tom logg). `ProcessStartMode.detached` gir `DETACHED_PROCESS` (ingen konsoll) på Windows, og
   da kommer ikke Windows PowerShell i gang. Bygg 8 starter det i vanlig modus (Dart bruker da `CREATE_NO_WINDOW`:
   skjult konsoll), skriptet skriver `i-gang.txt` selv, og appen logger oppstarten i `oppdatering.log`.
-  Bygg 7 → 8 måtte derfor også legges inn for hånd. Bygg 9 → 10 kom av seg selv (bekreftet av Pål-Erik 25.10):
+  Bygg 7 → 8 måtte derfor også legges inn for hånd. Bygg 9 → 10 kom av seg selv (bekreftet av eieren 25.10):
   oppdateringen virker fra start til slutt. Fullskjerm fra maksimert vindu virker (bygg 9), animasjonen er
   fjernet i bygg 10 (ikke bekreftet ennå).
 - 25.10.2026: Filmer og Serier i appen (ett bygg). Testet med kilde- og widget-tester, ikke med ekte avspilling:
   spoling, fortsett og neste episode i mpv, store lister fra leverandøren og fjernkontroll på Android TV er uprøvd.
-- 25.10.2026: TV-guide i appen (Pål-Erik savnet den). Testet med widget-tester; ikke prøvd med ekte EPG eller
+- 25.10.2026: TV-guide i appen (eieren savnet den). Testet med widget-tester; ikke prøvd med ekte EPG eller
   fjernkontroll ennå.
-- 25.10.2026: pause/tilbakespoling i direktesending og «Fortsett å se» (Pål-Eriks valg). Bare testet med tester;
+- 25.10.2026: pause/tilbakespoling i direktesending og «Fortsett å se» (eierens valg). Bare testet med tester;
   om `live_start_index` virker i mpv-en til media_kit, er ikke prøvd.
-- 26.10.2026: Apple TV vurdert og lagt bort (Pål-Erik stoppet det). Flutter har ingen offisiell tvOS (bare
+- 26.10.2026: Apple TV vurdert og lagt bort (eieren stoppet det). Flutter har ingen offisiell tvOS (bare
   flutter-tvos, uoffisiell) og media_kit finnes ikke for tvOS, så det ville blitt en egen Swift-app (AVPlayer for
   serverens HLS, MPVKit for MKV), bygget på GitHubs macOS-maskiner (~10x prisen per minutt) og lagt i TestFlight
   (krever betalt utviklerkonto). Enklere alternativ om det kommer opp igjen: M3U/XMLTV eller Xtream-API fra
   Fyrlys-serveren for en ferdig Apple TV-app.
-- 26.10.2026: v2.0.0 (Pål-Eriks valg av nummer) etter en gjennomgang av koden med to uavhengige lesere. Rettet:
+- 26.10.2026: v2.0.0 (eierens valg av nummer) etter en gjennomgang av koden med to uavhengige lesere. Rettet:
   passord i mpv-feil (`TvSource.redact`), kodede innloggingsdeler i Xtream-adressene, EPG-kø (150 ms før
   henting i kort og sideliste, nyeste først, feil huskes ikke), Filmer/Serier-løkke ved feil/tom side, én felles
   nedlasting av VOD-lister rett mot leverandøren (og 3 min tidsgrense for store lister), innlogging som ble
@@ -272,55 +276,61 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 - 26.10.2026: 2.1.2 (først levert som 2.0.3, bygg 24): Hjem (startsiden), kanalnummer med tall, språk for lyd og undertekster, «Spill av»/«Fortsett» på
   seriesiden. Testet med widget-tester; språkvalget i ekte mpv (koder, `subs-with-matching-audio` i media_kits
   libmpv) og tallene på en ekte fjernkontroll er ikke prøvd.
-- 26.10.2026: 2.1.3, «mer smooth» (Pål-Eriks ønske, alle sju forslagene): lista og bildene på disk, programinfo
+- 26.10.2026: 2.1.3, «mer smooth» (eierens ønske, alle sju forslagene): lista og bildene på disk, programinfo
   ved start, kanalinfo ved bytte, rask blaing, overganger og fokus. Testet med tester; ikke prøvd på ekte enheter.
 - 26.10.2026: 2.1.4: TV direkte (uendret strøm via serverens mellomstasjon, direkte-økter på serveren for «Ta over»
-  og seere, se peagstreams) og pause/spoling i appens eget buffer (Pål-Eriks valg: «Appen husker selv»). Testet med
+  og seere, se server-repoet) og pause/spoling i appens eget buffer (eierens valg: «Appen husker selv»). Testet med
   tester; mpv-bufferet, `demuxer-cache-state` og spolingen i ekte mpv er ikke prøvd.
-- 26.10.2026: 2.1.5: bildeinnstillinger (Pål-Erik ville prøve dem): `PicturePrefs` (`core/picture.dart`,
+- 26.10.2026: 2.1.5: bildeinnstillinger (eieren ville prøve dem): `PicturePrefs` (`core/picture.dart`,
   `deinterlace`/`smooth_motion` i shared_preferences, deinterlacing på som standard), `Playback.setPicture`
   (`deinterlace=auto`, `yes` på eldre mpv; jevn: `video-sync=display-resample`, `interpolation`, `tscale=oversample`,
   `display-fps-override` fra Flutters `display.refreshRate`), to valg nederst i `TracksButton`, og `describe` med
   fps/deinterlacet, bitrate, tapte bilder og om `display-sync-active`, hvert 5. s. Ikke prøvd i ekte mpv; usikkert
   om display-sync virker med media_kits libmpv-rendering.
-- 26.10.2026: 2.1.6: innlogging med M3U-lenke eller Xtream Codes, Fyrlys-serveren bare til oppdateringer (Pål-Eriks
+- 26.10.2026: 2.1.6: innlogging med M3U-lenke eller Xtream Codes, Fyrlys-serveren bare til oppdateringer (eierens
   valg). Fjernet `fyrlys_source.dart`, tilbakespoling på serveren (`LiveWindow`, `live_start_index`), «direkte»-økter
-  og hjerteslag fra appen (serverens API-er for dem står igjen i peagstreams). Testet med tester; ekte M3U-lister og
+  og hjerteslag fra appen (serverens API-er for dem står igjen i server-repoet). Testet med tester; ekte M3U-lister og
   XMLTV fra leverandøren hans er ikke prøvd.
 - 26.10.2026: 2.1.7: 404 fra GitHub/oppdateringsserveren er en feil med forklaring, ikke «du har siste versjon»
-  (Pål-Erik sto på 2.1.4 med den meldingen mens 2.1.6 var ute; serveren svarer nå 502 i det tilfellet).
-- 26.10.2026: repoet gjort offentlig (Pål-Erik), README skrevet om som forside. 2.1.8: oppdateringene rett fra
+  (eieren sto på 2.1.4 med den meldingen mens 2.1.6 var ute; serveren svarer nå 502 i det tilfellet).
+- 26.10.2026: repoet gjort offentlig (eieren), README skrevet om som forside. 2.1.8: oppdateringene rett fra
   GitHub (oppdateringsserveren valgfri, ikke lenger satt av seg selv fra en gammel innlogging). Notatene flyttet til
   `.claude/CLAUDE.md`.
 - 26.10.2026: 2.1.9: versjonen uten byggnummer og commit (menyen, releasen), CHANGELOG-avsnittet som tekst i
   releasen, byggnummeret i `<!-- bygg N -->` (bro, se Versjoner).
 - 26.10.2026: 2.1.10: første vanlige release (`v2.1.10`), `testbygg` slettet.
-- 26.10.2026: 2.1.11: «Oppdateringsserver» fjernet fra menyen (Pål-Erik: trengs ikke), oppdateringene bare fra
+- 26.10.2026: 2.1.11: «Oppdateringsserver» fjernet fra menyen (eieren: trengs ikke), oppdateringene bare fra
   GitHub.
-- 26.10.2026: 2.1.12: bare Windows (Pål-Erik). Android-bygget, `android/`, `lib/platform.dart` (`isDesktop`) og
+- 26.10.2026: 2.1.12: bare Windows (eieren). Android-bygget, `android/`, `lib/platform.dart` (`isDesktop`) og
   telefon-/TV-greinene i spillerne (immersive, `_suspended`/livssyklus, telefon på tvers) er fjernet. Et Linux-bygg
   med selvoppdatering ble laget samme kveld, men aldri lagt ut (kjøringen ble stoppet; koden er i commit ecaf411).
-- 26.10.2026: 2.1.13 (Pål-Eriks valg 1–6): installasjonsprogram, innloggingen kryptert (DPAPI), vinduet husker seg,
+- 26.10.2026: 2.1.13 (eierens valg 1–6): installasjonsprogram, innloggingen kryptert (DPAPI), vinduet husker seg,
   bare én Fyrlys, død kode fjernet («Ta over»/`BusyException`, delte favoritter og meldingsstrømmen, `prepare`/`close`
   i `TvSource`, testbygg-reserver, flyttingen fra Fyrlys-serveren), nye versjoner av actions. Testet med tester;
-  Installasjonsprogrammet virker på PC-en hans (Pål-Erik 26.10: «Funka veldig fint»); DPAPI, vinduet og
+  Installasjonsprogrammet virker på PC-en hans (eieren 26.10: «Funka veldig fint»); DPAPI, vinduet og
   én-om-gangen er ikke bekreftet hver for seg.
-- 26.10.2026: 2.1.14 (Pål-Eriks valg 1 og 12 fra lista over det som mangler): TV-arkiv med «Se fra start» (Xtream),
+- 26.10.2026: 2.1.14 (eierens valg 1 og 12 fra lista over det som mangler): TV-arkiv med «Se fra start» (Xtream),
   og flere innlogginger med egne favoritter. Testet med tester; arkivet mot leverandøren hans (tidssonen i adressen,
   HLS eller TS, spoling i ekte mpv, om timeshift godtar en varighet forbi nå for det som går) er ikke prøvd.
   2.1.15: fire rettelser fra en uavhengig gjennomlesing (fullskjerm etter «Se fra start», kanalliste-nøkkelen,
   kanalnummer under arkivet, favoritter når den gamle innloggingen ikke kunne flyttes).
-- 26.10.2026: 2.1.16: innstillingssiden (Pål-Erik: «kanskje de tre prikkene skal byttes ut med et tannhjul og så åpner
+- 26.10.2026: 2.1.16: innstillingssiden (eieren: «kanskje de tre prikkene skal byttes ut med et tannhjul og så åpner
   det et innstillingsvindu?»). Testet med widget-tester. Den virker hos ham (skjermbilde 26.10: abonnementet viser
   «aktiv til … · 1 tilkobling»).
 - 26.10.2026: 2.1.17: multiview over flere abonnementer. Testet med widget-tester.
-- 26.10.2026: 2.1.18: Pål-Erik fikk «Kanalen kunne ikke spilles (Failed to open …/live/***/***/<id>.ts)» i
+- 26.10.2026: 2.1.18: eieren fikk «Kanalen kunne ikke spilles (Failed to open …/live/***/***/<id>.ts)» i
   TV-spilleren. Sannsynlig årsak (feil fra 2.1.14): `_away` åpnet kanalen igjen så snart `nav.push` var ferdig, mens
   filmspilleren/multiview strømmet til `dispose` etter tilbakeovergangen (to strømmer på én tilkobling). Nå stopper
   alle spillerne strømmen i `PopScope.onPopInvokedWithResult(didPop: true)` (kalles i `Navigator.pop`, før
   `push`-framtiden er ferdig), og åpning som feiler prøves to ganger til etter 3 s (`_openTries`/`openTries`) før
   feilen vises; da spør spilleren `account(fresh: true)` og viser `busyText` når `active_cons` ≥ `max_connections`.
-  Ikke bekreftet hos ham ennå (spurt hva han gjorde da det skjedde).
+  Den egentlige årsaken var noe annet: diag og `/api/xtream/status?fresh=1` på serverversjonen viste HTTP 407 fra
+  leverandøren for den ene kanalen (både HLS og TS) med `active` 0 av `max` 1, altså en kanal leverandøren avviser.
+  Tilbudt: vise HTTP-koden fra leverandøren i feilmeldingen (ikke laget).
+- 26.10.2026: 2.1.19: ingenting personlig i appen eller repoet (eierens ønske): `--org no.fyrlys`, all filinfo i exe-en
+  «Fyrlys», kommentarene viser ikke til nettversjonen, notatene uten navn og serverrepo. Git-historikken har fortsatt
+  en lokal adresse og et maskinnavn i gamle commits (ingen passord eller leverandør); å fjerne dem krever at
+  historikken skrives om.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

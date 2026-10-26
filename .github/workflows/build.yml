@@ -63,10 +63,15 @@ jobs:
           cache: true
       - name: Lag resten av Windows-oppsettet
         run: |
-          flutter create --org no.peag --project-name fyrlys --platforms=windows . 2>&1 | tee create.log
+          flutter create --org no.fyrlys --project-name fyrlys --platforms=windows . 2>&1 | tee create.log
           sed -i 's/L"fyrlys"/L"Fyrlys"/' windows/runner/main.cpp
-          sed -i 's/VALUE "FileDescription", "fyrlys"/VALUE "FileDescription", "Fyrlys"/; s/VALUE "ProductName", "fyrlys"/VALUE "ProductName", "Fyrlys"/; s/VALUE "CompanyName", "no.peag"/VALUE "CompanyName", "Fyrlys"/' windows/runner/Runner.rc
+          # filinfoen i exe-en: bare «Fyrlys». CompanyName og ProductName bestemmer også mappen innstillingene og
+          # innloggingen ligger i (%APPDATA%\Fyrlys\Fyrlys), så de må aldri endres; bygget stopper om de ikke stemmer.
+          sed -i 's/VALUE "FileDescription", "[^"]*"/VALUE "FileDescription", "Fyrlys"/; s/VALUE "ProductName", "[^"]*"/VALUE "ProductName", "Fyrlys"/; s/VALUE "CompanyName", "[^"]*"/VALUE "CompanyName", "Fyrlys"/; s/VALUE "LegalCopyright", "[^"]*"/VALUE "LegalCopyright", "Fyrlys"/' windows/runner/Runner.rc
           grep -n 'L"Fyrlys"' windows/runner/main.cpp
+          grep -n 'VALUE "CompanyName", "Fyrlys"' windows/runner/Runner.rc
+          grep -n 'VALUE "ProductName", "Fyrlys"' windows/runner/Runner.rc
+          grep -n 'VALUE "LegalCopyright", "Fyrlys"' windows/runner/Runner.rc
       - name: Versjon og byggnummer til appen (vises i menyen)
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)

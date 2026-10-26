@@ -10,7 +10,7 @@ import '../core/session.dart';
 import '../theme.dart';
 import 'channel_card.dart';
 
-/// Hvor mange timer guiden viser, og hvor mange programmer som hentes per kanal (som på nettsiden).
+/// Hvor mange timer guiden viser, og hvor mange programmer som hentes per kanal.
 const guideHours = 6;
 const guideEpgLimit = 14;
 
@@ -25,7 +25,7 @@ DateTime guideStart(DateTime now) =>
 typedef GuidePlay = void Function(List<Channel> channels, int index, String title, bool fromFavorites);
 
 /// TV-guiden: kanalene nedover, de neste timene bortover, med en strek for «nå». Kanalnavnene står fast til
-/// venstre og følger med når lista rulles. Som på nettsiden.
+/// venstre og følger med når lista rulles.
 class GuideView extends StatefulWidget {
   const GuideView({super.key, required this.session, required this.query, required this.onPlay, this.onArchive});
 

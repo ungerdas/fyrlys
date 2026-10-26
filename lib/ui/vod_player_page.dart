@@ -16,7 +16,7 @@ import 'window_effects.dart';
 
 export '../core/names.dart' show formatDuration;
 
-/// Spilleren er alltid mørk, som på nettsiden.
+/// Spilleren er alltid mørk.
 final ThemeData _playerTheme = fyrlysTheme(Brightness.dark);
 
 /// Noe å spille: en film, en episode eller et program i TV-arkivet.

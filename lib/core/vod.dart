@@ -11,7 +11,7 @@ enum VodKind {
   final String title;
 }
 
-/// Rekkefølgen i lista, som på nettsiden.
+/// Rekkefølgen i lista.
 enum VodSort {
   provider('', 'Leverandørens rekkefølge'),
   newest('added', 'Nyeste først'),
@@ -388,7 +388,7 @@ class ContinueItem {
       };
 }
 
-/// «S01E02», som på nettsiden; tomt når noe mangler.
+/// «S01E02»; tomt når noe mangler.
 String episodeCode(String season, int? episode) {
   final s = int.tryParse(season);
   if (s == null || episode == null) return '';

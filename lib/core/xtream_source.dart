@@ -8,7 +8,7 @@ import 'models.dart';
 import 'source.dart';
 import 'vod.dart';
 
-/// Mange IPTV-leverandører avviser ukjente klienter, så appen presenterer seg som VLC, slik nettversjonen gjør.
+/// Mange IPTV-leverandører avviser ukjente klienter, så appen presenterer seg som VLC.
 const xtreamUserAgent = 'VLC/3.0.21 LibVLC/3.0.21';
 
 class XtreamLogin {

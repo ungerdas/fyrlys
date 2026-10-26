@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Fargene fra nettversjonen: mørk «Fyrlys om natta» og lys «Nordisk lys».
+/// Fargene: mørk «Fyrlys om natta» og lys «Nordisk lys».
 class FyrlysColors {
   static const live = Color(0xFFFF5A4F);
   static const beam = Color(0xFFF2B544);

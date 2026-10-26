@@ -59,6 +59,6 @@ Laget i Flutter, med [media_kit](https://github.com/media-kit/media-kit) og [mpv
 [GitHub Actions](.github/workflows/build.yml).
 
 ```bash
-flutter create --org no.peag --project-name fyrlys --platforms=windows .
+flutter create --org no.fyrlys --project-name fyrlys --platforms=windows .
 flutter run
 ```

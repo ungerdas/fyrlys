@@ -10,7 +10,7 @@ import 'channel_card.dart';
 /// Hvilken liste kanallista i spilleren viser.
 enum SideTab { list, fav }
 
-/// Kanallista ved siden av spilleren, som på nettsiden: lista du kom fra og favorittene, med søk.
+/// Kanallista ved siden av spilleren: lista du kom fra og favorittene, med søk.
 /// Kanalen som spilles er markert, og lista holder den synlig når du bytter kanal.
 class ChannelSideList extends StatefulWidget {
   const ChannelSideList({

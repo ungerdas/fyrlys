@@ -1,4 +1,4 @@
-// Kanalnavn fra leverandøren, som i nettversjonen.
+// Kanalnavn fra leverandøren: klokkeslett, kanal eller kamp, og resten.
 
 class NameParts {
   const NameParts({required this.time, required this.main, required this.sub});

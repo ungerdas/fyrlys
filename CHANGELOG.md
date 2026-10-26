@@ -1,5 +1,9 @@
 # Endringer
 
+## v2.1.19
+
+- Filinfoen i programmet (Egenskaper → Detaljer) sier bare «Fyrlys». Innstillingene og innloggingen ligger der de lå.
+
 ## v2.1.18
 
 - Rettet: «Kanalen kunne ikke spilles» når du gikk tilbake fra TV-arkivet, «Se fra start» eller multiview. Spilleren
