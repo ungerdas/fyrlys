@@ -6,27 +6,41 @@ import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
 import '../core/source.dart';
+import '../l10n/dates.dart';
+import '../l10n/tr.dart';
 import '../theme.dart';
 import 'channel_card.dart';
 import 'motion.dart';
-import 'start_view.dart' show dateLine;
 import 'vod_player_page.dart';
 
-/// «I dag», «I går» eller «Lørdag 24. oktober»
-String archiveDay(DateTime t, DateTime now) {
+/// hvor mange dager før [now] [t] er (0 = i dag)
+int _daysAgo(DateTime t, DateTime now) {
   final day = DateTime(t.year, t.month, t.day);
   final today = DateTime(now.year, now.month, now.day);
   // timer og avrunding: et døgn med sommertid eller vintertid er 23 eller 25 timer
-  final days = (today.difference(day).inHours / 24).round();
-  if (days == 0) return 'I dag';
-  if (days == 1) return 'I går';
-  return dateLine(t);
+  return (today.difference(day).inHours / 24).round();
 }
 
-/// «i går 20:00–21:00»
+/// «I dag», «I går» eller «Lørdag 24. oktober»
+String archiveDay(DateTime t, DateTime now) => switch (_daysAgo(t, now)) {
+      0 => tr('I dag'),
+      1 => tr('I går'),
+      _ => longDate(t),
+    };
+
+/// «i går 20:00–21:00», «lørdag 24. oktober 20:00–21:00» (engelsk: «Saturday 24 October 20:00–21:00»)
 String archiveWhen(EpgEntry e, DateTime now) {
-  final day = archiveDay(e.start, now);
-  return '${day[0].toLowerCase()}${day.substring(1)} ${hhmm(e.start)}–${hhmm(e.stop)}';
+  final time = '${hhmm(e.start)}–${hhmm(e.stop)}';
+  switch (_daysAgo(e.start, now)) {
+    case 0:
+      return tr('i dag {time}', {'time': time});
+    case 1:
+      return tr('i går {time}', {'time': time});
+  }
+  // ukedagen med liten bokstav midt i en setning på norsk, men ikke på engelsk
+  final date = longDate(e.start);
+  final day = appLanguage == 'en' ? date : '${date[0].toLowerCase()}${date.substring(1)}';
+  return '$day $time';
 }
 
 /// for «fortsett der du slapp»: kanalen og når programmet begynte
@@ -109,7 +123,7 @@ class _ArchivePageState extends State<ArchivePage> {
                   Text(nameParts(ch.name).main,
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
                   Text(
-                    'TV-arkiv · $days ${days == 1 ? 'dag' : 'dager'} tilbake',
+                    days == 1 ? tr('TV-arkiv · 1 dag tilbake') : tr('TV-arkiv · {n} dager tilbake', {'n': days}),
                     style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
                   ),
                 ],
@@ -118,7 +132,7 @@ class _ArchivePageState extends State<ArchivePage> {
           ],
         ),
         actions: [
-          IconButton(tooltip: 'Hent på nytt', icon: const Icon(Icons.refresh), onPressed: _reload),
+          IconButton(tooltip: tr('Hent på nytt'), icon: const Icon(Icons.refresh), onPressed: _reload),
           const SizedBox(width: 8),
         ],
       ),
@@ -129,13 +143,13 @@ class _ArchivePageState extends State<ArchivePage> {
           final error = snap.error;
           if (error != null) {
             return _message(
-              error is SourceException ? error.message : 'Fikk ikke hentet arkivet.',
+              error is SourceException ? error.message : tr('Fikk ikke hentet arkivet.'),
               isError: true,
               retry: true,
             );
           }
           final list = snap.data ?? const <EpgEntry>[];
-          if (list.isEmpty) return _message('Ingen programmer i arkivet ennå.');
+          if (list.isEmpty) return _message(tr('Ingen programmer i arkivet ennå.'));
           return _list(list);
         },
       ),
@@ -154,7 +168,7 @@ class _ArchivePageState extends State<ArchivePage> {
                 textAlign: TextAlign.center, style: TextStyle(color: isError ? scheme.error : scheme.onSurfaceVariant)),
             if (retry) ...[
               const SizedBox(height: 12),
-              FilledButton(onPressed: _reload, child: const Text('Prøv igjen')),
+              FilledButton(onPressed: _reload, child: Text(tr('Prøv igjen'))),
             ],
           ],
         ),
@@ -234,8 +248,8 @@ class _ArchivePageState extends State<ArchivePage> {
                         margin: const EdgeInsets.only(left: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(color: FyrlysColors.live, borderRadius: BorderRadius.circular(10)),
-                        child: const Text('Går nå',
-                            style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800)),
+                        child: Text(tr('Går nå'),
+                            style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800)),
                       ),
                   ],
                 ),
@@ -250,7 +264,7 @@ class _ArchivePageState extends State<ArchivePage> {
                 if (!ok)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text('Ikke i arkivet', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+                    child: Text(tr('Ikke i arkivet'), style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
                   ),
                 if (ok && seen > 0)
                   Padding(
@@ -285,7 +299,7 @@ class _ArchivePageState extends State<ArchivePage> {
     );
     if (!ok) return Opacity(opacity: 0.45, child: tile);
     return Tooltip(
-      message: live ? 'Se fra start' : 'Se programmet',
+      message: live ? tr('Se fra start') : tr('Se programmet'),
       waitDuration: const Duration(milliseconds: 800),
       child: tile,
     );

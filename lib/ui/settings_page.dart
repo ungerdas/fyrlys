@@ -8,6 +8,7 @@ import '../core/report.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../core/updater.dart';
+import '../l10n/dates.dart';
 import '../l10n/tr.dart';
 import 'language_dialog.dart';
 import 'login_page.dart';
@@ -18,14 +19,14 @@ Future<bool> confirmLogout(BuildContext context, SavedLogin login) async {
   final yes = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text('Logg ut av ${login.name}?'),
-      content: const Text(
-        'Innloggingen slettes fra Fyrlys på denne PC-en. Favorittene og det du har sett, kommer tilbake hvis du logger '
-        'inn igjen.',
+      title: Text(tr('Logg ut av {name}?', {'name': login.name})),
+      content: Text(
+        tr('Innloggingen slettes fra Fyrlys på denne PC-en. Favorittene og det du har sett, kommer tilbake hvis du '
+            'logger inn igjen.'),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Avbryt')),
-        FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Logg ut')),
+        TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(tr('Avbryt'))),
+        FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(tr('Logg ut'))),
       ],
     ),
   );

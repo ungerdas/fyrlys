@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
+import '../l10n/tr.dart';
 import '../theme.dart';
 import 'channel_card.dart';
 
@@ -142,8 +143,8 @@ class _GuideViewState extends State<GuideView> {
   }
 
   String _title(String filter) => switch (filter) {
-        'all' => 'Alle kanaler',
-        'fav' => 'Favoritter',
+        'all' => tr('Alle kanaler'),
+        'fav' => tr('Favoritter'),
         _ => s.categoryName(filter),
       };
 
@@ -158,15 +159,16 @@ class _GuideViewState extends State<GuideView> {
   }
 
   void _play(List<Channel> list, int index, String filter) {
-    final title = widget.query.isEmpty ? _title(filter) : 'Treff i ${_title(filter).toLowerCase()}';
+    final title =
+        widget.query.isEmpty ? _title(filter) : tr('Treff i {list}', {'list': _title(filter).toLowerCase()});
     widget.onPlay(List.of(list), index, title, filter == 'fav');
   }
 
   void _info(List<Channel> list, int index, String filter, EpgEntry e) {
     final ch = list[index];
     final now = DateTime.now();
-    final tomorrow = e.start.day != now.day && e.start.isAfter(now) ? 'I morgen ' : '';
-    final when = '$tomorrow${hhmm(e.start)}–${hhmm(e.stop)}';
+    final span = '${hhmm(e.start)}–${hhmm(e.stop)}';
+    final when = e.start.day != now.day && e.start.isAfter(now) ? tr('I morgen {time}', {'time': span}) : span;
     unawaited(showDialog<void>(
       context: context,
       builder: (context) {
@@ -191,14 +193,14 @@ class _GuideViewState extends State<GuideView> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Lukk')),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Lukk'))),
             FilledButton(
               autofocus: true,
               onPressed: () {
                 Navigator.of(context).pop();
                 _play(list, index, filter);
               },
-              child: const Text('Se kanalen'),
+              child: Text(tr('Se kanalen')),
             ),
           ],
         );
@@ -245,8 +247,8 @@ class _GuideViewState extends State<GuideView> {
                 isExpanded: true,
                 value: filter,
                 items: [
-                  DropdownMenuItem(value: 'fav', child: Text('★ Favorittkanaler (${s.favorites.length})')),
-                  DropdownMenuItem(value: 'all', child: Text('Alle kanaler (${s.channels.length})')),
+                  DropdownMenuItem(value: 'fav', child: Text(tr('★ Favorittkanaler ({n})', {'n': s.favorites.length}))),
+                  DropdownMenuItem(value: 'all', child: Text(tr('Alle kanaler ({n})', {'n': s.channels.length}))),
                   for (final c in pinned)
                     DropdownMenuItem(value: c.id, child: Text('☆ ${label(c)}', overflow: TextOverflow.ellipsis)),
                   for (final c in rest)
@@ -259,7 +261,7 @@ class _GuideViewState extends State<GuideView> {
             ),
           ),
           const SizedBox(width: 16),
-          OutlinedButton(onPressed: _jumpToNow, child: const Text('Til nå')),
+          OutlinedButton(onPressed: _jumpToNow, child: Text(tr('Til nå'))),
         ],
       ),
     );
@@ -276,20 +278,20 @@ class _GuideViewState extends State<GuideView> {
         );
     if (s.channels.isEmpty && error != null) return message(error, isError: true);
     if (s.channels.isEmpty && s.loading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [CircularProgressIndicator(), SizedBox(height: 16), Text('Henter kanaler …')],
+          children: [const CircularProgressIndicator(), const SizedBox(height: 16), Text(tr('Henter kanaler …'))],
         ),
       );
     }
     if (list.isEmpty) {
       _placed = false;
       return message(widget.query.isNotEmpty
-          ? 'Fant ingenting.'
+          ? tr('Fant ingenting.')
           : filter == 'fav'
-              ? 'Ingen favoritter ennå. Trykk ☆ på en kanal under TV, eller velg en kategori over.'
-              : 'Ingen kanaler her.');
+              ? tr('Ingen favoritter ennå. Trykk ☆ på en kanal under TV, eller velg en kategori over.')
+              : tr('Ingen kanaler her.'));
     }
     if (!_placed) {
       // første gang guiden vises: rett før «nå»
@@ -510,7 +512,7 @@ class _ChannelCell extends StatelessWidget {
               ),
               if (onArchive != null)
                 IconButton(
-                  tooltip: 'TV-arkiv',
+                  tooltip: tr('TV-arkiv'),
                   onPressed: onArchive,
                   icon: Icon(Icons.history, size: 18, color: Theme.of(context).colorScheme.primary),
                   visualDensity: VisualDensity.compact,
@@ -563,8 +565,8 @@ class _GuideRowState extends State<_GuideRow> {
   String? get _fixedText {
     final p = nameParts(ch.name);
     if (p.sub.isNotEmpty) return p.sub;
-    if (p.time.isNotEmpty) return 'Starter ${p.time}';
-    if (!ch.hasEpg) return 'Ingen programinformasjon';
+    if (p.time.isNotEmpty) return tr('Starter {time}', {'time': p.time});
+    if (!ch.hasEpg) return tr('Ingen programinformasjon');
     return null;
   }
 
@@ -618,7 +620,7 @@ class _GuideRowState extends State<_GuideRow> {
     } else {
       final items = [for (final e in list) if (e.stop.isAfter(t0) && e.start.isBefore(t1)) e];
       body = items.isEmpty
-          ? _StickyText(text: 'Ingen programinformasjon', timeScroll: widget.timeScroll)
+          ? _StickyText(text: tr('Ingen programinformasjon'), timeScroll: widget.timeScroll)
           : Stack(
               children: [
                 for (final e in items) _block(e, t0, t1),
