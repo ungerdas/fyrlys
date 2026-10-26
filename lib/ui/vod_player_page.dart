@@ -160,6 +160,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   Future<void> _start() async {
     await _pb.setup();
     await _pb.setLanguages(_session.languages);
+    await _pb.setPicture(_session.picture);
     await _pb.setVolume(_muted ? 0 : _volume);
     await _open(resume: widget.page.resume);
   }

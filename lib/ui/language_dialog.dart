@@ -142,6 +142,8 @@ class TracksButton extends StatelessWidget {
   final VoidCallback? onClose;
 
   static const _languages = 'språk';
+  static const _deinterlace = 'deinterlace';
+  static const _smooth = 'jevn';
 
   Future<void> _show(BuildContext context) async {
     onOpen?.call();
@@ -149,6 +151,7 @@ class TracksButton extends StatelessWidget {
     final button = context.findRenderObject()! as RenderBox;
     final overlay = Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
     final tracks = await playback.tracks();
+    final picture = session.picture;
     if (!context.mounted) return;
     final position = RelativeRect.fromRect(
       Rect.fromPoints(
@@ -170,9 +173,28 @@ class TracksButton extends StatelessWidget {
           CheckedPopupMenuItem<Object>(value: t, checked: t.selected, child: Text(t.label)),
         const PopupMenuDivider(),
         const PopupMenuItem<Object>(value: _languages, child: Text('Foretrukne språk …')),
+        const PopupMenuDivider(),
+        const PopupMenuItem<Object>(enabled: false, child: Text('Bilde')),
+        CheckedPopupMenuItem<Object>(
+          value: _deinterlace,
+          checked: picture.deinterlace,
+          child: const Text('Fjern striper (deinterlacing)'),
+        ),
+        CheckedPopupMenuItem<Object>(
+          value: _smooth,
+          checked: picture.smooth,
+          child: const Text('Jevn bevegelse (prøve)'),
+        ),
       ],
     );
     if (choice is TrackChoice) await playback.selectTrack(choice);
+    if (choice == _deinterlace || choice == _smooth) {
+      final next = choice == _deinterlace
+          ? picture.copyWith(deinterlace: !picture.deinterlace)
+          : picture.copyWith(smooth: !picture.smooth);
+      session.savePicture(next);
+      await playback.setPicture(next);
+    }
     if (choice == _languages) {
       if (!context.mounted) return;
       // nye språk: velg sporene på nytt i det som spilles nå også

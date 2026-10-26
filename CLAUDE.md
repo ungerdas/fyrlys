@@ -222,4 +222,10 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
 - 26.10.2026: 2.1.4: TV direkte (uendret strøm via serverens mellomstasjon, direkte-økter på serveren for «Ta over»
   og seere, se peagstreams) og pause/spoling i appens eget buffer (Pål-Eriks valg: «Appen husker selv»). Testet med
   tester; mpv-bufferet, `demuxer-cache-state` og spolingen i ekte mpv er ikke prøvd.
+- 26.10.2026: 2.1.5: bildeinnstillinger (Pål-Erik ville prøve dem): `PicturePrefs` (`core/picture.dart`,
+  `deinterlace`/`smooth_motion` i shared_preferences, deinterlacing på som standard), `Playback.setPicture`
+  (`deinterlace=auto`, `yes` på eldre mpv; jevn: `video-sync=display-resample`, `interpolation`, `tscale=oversample`,
+  `display-fps-override` fra Flutters `display.refreshRate`), to valg nederst i `TracksButton`, og `describe` med
+  fps/deinterlacet, bitrate, tapte bilder og om `display-sync-active`, hvert 5. s. Ikke prøvd i ekte mpv; usikkert
+  om display-sync virker med media_kits libmpv-rendering.
 - Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.

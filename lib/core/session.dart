@@ -10,6 +10,7 @@ import 'fyrlys_source.dart';
 import 'languages.dart';
 import 'models.dart';
 import 'names.dart';
+import 'picture.dart';
 import 'source.dart';
 import 'vod.dart';
 import 'xtream_source.dart';
@@ -431,6 +432,18 @@ class Session extends ChangeNotifier {
   void saveLanguages(LanguagePrefs prefs) {
     unawaited(_prefs.setStringList('lang_audio', prefs.audio));
     unawaited(_prefs.setStringList('lang_subs', prefs.subtitles));
+    notifyListeners();
+  }
+
+  /// Bildet i spillerne: deinterlacing (på) og jevn bevegelse (av til den er prøvd).
+  PicturePrefs get picture => PicturePrefs(
+        deinterlace: _prefs.getBool('deinterlace') ?? true,
+        smooth: _prefs.getBool('smooth_motion') ?? false,
+      );
+
+  void savePicture(PicturePrefs prefs) {
+    unawaited(_prefs.setBool('deinterlace', prefs.deinterlace));
+    unawaited(_prefs.setBool('smooth_motion', prefs.smooth));
     notifyListeners();
   }
 

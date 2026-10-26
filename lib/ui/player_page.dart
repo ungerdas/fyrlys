@@ -278,6 +278,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   Future<void> _start() async {
     await _pb.setup(live: true);
     await _pb.setLanguages(_session.languages);
+    await _pb.setPicture(_session.picture);
     await _pb.setVolume(_muted ? 0 : _volume);
     await _open();
   }
@@ -419,14 +420,24 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     }
   }
 
-  /// Kodek og dekoding vises i infoen når bildet har kommet i gang.
+  /// Kodek og dekoding vises i infoen når bildet har kommet i gang, og oppdateres hvert 5. s (bitrate og tapte
+  /// bilder endrer seg mens du ser).
   void _probe() {
     _probeTimer?.cancel();
     final my = _seq;
-    _probeTimer = Timer(const Duration(milliseconds: 1500), () async {
+    Future<void> update() async {
       final text = await _pb.describe();
-      if (mounted && my == _seq) setState(() => _tech = text);
+      if (mounted && my == _seq && text != _tech) setState(() => _tech = text);
+    }
+
+    late final Timer first;
+    first = Timer(const Duration(milliseconds: 1500), () async {
+      await update();
+      if (mounted && my == _seq && identical(_probeTimer, first)) {
+        _probeTimer = Timer.periodic(const Duration(seconds: 5), (_) => unawaited(update()));
+      }
     });
+    _probeTimer = first;
   }
 
   void _loadEpg(Channel ch) {

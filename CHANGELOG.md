@@ -2,6 +2,15 @@
 
 Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
 
+## v2.1.5
+
+- **Fjern striper (deinterlacing):** kanaler som sendes interlacet (1080i, vanlig hos NRK og TV 2), får ikke lenger
+  «kammer» i bevegelse. Gjelder bare bilder som faktisk er interlacet, og er på som standard.
+- **Jevn bevegelse (prøve):** tilpasser bildet til skjermens frekvens, så 25/50 fps hakker mindre på en 60 Hz-skjerm.
+  Av som standard; slå den på i menyen for lydspor og undertekster. Infoen sier om den virker.
+- **Mer info under bildet:** bilder i sekundet (og om bildet er deinterlacet), bitrate og tapte bilder, oppdatert
+  hvert 5. sekund.
+
 ## v2.1.4
 
 - **TV direkte:** via Fyrlys-serveren spiller appen nå leverandørens strøm uendret, i stedet for at serveren gjør den

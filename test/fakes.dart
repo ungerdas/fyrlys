@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:fyrlys/core/languages.dart';
+import 'package:fyrlys/core/picture.dart';
 import 'package:fyrlys/core/models.dart';
 import 'package:fyrlys/core/source.dart';
 import 'package:fyrlys/core/vod.dart';
@@ -305,6 +306,12 @@ class FakePlayback implements Playback {
 
   @override
   Future<void> setLanguages(LanguagePrefs prefs, {bool now = false}) async => languages.add((prefs, now));
+
+  /// bildeinnstillingene spilleren har fått
+  final pictures = <PicturePrefs>[];
+
+  @override
+  Future<void> setPicture(PicturePrefs prefs) async => pictures.add(prefs);
 
   @override
   Future<String> describe() async => 'H.264 · AAC stereo';

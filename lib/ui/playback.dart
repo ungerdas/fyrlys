@@ -6,6 +6,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../core/languages.dart';
 import '../core/names.dart';
+import '../core/picture.dart';
 import '../platform.dart';
 
 /// Et lydspor eller en undertekst man kan velge i spilleren.
@@ -75,7 +76,11 @@ abstract class Playback {
   /// Språkene du foretrekker. Gjelder neste fil eller kanal som åpnes, og med [now] også det som spilles nå.
   Future<void> setLanguages(LanguagePrefs prefs, {bool now = false});
 
-  /// for feilsøking: kodek, dekoding og lyd, f.eks. «H.264 · maskinvaredekoding (d3d11va) · AC3 5.1»
+  /// Deinterlacing og jevn bevegelse. Gjelder med en gang, også det som spilles nå.
+  Future<void> setPicture(PicturePrefs prefs);
+
+  /// for feilsøking: kodek, bilder i sekundet, dekoding, bitrate, lyd og tapte bilder, f.eks.
+  /// «H.264 · 50 fps (deinterlacet) · maskinvaredekoding (d3d11va) · 8,1 Mbit/s · AC3 5.1»
   Future<String> describe();
 
   Widget view();
@@ -288,6 +293,52 @@ class MpvPlayback implements Playback {
     if (v is SubtitleTrack) await _player.setSubtitleTrack(v);
   }
 
+  PicturePrefs _picture = const PicturePrefs();
+
+  @override
+  Future<void> setPicture(PicturePrefs prefs) async {
+    _picture = prefs;
+    final p = _player.platform;
+    if (p is! NativePlayer) return;
+    if (prefs.deinterlace) {
+      // auto (mpv 0.38 og nyere): bare bilder som er merket interlacet. Eldre mpv kjenner ikke auto (og setProperty
+      // sier ikke fra om feil), men der gjør yes det samme.
+      await _try(() => p.setProperty('deinterlace', 'auto'));
+      var now = '';
+      try {
+        now = (await p.getProperty('deinterlace')).trim();
+      } on Object {
+        // som under
+      }
+      if (now != 'auto') await _try(() => p.setProperty('deinterlace', 'yes'));
+    } else {
+      await _try(() => p.setProperty('deinterlace', 'no'));
+    }
+    if (prefs.smooth) {
+      // mpv tegner i Flutter og ser ikke skjermen selv, så den får vite frekvensen
+      final hz = _displayHz();
+      if (hz != null) await _try(() => p.setProperty('display-fps-override', hz.toStringAsFixed(3)));
+      await _try(() => p.setProperty('video-sync', 'display-resample'));
+      await _try(() => p.setProperty('interpolation', 'yes'));
+      await _try(() => p.setProperty('tscale', 'oversample'));
+    } else {
+      await _try(() => p.setProperty('interpolation', 'no'));
+      await _try(() => p.setProperty('video-sync', 'audio'));
+    }
+  }
+
+  /// skjermens frekvens (60, 144 …), når Flutter vet den
+  static double? _displayHz() {
+    try {
+      final views = WidgetsBinding.instance.platformDispatcher.views;
+      if (views.isEmpty) return null;
+      final hz = views.first.display.refreshRate;
+      return hz > 1 ? hz : null;
+    } on Object {
+      return null;
+    }
+  }
+
   @override
   Future<String> describe() async {
     final p = _player.platform;
@@ -304,10 +355,24 @@ class MpvPlayback implements Playback {
     final hwdec = await prop('hwdec-current');
     final audio = await prop('audio-codec-name');
     final channels = await prop('audio-params/hr-channels');
+    // bilder i sekundet etter filtrene (1080i50 er 25 inn og 50 ut av deinterlacingen), ellers fra strømmen
+    final fps = double.tryParse(await prop('estimated-vf-fps')) ?? double.tryParse(await prop('container-fps'));
+    final interlaced = await prop('video-frame-info/interlaced') == 'yes';
+    final deint = await prop('deinterlace-active') == 'yes';
+    final bitrate = double.tryParse(await prop('video-bitrate'));
+    final dropped = (int.tryParse(await prop('frame-drop-count')) ?? 0) +
+        (int.tryParse(await prop('decoder-frame-drop-count')) ?? 0);
+    final sync = _picture.smooth ? await prop('display-sync-active') : '';
     return [
       if (video.isNotEmpty) codecName(video),
+      if (fps != null && fps > 0)
+        '${fps.round()} fps${deint ? ' (deinterlacet)' : interlaced ? ' (interlacet)' : ''}',
       if (video.isNotEmpty && hwdec.isNotEmpty) hwdec == 'no' ? 'programvaredekoding' : 'maskinvaredekoding ($hwdec)',
+      if (bitrate != null && bitrate > 0) bitrateText(bitrate),
       if (audio.isNotEmpty) [codecName(audio), if (channels.isNotEmpty) channelLayout(channels)].join(' '),
+      if (sync == 'yes') 'jevn bevegelse',
+      if (sync.isNotEmpty && sync != 'yes') 'jevn bevegelse virker ikke her',
+      if (dropped > 0) '$dropped tapte bilder',
     ].join(' · ');
   }
 
@@ -321,4 +386,10 @@ class MpvPlayback implements Playback {
 
   @override
   Future<void> dispose() => _player.dispose();
+}
+
+/// «8,1 Mbit/s» (eller «850 kbit/s») fra bit per sekund
+String bitrateText(double bits) {
+  if (bits >= 1e6) return '${(bits / 1e6).toStringAsFixed(1).replaceAll('.', ',')} Mbit/s';
+  return '${(bits / 1e3).round()} kbit/s';
 }

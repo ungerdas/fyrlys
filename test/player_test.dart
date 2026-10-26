@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fyrlys/core/picture.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/theme.dart';
 import 'package:fyrlys/ui/channel_card.dart';
+import 'package:fyrlys/ui/playback.dart';
 import 'package:fyrlys/ui/player_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -51,6 +53,32 @@ Future<void> _close(WidgetTester tester) async {
 }
 
 void main() {
+  test('bitrate i infoen', () {
+    expect(bitrateText(8123456), '8,1 Mbit/s');
+    expect(bitrateText(850000), '850 kbit/s');
+  });
+
+  testWidgets('bilde: deinterlacing på fra start, jevn bevegelse slås på i menyen og huskes', (tester) async {
+    final (session, _) = await _session();
+    final playback = await _openPlayer(tester, session);
+    expect(playback.pictures.single, const PicturePrefs());
+
+    await tester.tap(find.byTooltip('Lydspor og undertekster'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fjern striper (deinterlacing)'), findsOneWidget);
+    await tester.tap(find.text('Jevn bevegelse (prøve)'));
+    await tester.pumpAndSettle();
+    expect(playback.pictures.last, const PicturePrefs(smooth: true));
+    expect(session.picture, const PicturePrefs(smooth: true));
+
+    await tester.tap(find.byTooltip('Lydspor og undertekster'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fjern striper (deinterlacing)'));
+    await tester.pumpAndSettle();
+    expect(playback.pictures.last, const PicturePrefs(deinterlace: false, smooth: true));
+    await _close(tester);
+  });
+
   testWidgets('spilleren: bildet, programinfo under og kanallista ved siden av', (tester) async {
     final (session, source) = await _session();
     final playback = await _openPlayer(tester, session);
