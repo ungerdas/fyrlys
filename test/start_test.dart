@@ -125,7 +125,7 @@ void main() {
 
     // søket på startsiden gjelder alle kanalene
     await tester.enterText(find.byType(TextField), 'tv');
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('Treff i alle kanaler'), findsOneWidget);
     expect(find.text('TV 2 HD'), findsOneWidget);
 

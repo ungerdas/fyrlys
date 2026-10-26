@@ -42,6 +42,8 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 
 ## Bruk
 
+- **Rask oppstart:** kanallista fra sist vises med en gang og oppdateres i bakgrunnen, og logoer og plakater
+  lagres på disken.
 - **Hjem:** startsiden når appen åpnes: kanalen du så sist (med programmet nå og etterpå, «Se videre»),
   favorittene med det som går nå og det som kommer etterpå, de andre kanalene du har sett, kategoriene dine, og
   nederst filmen eller serien du holder på med.
@@ -58,7 +60,9 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 - **Pause og spol tilbake** i direktesendingen når appen er logget inn på en Fyrlys-server: serveren tar vare på
   de siste 30 minuttene. Tidslinja over knappene, −10/+10 sekunder (← og →), og «DIREKTE» (eller L) tar deg til
   direkte igjen. Hvor langt bak du er, står ved siden av.
-- **Taster:** ↑/↓ (eller kanal +/− på fjernkontrollen) bytter kanal, Backspace går til kanalen du så sist,
+- **Kanalbytte:** ↑/↓ (eller kanal +/− på fjernkontrollen) blar i kanalinfoen nederst i bildet (logo, nummer, nå og
+  etterpå), og kanalen du stopper på, startes etter et øyeblikk (OK starter med en gang, Esc blir der du var).
+- **Taster:** Backspace går til kanalen du så sist,
   mellomrom pauser, M slår av lyden, F fullskjerm, C kanallista, Esc går tilbake. På fjernkontrollen gir OK
   fullskjerm, og i fullskjerm kanallista; → går inn i kanallista og ← ut igjen.
 - **Lyd:** glidebryter ved lydknappen og musehjulet over bildet (PC). Volumet huskes. Lydspor og undertekster

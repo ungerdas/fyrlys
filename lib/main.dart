@@ -3,10 +3,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'core/cache.dart';
 import 'core/fyrlys_source.dart';
 import 'core/session.dart';
 import 'core/updater.dart';
@@ -20,7 +22,17 @@ Future<void> main() async {
   if (await updater.beforeStart()) exit(0);
   MediaKit.ensureInitialized();
   if (isDesktop) await windowManager.ensureInitialized();
-  final session = Session(await SharedPreferences.getInstance());
+  // kanallista fra sist og bildene på disk, så appen er klar med en gang (uten mapper: hentes hver gang)
+  ListCache? lists;
+  try {
+    lists = FileListCache(Directory('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}lister'));
+    final images = ImageStore(Directory('${(await getApplicationCacheDirectory()).path}${Platform.pathSeparator}bilder'));
+    ImageStore.instance = images;
+    unawaited(images.prune());
+  } on Object {
+    // uten disk
+  }
+  final session = Session(await SharedPreferences.getInstance(), listCache: lists);
   // Repoet er privat: byggene hentes via Fyrlys-serveren, som har en lesenøkkel til GitHub.
   updater.serverBase = () {
     final source = session.source;

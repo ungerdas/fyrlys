@@ -5,9 +5,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'cache.dart';
 import 'fyrlys_source.dart';
 import 'languages.dart';
 import 'models.dart';
+import 'names.dart';
 import 'source.dart';
 import 'vod.dart';
 import 'xtream_source.dart';
@@ -16,12 +18,15 @@ typedef SourceFactory = Future<TvSource?> Function(Map<String, String> saved);
 
 /// Tilstanden i appen: kilden du er logget inn på, kanallista, favoritter, «sist sett» og lys/mørk.
 class Session extends ChangeNotifier {
-  Session(this._prefs, {this.sourceFactory}) : themeMode = _themeFrom(_prefs.getString('theme'));
+  Session(this._prefs, {this.sourceFactory, this.listCache}) : themeMode = _themeFrom(_prefs.getString('theme'));
 
   final SharedPreferences _prefs;
 
   /// tester lager kilden selv i stedet for å koble til noe
   final SourceFactory? sourceFactory;
+
+  /// kanallista fra sist (null: hentes hver gang, som i testene)
+  final ListCache? listCache;
 
   TvSource? source;
   bool restoring = true;
@@ -123,9 +128,26 @@ class Session extends ChangeNotifier {
       favoriteCategories = _prefs.getStringList('favoriteCategories') ?? const [];
     }
     notifyListeners();
-    unawaited(load());
+    unawaited(_startLists(src));
     unawaited(refreshFavorites());
   }
+
+  /// Lista fra sist vises med en gang, og den nye hentes i bakgrunnen.
+  Future<void> _startLists(TvSource src) async {
+    final cache = listCache;
+    if (cache != null) {
+      final saved = await cache.read(_cacheKey(src));
+      // ikke hvis kilden er byttet imens, eller den nye lista alt er kommet
+      if (saved != null && source == src && channels.isEmpty && saved.channels.isNotEmpty) {
+        _applyLists(saved.categories, saved.channels);
+        notifyListeners();
+        _prefetchEpg();
+      }
+    }
+    if (source == src) await load();
+  }
+
+  static String _cacheKey(TvSource src) => '${src.kind}|${src.label}';
 
   Future<void> logout() async {
     source?.dispose();
@@ -156,18 +178,10 @@ class Session extends ChangeNotifier {
       final cats = await src.categories(force: force);
       final chans = await src.channels(force: force);
       if (source != src) return;
-      final counts = <String, int>{};
-      for (final c in chans) {
-        counts[c.categoryId] = (counts[c.categoryId] ?? 0) + 1;
-      }
-      final seen = <String>{};
-      categories = [for (final c in cats) if ((counts[c.id] ?? 0) > 0 && seen.add(c.id)) c];
-      channels = chans;
-      categoryCounts = counts;
-      _byId = {for (final c in chans) c.id: c};
-      _filtered.clear();
-      favorites = [for (final f in favorites) _byId[f.id] ?? f];
-      recent = [for (final r in recent) _byId[r.id] ?? r];
+      final first = channels.isEmpty;
+      _applyLists(cats, chans);
+      unawaited(listCache?.write(_cacheKey(src), categories, channels));
+      if (first) _prefetchEpg();
     } on SourceException catch (e) {
       if (source == src) error = e.message;
     } on Object {
@@ -178,6 +192,33 @@ class Session extends ChangeNotifier {
         loading = false;
         notifyListeners();
       }
+    }
+  }
+
+  void _applyLists(List<Category> cats, List<Channel> chans) {
+    final counts = <String, int>{};
+    for (final c in chans) {
+      counts[c.categoryId] = (counts[c.categoryId] ?? 0) + 1;
+    }
+    final seen = <String>{};
+    categories = [for (final c in cats) if ((counts[c.id] ?? 0) > 0 && seen.add(c.id)) c];
+    channels = chans;
+    categoryCounts = counts;
+    _byId = {for (final c in chans) c.id: c};
+    _filtered.clear();
+    favorites = [for (final f in favorites) _byId[f.id] ?? f];
+    recent = [for (final r in recent) _byId[r.id] ?? r];
+  }
+
+  /// Programinfo for favorittene og det du har sett sist hentes med en gang, så startsiden er fylt ut når den
+  /// vises (det som faktisk vises, går likevel først i køen).
+  void _prefetchEpg() {
+    final ids = <String>{
+      for (final c in [...favorites.take(12), ...recent.take(8)])
+        if (c.hasEpg && nameParts(c.name).sub.isEmpty) c.id,
+    };
+    for (final id in ids) {
+      unawaited(epg(id));
     }
   }
 
@@ -350,6 +391,8 @@ class Session extends ChangeNotifier {
     favorites = [for (final c in f.channels) _byId[c.id] ?? c];
     favoriteCategories = f.categories;
     notifyListeners();
+    // favorittene fra serveren kom etter lista: programinfoen deres med en gang (det som alt er hentet, gjenbrukes)
+    _prefetchEpg();
   }
 
   void addRecent(Channel ch) {

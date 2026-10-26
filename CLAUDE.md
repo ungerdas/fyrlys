@@ -66,6 +66,11 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
     Rett mot leverandøren hentes hele lista (`get_vod_streams`/`get_series`, 30 min) og filtreres i appen;
     filene er `/movie/` og `/series/<bruker>/<passord>/<id>.<ext>`. Filmer og serier går utenom «Ta over» og
     seertellingen på serveren.
+- `core/cache.dart` – det som tas vare på mellom gangene (2.1.3): `ListCache` (`FileListCache` i
+  `getApplicationSupportDirectory()/lister`, én JSON per kilde med nøkkelen `kind|label`; `MemoryListCache` i testene)
+  og `ImageStore` (bildene i `getApplicationCacheDirectory()/bilder`, filnavn `stableHash(url)`, fornyes etter 14 dager,
+  det gamle brukes når nettet feiler, 404 huskes i 10 min, `prune()` ved start holder det under 300 MB). Settes opp i
+  `main.dart` (path_provider); uten dem (testene) hentes alt som før.
 - `core/session.dart` – tilstanden (ChangeNotifier): innlogging (lagres i shared_preferences, også
   Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
   `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene; `cleanEpg` i `models.dart` slår sammen
@@ -73,7 +78,9 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   serveren for Fyrlys-server, i kø), «sist sett», lys/mørk, og «fortsett der du
   slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
   `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken). Språkene (`languages`/`saveLanguages`,
-  `lang_audio`/`lang_subs` i shared_preferences; `LanguagePrefs` og kodene i `core/languages.dart`).
+  `lang_audio`/`lang_subs` i shared_preferences; `LanguagePrefs` og kodene i `core/languages.dart`). Lista fra
+  `listCache` vises med en gang (`_startLists`), `load` skriver den nye; `_prefetchEpg` henter programinfo for 12
+  favoritter og 8 sist sett når lista er klar og når favorittene kommer fra serveren.
 - `ui/login_page.dart`, `ui/home_page.dart` (TV/TV-guide/Filmer/Serier: SegmentedButton i toppen ≥ 900 px (ikoner ≥ 1200), ellers
   NavigationBar nederst; TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
   på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå).
@@ -85,6 +92,11 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   i 1,4 s (OK/Enter går straks), lista du ser fra først og så alle kanalene, som `numGo` på nettsiden. I spilleren via
   `_onKey` (også fra kanallista, ikke i søket), på TV-siden og i guiden via `HardwareKeyboard`-handler i
   `home_page.dart` (bare når siden er øverst og søket ikke har fokus).
+- `ui/net_image.dart` – `NetImage` (alle nettbilder: logoer, plakater, bakgrunner, episodebilder): `StoredImage` via
+  `ImageStore`, `ResizeImage` til `decodeWidth` × skjermtetthet, tones inn (ikke når det alt var i minnet).
+- `ui/motion.dart` – `fadeRoute` (begge spillerne), `SmoothSwitch` (AnimatedSwitcher: fanene i `home_page.dart` og
+  listene/Hjem på TV, nøkkel `start`/`liste:<filter>`), `Lift` (kort som løftes ved fokus/hover: kanalkort, plakater,
+  «Fortsett å se», sist sett). Tester må `pumpAndSettle` etter fane-/listebytter (to barn under overgangen).
 - `ui/language_dialog.dart` – «Språk for lyd og undertekster» (FilterChips i den rekkefølgen du velger, «Av» for
   undertekster) og `TracksButton`, sporvalget i begge spillerne (henter sporene asynkront så det som faktisk spilles
   er huket av; «Foretrukne språk …» nederst gjelder straks). Via Fyrlys-serveren har direktesendingene bare første
@@ -118,7 +130,12 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   tvers = fullskjerm. Bildet ligger under en GlobalKey, så det flyttes mellom oppsettene uten å starte på nytt.
   Volum (glidebryter på PC, musehjulet over bildet, lagres i Session), ⇄/Backspace, tastatur og fjernkontroll
   (OK = fullskjerm/kanalliste, → inn i lista, ← ut). Infoen viser oppløsning, kodek/hwdec/lyd (mpv-egenskaper)
-  og hvor strømmen kommer fra. Nye forsøk ved brudd/fast bilde, tre per minutt. Telefon/TV: kanalen stoppes når
+  og hvor strømmen kommer fra. Nye forsøk ved brudd/fast bilde, tre per minutt. Kanalbytte (2.1.3): ↑/↓ setter
+  `_pendingZap` (kanalinfoen viser den, programinfo via `session.epg`) og starter den etter 650 ms (`_commitZap`; OK
+  straks, Esc avbryter); `_banner` nederst i bildet (`ValueKey('channel-banner')`) vises mens du blar, 4 s etter
+  `_switchTo` og til den nye kanalen har startet (`_switching`), ikke ved første åpning, spoling eller nye forsøk;
+  toppstripa i fullskjerm skjules imens. Den lille spinneren i banneret går til bildet starter: ingen
+  `pumpAndSettle` i tester etter et kanalbytte (den falske avspilleren starter aldri). Telefon/TV: kanalen stoppes når
   appen legges bort (`paused`) og startes igjen ved `resumed`.
   Pause og tilbakespoling (bare via Fyrlys-serveren med ffmpeg: `PlayTarget.timeshift` fra `timeshift_min` i
   `/api/streams/info`): ffmpegs HLS-demuxer kan ikke spole i en direktesending, så spillelista åpnes på nytt med
@@ -190,5 +207,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
 - 26.10.2026: 2.1.2 (først levert som 2.0.3, bygg 24): Hjem (startsiden), kanalnummer med tall, språk for lyd og undertekster, «Spill av»/«Fortsett» på
   seriesiden. Testet med widget-tester; språkvalget i ekte mpv (koder, `subs-with-matching-audio` i media_kits
   libmpv) og tallene på en ekte fjernkontroll er ikke prøvd.
+- 26.10.2026: 2.1.3, «mer smooth» (Pål-Eriks ønske, alle sju forslagene): lista og bildene på disk, programinfo
+  ved start, kanalinfo ved bytte, rask blaing, overganger og fokus. Testet med tester; ikke prøvd på ekte enheter.
 - Ideer senere: tilbakespoling rett mot leverandøren (mpv-bufferet), bilde-i-bilde på Android, serveren kunne velge
   lydspor etter språk, signering av exe/APK, Play Store, iOS/macOS.

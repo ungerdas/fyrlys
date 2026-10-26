@@ -12,6 +12,7 @@ import 'channel_card.dart';
 import 'channel_number.dart';
 import 'guide_view.dart';
 import 'language_dialog.dart';
+import 'motion.dart';
 import 'player_page.dart';
 import 'start_view.dart';
 import 'vod_browser.dart';
@@ -100,8 +101,8 @@ class _HomePageState extends State<HomePage> {
 
   void _openPlayer(List<Channel> list, int i, String title, bool fromFavorites) {
     unawaited(Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PlayerPage(
+      fadeRoute<void>(
+        (_) => PlayerPage(
           session: s,
           channels: list,
           index: i,
@@ -292,34 +293,56 @@ class _HomePageState extends State<HomePage> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                switch (_section) {
-                  _Section.guide => GuideView(
-                      key: const ValueKey('guide'), session: s, query: _query, onPlay: _openPlayer),
-                  _Section.movies =>
-                    VodBrowser(key: const ValueKey('filmer'), session: s, kind: VodKind.movies, query: _query),
-                  _Section.series =>
-                    VodBrowser(key: const ValueKey('serier'), session: s, kind: VodKind.series, query: _query),
-                  _Section.tv => wide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(width: 280, child: _sidebar()),
-                            VerticalDivider(width: 1, color: theme.colorScheme.outline),
-                            Expanded(
-                              child: home
-                                  ? _start()
-                                  : Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: [_header(list), Expanded(child: content)],
+                // fanene og listene glir over i hverandre
+                SmoothSwitch(
+                  slide: false,
+                  child: KeyedSubtree(
+                    key: ValueKey(_section),
+                    child: switch (_section) {
+                      _Section.guide => GuideView(
+                          key: const ValueKey('guide'), session: s, query: _query, onPlay: _openPlayer),
+                      _Section.movies =>
+                        VodBrowser(key: const ValueKey('filmer'), session: s, kind: VodKind.movies, query: _query),
+                      _Section.series =>
+                        VodBrowser(key: const ValueKey('serier'), session: s, kind: VodKind.series, query: _query),
+                      _Section.tv => wide
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                SizedBox(width: 280, child: _sidebar()),
+                                VerticalDivider(width: 1, color: theme.colorScheme.outline),
+                                Expanded(
+                                  child: SmoothSwitch(
+                                    child: KeyedSubtree(
+                                      key: ValueKey(home ? 'start' : 'liste:$_filter'),
+                                      child: home
+                                          ? _start()
+                                          : Column(
+                                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                                              children: [_header(list), Expanded(child: content)],
+                                            ),
                                     ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _picker(),
+                                Expanded(
+                                  child: SmoothSwitch(
+                                    child: KeyedSubtree(
+                                      key: ValueKey(home ? 'start' : 'liste:$_filter'),
+                                      child: home ? _start() : content,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [_picker(), Expanded(child: home ? _start() : content)],
-                        ),
-                },
+                    },
+                  ),
+                ),
                 if (_digits.isNotEmpty)
                   Positioned(top: 16, right: 20, child: IgnorePointer(child: NumberBadge(digits: _digits))),
               ],

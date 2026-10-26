@@ -12,6 +12,7 @@ import '../core/session.dart';
 import '../core/source.dart';
 import '../platform.dart';
 import '../theme.dart';
+import 'channel_card.dart';
 import 'channel_number.dart';
 import 'language_dialog.dart';
 import 'playback.dart';
@@ -152,6 +153,18 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   String _digits = '';
   Timer? _digitTimer;
 
+  /// kanalen ↑/↓ har bladd fram til (plassen i lista); den startes først når du slutter å bla
+  int? _pendingZap;
+  Timer? _zapTimer;
+
+  /// programinfoen til kanalen du blar forbi
+  Future<List<EpgEntry>>? _pendingEpg;
+
+  /// kanalinfoen nederst i bildet: noen sekunder etter et kanalbytte, og til den nye kanalen har startet
+  bool _bannerOn = false;
+  bool _switching = false;
+  Timer? _bannerTimer;
+
   Channel get _channel => _list[_index];
   Session get _session => widget.page.session;
   TvSource? get _source => _session.source;
@@ -168,6 +181,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
         if (!_started && p > Duration.zero) {
           _set(() {
             _started = true;
+            _switching = false;
             _status = null;
           });
           _probe();
@@ -197,6 +211,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _watchdog?.cancel();
     _shiftTimer?.cancel();
     _digitTimer?.cancel();
+    _zapTimer?.cancel();
+    _bannerTimer?.cancel();
     final ch = _opened;
     final src = _source;
     if (ch != null && src != null) unawaited(src.close(ch));
@@ -667,6 +683,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// Bytter til en kanal i en liste (▲▼ blar videre i den lista).
   void _switchTo(List<Channel> list, int index) {
     if (index < 0 || index >= list.length) return;
+    _zapTimer?.cancel();
+    _pendingZap = null;
     if (list[index].id == _channel.id) {
       setState(() {
         _list = list;
@@ -681,16 +699,54 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     setState(() {
       _list = list;
       _index = index;
+      _switching = true;
     });
+    _showBanner();
     unawaited(_open());
     _wake();
   }
 
+  /// ↑/↓: kanalinfoen blar gjennom lista med en gang, og kanalen du stopper på, startes etter et øyeblikk (eller
+  /// straks med OK). Kanalene du blar forbi, startes ikke (med én tilkobling ville hver av dem tatt den).
   void _zap(int step) {
     final n = _list.length;
     if (n < 2) return;
-    _switchTo(_list, (_index + step) % n);
+    final to = ((_pendingZap ?? _index) + step) % n;
+    _zapTimer?.cancel();
+    setState(() {
+      _pendingZap = to;
+      _pendingEpg = _wantsEpg(_list[to]) ? _session.epg(_list[to].id) : null;
+    });
+    _zapTimer = Timer(const Duration(milliseconds: 650), _commitZap);
   }
+
+  void _commitZap() {
+    _zapTimer?.cancel();
+    final to = _pendingZap;
+    if (!mounted || to == null) return;
+    if (to == _index) {
+      setState(() => _pendingZap = null);
+      return;
+    }
+    _switchTo(_list, to);
+  }
+
+  /// Bla tilbake til kanalen som spilles (Esc mens du blar).
+  void _cancelZap() {
+    _zapTimer?.cancel();
+    setState(() => _pendingZap = null);
+  }
+
+  static bool _wantsEpg(Channel ch) => ch.hasEpg && nameParts(ch.name).sub.isEmpty;
+
+  void _showBanner() {
+    _bannerTimer?.cancel();
+    _bannerOn = true;
+    _bannerTimer = Timer(const Duration(seconds: 4), () => _set(() => _bannerOn = false));
+  }
+
+  bool get _bannerVisible =>
+      _busy == null && _status == null && (_pendingZap != null || _bannerOn || (_switching && !_started));
 
   void _lastChannel() {
     final last = _last;
@@ -789,6 +845,15 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     }
     if (_digits.isNotEmpty && _okKeys.contains(key)) {
       _goToNumber();
+      return KeyEventResult.handled;
+    }
+    // mens du blar: OK starter kanalen med en gang, Esc blir på den du ser
+    if (_pendingZap != null && _okKeys.contains(key)) {
+      _commitZap();
+      return KeyEventResult.handled;
+    }
+    if (_pendingZap != null && key == LogicalKeyboardKey.escape) {
+      _cancelZap();
       return KeyEventResult.handled;
     }
     // i kanallista flytter piltastene mellom kanalene; ← og Esc går tilbake til bildet
@@ -1007,6 +1072,33 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
               Positioned(top: full ? 96 : 16, right: 20, child: IgnorePointer(child: _flashBadge(flash))),
             if (_digits.isNotEmpty)
               Positioned(top: full ? 96 : 16, right: 20, child: IgnorePointer(child: NumberBadge(digits: _digits))),
+            // kanalinfoen ved bytte, over kontrollene når de vises
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              left: compact ? 10 : 20,
+              right: compact ? 10 : null,
+              bottom: showBars ? (compact ? 62 : (_canShift && _window >= const Duration(seconds: 20) ? 112 : 86)) : 20,
+              child: IgnorePointer(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOut,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween(begin: const Offset(0, 0.15), end: Offset.zero).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: _bannerVisible
+                      ? KeyedSubtree(
+                          key: ValueKey('banner:${(_pendingZap != null ? _list[_pendingZap!] : _channel).id}'),
+                          child: _banner(compact: compact),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('banner:none')),
+                ),
+              ),
+            ),
             ExcludeFocus(
               excluding: !showBars,
               child: IgnorePointer(
@@ -1035,7 +1127,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   Widget _overlay({required bool full, required bool compact, required bool canToggleFull}) {
     return Stack(
       children: [
-        if (full) Positioned(left: 0, right: 0, top: 0, child: _topBar()),
+        // kanalinfoen nederst viser det samme mens den er framme
+        if (full && !_bannerVisible) Positioned(left: 0, right: 0, top: 0, child: _topBar()),
         Positioned(
           left: 12,
           top: 12,
@@ -1339,6 +1432,136 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
           _probe();
         },
       );
+
+  /// Kanalinfoen ved bytte, som på en TV-boks: logo, nummer, navn, og programmet nå og etterpå.
+  Widget _banner({required bool compact}) {
+    final pending = _pendingZap;
+    final ch = pending != null ? _list[pending] : _channel;
+    final parts = nameParts(ch.name);
+    final scheme = Theme.of(context).colorScheme;
+    Widget program(List<EpgEntry> epg) {
+      final nn = nowAndNext(epg, DateTime.now());
+      final cur = nn.now;
+      final next = nn.next;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (cur != null) ...[
+            Text(cur.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Color(0xFFDFE6EA), fontSize: 15, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 5),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${hhmm(cur.start)}–${hhmm(cur.stop)}', style: const TextStyle(color: _dim, fontSize: 12.5)),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: compact ? 70 : 120,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: cur.progressAt(DateTime.now()),
+                      minHeight: 3,
+                      color: scheme.primary,
+                      backgroundColor: Colors.white24,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else if (parts.sub.isNotEmpty)
+            Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _ink2)),
+          if (next != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Så ${hhmm(next.start)}  ${next.title}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _dim, fontSize: 12.5),
+              ),
+            ),
+        ],
+      );
+    }
+
+    final Widget info = pending == null
+        ? program(_epg)
+        : FutureBuilder<List<EpgEntry>>(
+            future: _pendingEpg,
+            initialData: _session.epgCached(ch.id),
+            builder: (context, snap) => program(snap.data ?? const []),
+          );
+    final loading = pending == null && _switching && !_started;
+    return Container(
+      key: const ValueKey('channel-banner'),
+      constraints: const BoxConstraints(maxWidth: 560),
+      padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xE6091019),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x24FFFFFF)),
+        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 20, offset: Offset(0, 6))],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ChannelLogo(
+            url: _source?.logoUrl(ch.icon),
+            name: ch.name,
+            width: compact ? 64 : 84,
+            height: compact ? 48 : 62,
+          ),
+          const SizedBox(width: 14),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (ch.number != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                        decoration: BoxDecoration(color: scheme.primary, borderRadius: BorderRadius.circular(6)),
+                        child: Text(
+                          ch.number!,
+                          style: TextStyle(color: scheme.onPrimary, fontWeight: FontWeight.w800, fontSize: 14),
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                    ],
+                    Flexible(
+                      child: Text(
+                        parts.time.isEmpty ? parts.main : '${parts.time} · ${parts.main}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    if (loading) ...[
+                      const SizedBox(width: 10),
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                info,
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _flashBadge(String text) {
     return Container(

@@ -2,6 +2,20 @@
 
 Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
 
+## v2.1.3
+
+Mer smooth:
+- **Rask oppstart:** kanallista fra sist vises med en gang og oppdateres i bakgrunnen, og programinfoen for
+  favorittene og kanalene du har sett, hentes straks, så Hjem er fylt ut når du ser den.
+- **Bildene huskes:** logoer, plakater og bakgrunner lagres på disken og pakkes ut i størrelsen de vises i (mindre
+  hakking, særlig på TV-bokser), og tones inn når de kommer.
+- **Kanalinfo ved bytte**, som på en TV-boks: logo, nummer, navn og programmet nå og etterpå nederst i bildet, også
+  mens kanalen laster.
+- **Rask blaing:** ↑/↓ blar i kanalinfoen, og bare kanalen du stopper på, startes (OK starter med en gang, Esc blir
+  der du var). Kanalene du blar forbi, tar ikke tilkoblingen.
+- **Myke overganger:** spillerne tones inn og ut, fanene og listene glir over i hverandre, og programinfoen tones inn.
+- **Tydeligere fokus:** kortet du står på med fjernkontrollen eller har musa over, løftes litt.
+
 ## v2.1.2
 
 Herfra får hver oppdatering neste nummer (2.1.3, 2.1.4 …). Denne kom først som 2.0.3.

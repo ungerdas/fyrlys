@@ -7,16 +7,28 @@ import 'package:flutter/material.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../core/vod.dart';
+import 'motion.dart';
+import 'net_image.dart';
 import 'vod_browser.dart';
 import 'vod_player_page.dart';
 
 /// Plakaten: bildet fra leverandøren, eller en farget flate (med navnet) når det mangler.
 class Poster extends StatelessWidget {
-  const Poster({super.key, required this.url, required this.title, this.radius = 10, this.showTitle = true});
+  const Poster({
+    super.key,
+    required this.url,
+    required this.title,
+    this.radius = 10,
+    this.showTitle = true,
+    this.decodeWidth = 240,
+  });
 
   final String? url;
   final String title;
   final double radius;
+
+  /// omtrent hvor bred plakaten vises (bildet pakkes ut i den størrelsen)
+  final double decodeWidth;
 
   /// navnet på flata når bildet mangler (i rutenettet står navnet under plakaten, så der vises et ikon)
   final bool showTitle;
@@ -45,12 +57,7 @@ class Poster extends StatelessWidget {
         aspectRatio: 2 / 3,
         child: u == null
             ? fallback
-            : Image.network(
-                u,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.medium,
-                errorBuilder: (context, error, stackTrace) => fallback,
-              ),
+            : NetImage(u, decodeWidth: decodeWidth, fallback: fallback),
       ),
     );
   }
@@ -120,7 +127,7 @@ Future<void> playContinue(BuildContext context, Session s, ContinueItem c) async
   if (c.kind == VodKind.movies) {
     final item = movieItem(s, series);
     if (item == null) return;
-    await nav.push(MaterialPageRoute<void>(builder: (_) => VodPlayerPage(session: s, items: [item])));
+    await nav.push(fadeRoute<void>((_) => VodPlayerPage(session: s, items: [item])));
     return;
   }
   try {
@@ -129,8 +136,8 @@ Future<void> playContinue(BuildContext context, Session s, ContinueItem c) async
       if (season.number != c.season) continue;
       final i = season.episodes.indexWhere((e) => e.id == c.episodeId);
       if (i < 0) break;
-      await nav.push(MaterialPageRoute<void>(
-        builder: (_) => VodPlayerPage(session: s, items: seasonItems(s, info, season, series), index: i),
+      await nav.push(fadeRoute<void>(
+        (_) => VodPlayerPage(session: s, items: seasonItems(s, info, season, series), index: i),
       ));
       return;
     }
@@ -205,9 +212,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
 
   Future<void> _play(List<VodPlayItem> items, int index, {bool resume = true}) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => VodPlayerPage(session: s, items: items, index: index, resume: resume),
-      ),
+      fadeRoute<void>((_) => VodPlayerPage(session: s, items: items, index: index, resume: resume)),
     );
     // hvor du slapp, og hva som er sett, kan ha endret seg
     if (mounted) setState(() {});
@@ -559,7 +564,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
           fit: StackFit.expand,
           children: [
             if (image != null)
-              Image.network(image, fit: BoxFit.cover, errorBuilder: (c, e, s) => _EpisodeFallback(url: fallback))
+              NetImage(image, decodeWidth: 192, fallback: _EpisodeFallback(url: fallback))
             else
               _EpisodeFallback(url: fallback),
             // nummeret på alle, også når episoden har eget bilde
@@ -665,7 +670,7 @@ class _EpisodeFallback extends StatelessWidget {
         if (u == null)
           ColoredBox(color: scheme.surfaceContainerHighest)
         else
-          Image.network(u, fit: BoxFit.cover, errorBuilder: (c, e, s) => ColoredBox(color: scheme.surfaceContainerHighest)),
+          NetImage(u, decodeWidth: 192, fallback: ColoredBox(color: scheme.surfaceContainerHighest)),
         const ColoredBox(color: Color(0x66000000)),
       ],
     );
@@ -718,8 +723,8 @@ class _Hero extends StatelessWidget {
       if (p == null) return ColoredBox(color: scheme.surfaceContainerHighest);
       return ImageFiltered(
         imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Image.network(p,
-            fit: BoxFit.cover, errorBuilder: (c, e, s) => ColoredBox(color: scheme.surfaceContainerHighest)),
+        // uskarp uansett: holder med et lite bilde
+        child: NetImage(p, decodeWidth: 240, fallback: ColoredBox(color: scheme.surfaceContainerHighest)),
       );
     }
 
@@ -733,7 +738,7 @@ class _Hero extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (b != null)
-            Image.network(b, fit: BoxFit.cover, alignment: Alignment.topCenter, errorBuilder: (c, e, s) => blurredPoster())
+            NetImage(b, alignment: Alignment.topCenter, decodeWidth: size.width, fallback: blurredPoster())
           else
             blurredPoster(),
           DecoratedBox(

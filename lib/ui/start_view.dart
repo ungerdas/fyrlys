@@ -7,6 +7,7 @@ import '../core/names.dart';
 import '../core/session.dart';
 import '../core/vod.dart';
 import 'channel_card.dart';
+import 'motion.dart';
 import 'vod_browser.dart';
 import 'vod_detail_page.dart';
 
@@ -373,6 +374,7 @@ class LastWatchedCard extends StatefulWidget {
 class _LastWatchedCardState extends State<LastWatchedCard> {
   Future<List<EpgEntry>>? _epg;
   bool _focused = false;
+  bool _hovered = false;
 
   @override
   void initState() {
@@ -440,50 +442,57 @@ class _LastWatchedCardState extends State<LastWatchedCard> {
         mainAxisSize: MainAxisSize.min,
         children: [label, const SizedBox(height: 4), title, const SizedBox(height: 8), program],
       );
-      return Material(
-        color: scheme.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: _focused ? scheme.tertiary : scheme.outline, width: _focused ? 2 : 1),
-        ),
-        child: InkWell(
-          onTap: widget.onTap,
-          onFocusChange: (f) => setState(() => _focused = f),
-          child: Ink(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [scheme.primary.withValues(alpha: 0.18), scheme.surface],
-                stops: const [0, 0.75],
+      return Lift(
+        up: _focused || _hovered,
+        scale: 1.012,
+        child: Material(
+          color: scheme.surface,
+          clipBehavior: Clip.antiAlias,
+          elevation: _focused || _hovered ? 8 : 0,
+          shadowColor: Colors.black54,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: _focused ? scheme.tertiary : scheme.outline, width: _focused ? 2 : 1),
+          ),
+          child: InkWell(
+            onTap: widget.onTap,
+            onFocusChange: (f) => setState(() => _focused = f),
+            onHover: (h) => setState(() => _hovered = h),
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [scheme.primary.withValues(alpha: 0.18), scheme.surface],
+                  stops: const [0, 0.75],
+                ),
               ),
+              padding: EdgeInsets.all(wide ? 22 : 16),
+              child: wide
+                  ? Row(
+                      children: [
+                        logo,
+                        const SizedBox(width: 24),
+                        Expanded(child: info),
+                        const SizedBox(width: 16),
+                        watch,
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            logo,
+                            const SizedBox(width: 14),
+                            Expanded(child: info),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        watch,
+                      ],
+                    ),
             ),
-            padding: EdgeInsets.all(wide ? 22 : 16),
-            child: wide
-                ? Row(
-                    children: [
-                      logo,
-                      const SizedBox(width: 24),
-                      Expanded(child: info),
-                      const SizedBox(width: 16),
-                      watch,
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          logo,
-                          const SizedBox(width: 14),
-                          Expanded(child: info),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      watch,
-                    ],
-                  ),
           ),
         ),
       );

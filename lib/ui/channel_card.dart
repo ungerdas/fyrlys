@@ -6,6 +6,8 @@ import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
 import '../theme.dart';
+import 'motion.dart';
+import 'net_image.dart';
 
 /// Kanalkort: logo, navn (eventkanaler med klokkeslett), programmet som går nå med fremdrift, og stjerne.
 class ChannelCard extends StatefulWidget {
@@ -32,6 +34,7 @@ class _ChannelCardState extends State<ChannelCard> {
   Future<List<EpgEntry>>? _epg;
   Timer? _wait;
   bool _focused = false;
+  bool _hovered = false;
 
   @override
   void initState() {
@@ -79,93 +82,115 @@ class _ChannelCardState extends State<ChannelCard> {
     final parts = nameParts(ch.name);
     final fav = s.isFavorite(ch.id);
     final dim = TextStyle(color: scheme.onSurfaceVariant, fontSize: 13);
-    return Material(
-      color: scheme.surface,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: _focused ? scheme.tertiary : scheme.outline, width: _focused ? 2 : 1),
-      ),
-      child: InkWell(
-        onTap: widget.onTap,
-        onFocusChange: (f) => setState(() => _focused = f),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 4, 10),
-          child: Row(
-            children: [
-              ChannelLogo(url: s.source?.logoUrl(ch.icon), name: ch.name),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text.rich(
-                      TextSpan(children: [
-                        if (parts.time.isNotEmpty)
-                          TextSpan(
-                            text: '${parts.time}  ',
-                            style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
-                          ),
-                        TextSpan(text: parts.main),
-                      ]),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                    ),
-                    const SizedBox(height: 3),
-                    if (parts.sub.isNotEmpty)
-                      Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: dim)
-                    else if (_epg != null)
-                      FutureBuilder<List<EpgEntry>>(
-                        future: _epg,
-                        builder: (context, snap) {
-                          final now = DateTime.now();
-                          final nn = nowAndNext(snap.data ?? const [], now);
-                          final cur = nn.now;
-                          final next = widget.showNext ? nn.next : null;
-                          if (cur == null) return const SizedBox.shrink();
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(cur.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: dim),
-                              const SizedBox(height: 5),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(2),
-                                child: LinearProgressIndicator(
-                                  value: cur.progressAt(now),
-                                  minHeight: 3,
-                                  backgroundColor: scheme.outline,
-                                ),
-                              ),
-                              if (next != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 5),
-                                  child: Text(
-                                    '${hhmm(next.start)}  ${next.title}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: dim.copyWith(fontSize: 12),
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
+    final up = _focused || _hovered;
+    return Lift(
+      up: up,
+      child: Material(
+        color: scheme.surface,
+        clipBehavior: Clip.antiAlias,
+        elevation: up ? 6 : 0,
+        shadowColor: Colors.black54,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: _focused ? scheme.tertiary : scheme.outline, width: _focused ? 2 : 1),
+        ),
+        child: InkWell(
+          onTap: widget.onTap,
+          onFocusChange: (f) => setState(() => _focused = f),
+          onHover: (h) => setState(() => _hovered = h),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 4, 10),
+            child: Row(
+              children: [
+                ChannelLogo(url: s.source?.logoUrl(ch.icon), name: ch.name),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text.rich(
+                        TextSpan(children: [
+                          if (parts.time.isNotEmpty)
+                            TextSpan(
+                              text: '${parts.time}  ',
+                              style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
+                            ),
+                          TextSpan(text: parts.main),
+                        ]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                       ),
-                  ],
+                      const SizedBox(height: 3),
+                      if (parts.sub.isNotEmpty)
+                        Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: dim)
+                      else if (_epg != null)
+                        FutureBuilder<List<EpgEntry>>(
+                          future: _epg,
+                          builder: (context, snap) => _program(snap.data ?? const [], dim),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              if (ch.number != null) Padding(padding: const EdgeInsets.only(left: 8), child: Text(ch.number!, style: dim)),
-              IconButton(
-                tooltip: fav ? 'Fjern fra favoritter' : 'Legg til i favoritter',
-                icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? scheme.primary : scheme.onSurfaceVariant),
-                onPressed: () => unawaited(s.toggleFavorite(ch)),
-              ),
-            ],
+                if (ch.number != null)
+                  Padding(padding: const EdgeInsets.only(left: 8), child: Text(ch.number!, style: dim)),
+                IconButton(
+                  tooltip: fav ? 'Fjern fra favoritter' : 'Legg til i favoritter',
+                  icon: Icon(fav ? Icons.star : Icons.star_border,
+                      color: fav ? scheme.primary : scheme.onSurfaceVariant),
+                  onPressed: () => unawaited(s.toggleFavorite(ch)),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Programmet som går nå med fremdrift (og det som kommer etterpå), tonet inn når det kommer.
+  Widget _program(List<EpgEntry> epg, TextStyle dim) {
+    final scheme = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    final nn = nowAndNext(epg, now);
+    final cur = nn.now;
+    final next = widget.showNext ? nn.next : null;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      layoutBuilder: (current, previous) => Stack(
+        alignment: Alignment.topLeft,
+        children: [...previous, if (current != null) current],
+      ),
+      child: cur == null
+          ? const SizedBox.shrink(key: ValueKey('ingen'))
+          : Column(
+              key: ValueKey('${cur.title}@${cur.start}'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(cur.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: dim),
+                const SizedBox(height: 5),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(
+                    value: cur.progressAt(now),
+                    minHeight: 3,
+                    backgroundColor: scheme.outline,
+                  ),
+                ),
+                if (next != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: Text(
+                      '${hhmm(next.start)}  ${next.title}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: dim.copyWith(fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -192,14 +217,7 @@ class ChannelLogo extends StatelessWidget {
       padding: const EdgeInsets.all(5),
       alignment: Alignment.center,
       decoration: BoxDecoration(color: FyrlysColors.logoBg, borderRadius: BorderRadius.circular(8)),
-      child: logo == null
-          ? initials
-          : Image.network(
-              logo,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (context, error, stackTrace) => initials,
-            ),
+      child: logo == null ? initials : NetImage(logo, fit: BoxFit.contain, decodeWidth: width, fallback: initials),
     );
   }
 }

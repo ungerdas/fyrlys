@@ -47,14 +47,14 @@ void main() {
     expect(session.favorites.map((c) => c.id), ['101']);
 
     await tester.tap(find.text('Favoritter'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('NRK 1 HD'), findsOneWidget);
     expect(find.text('TV 2 HD'), findsNothing);
 
     await tester.tap(find.text('Alle kanaler').first);
-    await tester.pump();
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'tv 2');
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('TV 2 HD'), findsOneWidget);
     expect(find.text('NRK 1 HD'), findsNothing);
   });

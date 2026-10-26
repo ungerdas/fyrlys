@@ -76,13 +76,34 @@ void main() {
     expect(find.text('2  TV 2 HD'), findsOneWidget);
     expect(source.closed, ['101']);
 
-    // ▼ blar videre i lista, Backspace går tilbake til forrige kanal
+    // ▼▼ blar to kanaler fram i kanalinfoen, og bare den du stopper på, startes
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(find.text('15:00 · Man United - Bournemouth'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(playback.urls.last, 'http://example/102.ts');
+    await tester.pump(const Duration(milliseconds: 700));
+    await _settle(tester);
+    expect(playback.urls, ['http://example/101.ts', 'http://example/102.ts', 'http://example/101.ts']);
+    expect(find.byKey(const ValueKey('channel-banner')), findsOneWidget);
+
+    // ▲ og OK: starter med en gang; Esc mens du blar, blir på kanalen
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await _settle(tester);
     expect(playback.urls.last, 'http://example/103.ts');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 700));
+    await _settle(tester);
+    expect(playback.urls.last, 'http://example/103.ts');
+    expect(find.byType(PlayerPage), findsOneWidget);
+
+    // Backspace går tilbake til forrige kanal
     await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
     await _settle(tester);
-    expect(playback.urls.last, 'http://example/102.ts');
+    expect(playback.urls.last, 'http://example/101.ts');
 
     await _close(tester);
     expect(playback.disposed, isTrue);

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../core/vod.dart';
+import 'motion.dart';
 import 'vod_detail_page.dart';
 
 /// Filmer eller serier: plakatene i et rutenett, med kategori, sortering og søket i toppen av siden.
@@ -334,6 +335,7 @@ class PosterCard extends StatefulWidget {
 
 class _PosterCardState extends State<PosterCard> {
   bool _focused = false;
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
@@ -342,51 +344,56 @@ class _PosterCardState extends State<PosterCard> {
     // «Matchbox the Movie [PRE] [2026]»: navnet uten merker, året under og merkene på plakaten
     final clean = cleanTitle(it.name);
     final sub = [it.year ?? clean.year ?? '', ratingText(it.rating)].where((t) => t.isNotEmpty).join('  ');
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: widget.onTap,
-        onFocusChange: (f) => setState(() => _focused = f),
-        child: Padding(
-          padding: const EdgeInsets.all(3),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DecoratedBox(
-                position: DecorationPosition.foreground,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _focused ? scheme.tertiary : Colors.transparent, width: 3),
-                ),
-                child: Stack(
-                  children: [
-                    Poster(url: widget.imageUrl, title: clean.title, showTitle: false),
-                    if (clean.tags.isNotEmpty)
-                      Positioned(
-                        left: 6,
-                        top: 6,
-                        right: 6,
-                        child: Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: [for (final t in clean.tags.take(2)) PosterTag(text: t)],
+    return Lift(
+      up: _focused || _hovered,
+      scale: 1.04,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: widget.onTap,
+          onFocusChange: (f) => setState(() => _focused = f),
+          onHover: (h) => setState(() => _hovered = h),
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DecoratedBox(
+                  position: DecorationPosition.foreground,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _focused ? scheme.tertiary : Colors.transparent, width: 3),
+                  ),
+                  child: Stack(
+                    children: [
+                      Poster(url: widget.imageUrl, title: clean.title, showTitle: false),
+                      if (clean.tags.isNotEmpty)
+                        Positioned(
+                          left: 6,
+                          top: 6,
+                          right: 6,
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [for (final t in clean.tags.take(2)) PosterTag(text: t)],
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                clean.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, height: 1.25),
-              ),
-              if (sub.isNotEmpty)
-                Text(sub, maxLines: 1, style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  clean.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, height: 1.25),
+                ),
+                if (sub.isNotEmpty)
+                  Text(sub, maxLines: 1, style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+              ],
+            ),
           ),
         ),
       ),
@@ -409,6 +416,7 @@ class ContinueCard extends StatefulWidget {
 
 class _ContinueCardState extends State<ContinueCard> {
   bool _focused = false;
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
@@ -433,65 +441,71 @@ class _ContinueCardState extends State<ContinueCard> {
     ];
     return SizedBox(
       width: 300,
-      child: Material(
-        color: scheme.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: _focused ? scheme.tertiary : scheme.outline, width: _focused ? 2 : 1),
-        ),
-        child: InkWell(
-          onTap: widget.onTap,
-          onFocusChange: (f) => setState(() => _focused = f),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: 74,
-                child: Poster(url: s.source?.logoUrl(c.icon), title: c.title, radius: 0, showTitle: false),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(cleanTitle(c.title).title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
-                      for (final l in lines)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(l,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
-                        ),
-                      if (seen > 0 && seen < 0.95)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(2),
-                            child: LinearProgressIndicator(value: seen, minHeight: 3, backgroundColor: scheme.outline),
+      child: Lift(
+        up: _focused || _hovered,
+        child: Material(
+          color: scheme.surface,
+          clipBehavior: Clip.antiAlias,
+          elevation: _focused || _hovered ? 6 : 0,
+          shadowColor: Colors.black54,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: _focused ? scheme.tertiary : scheme.outline, width: _focused ? 2 : 1),
+          ),
+          child: InkWell(
+            onTap: widget.onTap,
+            onFocusChange: (f) => setState(() => _focused = f),
+            onHover: (h) => setState(() => _hovered = h),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 74,
+                  child: Poster(url: s.source?.logoUrl(c.icon), title: c.title, radius: 0, showTitle: false, decodeWidth: 80),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(cleanTitle(c.title).title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                        for (final l in lines)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(l,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
                           ),
-                        ),
-                    ],
+                        if (seen > 0 && seen < 0.95)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(value: seen, minHeight: 3, backgroundColor: scheme.outline),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              Align(
-                alignment: Alignment.topRight,
-                child: IconButton(
-                  tooltip: 'Fjern fra «Fortsett å se»',
-                  iconSize: 18,
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
-                  onPressed: widget.onRemove,
+                Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(
+                    tooltip: 'Fjern fra «Fortsett å se»',
+                    iconSize: 18,
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
+                    onPressed: widget.onRemove,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

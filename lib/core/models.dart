@@ -5,9 +5,14 @@ import 'dart:convert';
 class Category {
   const Category({required this.id, required this.name, this.count = 0});
 
+  factory Category.fromJson(Map<String, Object?> j) =>
+      Category(id: '${j['id']}', name: '${j['name'] ?? ''}', count: j['count'] is int ? j['count'] as int : 0);
+
   final String id;
   final String name;
   final int count;
+
+  Map<String, Object?> toJson() => {'id': id, 'name': name, 'count': count};
 }
 
 class Channel {
