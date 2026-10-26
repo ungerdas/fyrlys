@@ -45,10 +45,10 @@ class FakeSource implements TvSource {
       const [Category(id: '1', name: 'Norge'), Category(id: '2', name: 'Sport')];
 
   @override
-  Future<List<Channel>> channels({bool force = false}) async => const [
+  Future<List<Channel>> channels({bool force = false}) async => [
         Channel(id: '101', name: 'NRK 1 HD', categoryId: '1', number: '1', archiveDays: withArchive ? 7 : 0),
-        Channel(id: '102', name: 'TV 2 HD', categoryId: '1', number: '2'),
-        Channel(id: '103', name: '15:00 Man United - Bournemouth | Premier League', categoryId: '2', hasEpg: false),
+        const Channel(id: '102', name: 'TV 2 HD', categoryId: '1', number: '2'),
+        const Channel(id: '103', name: '15:00 Man United - Bournemouth | Premier League', categoryId: '2', hasEpg: false),
       ];
 
   @override
