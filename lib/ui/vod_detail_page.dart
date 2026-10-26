@@ -60,10 +60,11 @@ class Poster extends StatelessWidget {
 VodPlayItem? movieItem(Session s, VodItem item) {
   final src = s.source;
   if (src == null) return null;
-  final sub = [item.year ?? '', ratingText(item.rating)].where((t) => t.isNotEmpty).join('  ');
+  final clean = cleanTitle(item.name);
+  final sub = [item.year ?? clean.year ?? '', ratingText(item.rating)].where((t) => t.isNotEmpty).join('  ');
   return VodPlayItem(
     key: 'film:${item.id}',
-    title: item.name,
+    title: clean.title,
     subtitle: sub,
     url: src.movieUrl(item),
     continueAs: ContinueItem(
@@ -343,7 +344,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
               ],
             ),
             below: [
-              if (m.plot.isNotEmpty) _paragraph(m.plot),
+              if (hasText(m.plot)) _paragraph(m.plot),
               _credits(m.cast, m.director),
             ],
           ),
@@ -373,7 +374,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: pad),
             child: Text(
-              category.isEmpty ? 'Mer som dette' : 'Mer fra $category',
+              category.isEmpty ? 'Mer som dette' : 'Mer fra ${cleanTitle(category).title}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
           ),
@@ -415,7 +416,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
       if (episodes > 0) '$episodes episoder',
       if (ratingText(info.rating ?? item.rating).isNotEmpty) ratingText(info.rating ?? item.rating),
     ];
-    final plot = info.plot.isNotEmpty ? info.plot : item.plot;
+    final plot = hasText(info.plot) ? info.plot : (hasText(item.plot) ? item.plot : '');
     final index = _season < seasons.length ? _season : 0;
     final pad = _pad;
     final thumbFallback = s.source?.logoUrl(info.backdrop ?? info.cover ?? item.icon);
@@ -490,7 +491,23 @@ class _VodDetailPageState extends State<VodDetailPage> {
             if (image != null)
               Image.network(image, fit: BoxFit.cover, errorBuilder: (c, e, s) => _EpisodeFallback(url: fallback))
             else
-              _EpisodeFallback(url: fallback, number: e.number ?? i + 1),
+              _EpisodeFallback(url: fallback),
+            // nummeret på alle, også når episoden har eget bilde
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.center,
+                  colors: [Color(0xA6000000), Color(0x00000000)],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 10,
+              bottom: 4,
+              child: Text('${e.number ?? i + 1}',
+                  style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w800, height: 1)),
+            ),
             const Center(
               child: DecoratedBox(
                 decoration: BoxDecoration(color: Color(0x66000000), shape: BoxShape.circle),
@@ -541,7 +558,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
                         padding: const EdgeInsets.only(top: 3),
                         child: Text(runtime, style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
                       ),
-                    if (e.plot.isNotEmpty)
+                    if (hasText(e.plot))
                       Flexible(
                         child: Padding(
                           padding: const EdgeInsets.only(top: 4),
@@ -562,18 +579,16 @@ class _VodDetailPageState extends State<VodDetailPage> {
   }
 }
 
-/// Når episoden ikke har eget bilde: seriens bakgrunnsbilde, dempet, med nummeret på episoden.
+/// Når episoden ikke har eget bilde: seriens bakgrunnsbilde, dempet (nummeret legges over i raden).
 class _EpisodeFallback extends StatelessWidget {
-  const _EpisodeFallback({required this.url, this.number});
+  const _EpisodeFallback({required this.url});
 
   final String? url;
-  final int? number;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final u = url;
-    final n = number;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -581,14 +596,7 @@ class _EpisodeFallback extends StatelessWidget {
           ColoredBox(color: scheme.surfaceContainerHighest)
         else
           Image.network(u, fit: BoxFit.cover, errorBuilder: (c, e, s) => ColoredBox(color: scheme.surfaceContainerHighest)),
-        const ColoredBox(color: Color(0x80000000)),
-        if (n != null)
-          Positioned(
-            left: 10,
-            bottom: 4,
-            child: Text('$n',
-                style: const TextStyle(color: Colors.white70, fontSize: 34, fontWeight: FontWeight.w800, height: 1)),
-          ),
+        const ColoredBox(color: Color(0x66000000)),
       ],
     );
   }

@@ -22,8 +22,11 @@ class UpdateInfo {
 
   final int build;
 
-  /// «Fyrlys 0.1.0 · bygg 7 (abc1234)»
+  /// «Fyrlys 2.0.2 · bygg 22 (abc1234)» (byggnummeret er for oppdateringen)
   final String title;
+
+  /// det som vises: «Fyrlys 2.0.2»
+  String get label => title.split(' · ').first.trim();
   final String url;
   final int size;
 
@@ -374,7 +377,7 @@ class Updater extends ChangeNotifier {
       error = 'Oppdateringen ble ikke lagt inn: ${text.substring(text.indexOf(':') + 1).trim()}';
       state = UpdateState.failed;
     } else if (text == 'ok') {
-      notice = 'Fyrlys er oppdatert til bygg $current${appCommit.isEmpty ? '' : ' ($appCommit)'}.';
+      notice = 'Fyrlys er oppdatert til ${appVersion.isEmpty ? 'bygg $current' : appVersion}.';
     }
   }
 

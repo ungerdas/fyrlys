@@ -212,6 +212,30 @@ final _yearOnly = RegExp(r'^(19|20)\d{2}$');
   return (title: t.isEmpty ? raw.trim() : t, tags: tags, year: year);
 }
 
+const _placeholders = {
+  'not yet available',
+  'not available',
+  'no description',
+  'no description available',
+  'no plot',
+  'no overview',
+  'n/a',
+  'na',
+  'none',
+  'null',
+  'tba',
+  'tbd',
+  'coming soon',
+  '-',
+  '...',
+};
+
+/// En beskrivelse som faktisk sier noe (ikke «Not yet available» og lignende fyllord fra leverandøren).
+bool hasText(String text) {
+  final t = text.trim().toLowerCase().replaceAll(RegExp(r'[.!]+$'), '');
+  return t.length >= 3 && !_placeholders.contains(t);
+}
+
 final _codeInTitle = RegExp(r'^.*?\bS\d{1,2}\s*E\d{1,3}\b[\s\-–:|.]*', caseSensitive: false);
 
 /// «9-1-1 - S01E01 - Pilot» → «Pilot» (koden står ved siden av); tomt når det bare var koden.

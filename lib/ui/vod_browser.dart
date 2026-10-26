@@ -339,7 +339,9 @@ class _PosterCardState extends State<PosterCard> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final it = widget.item;
-    final sub = [it.year ?? '', ratingText(it.rating)].where((t) => t.isNotEmpty).join('  ');
+    // «Matchbox the Movie [PRE] [2026]»: navnet uten merker, året under og merkene på plakaten
+    final clean = cleanTitle(it.name);
+    final sub = [it.year ?? clean.year ?? '', ratingText(it.rating)].where((t) => t.isNotEmpty).join('  ');
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
@@ -358,11 +360,26 @@ class _PosterCardState extends State<PosterCard> {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: _focused ? scheme.tertiary : Colors.transparent, width: 3),
                 ),
-                child: Poster(url: widget.imageUrl, title: it.name, showTitle: false),
+                child: Stack(
+                  children: [
+                    Poster(url: widget.imageUrl, title: clean.title, showTitle: false),
+                    if (clean.tags.isNotEmpty)
+                      Positioned(
+                        left: 6,
+                        top: 6,
+                        right: 6,
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [for (final t in clean.tags.take(2)) PosterTag(text: t)],
+                        ),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: 6),
               Text(
-                it.name,
+                clean.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, height: 1.25),
@@ -440,7 +457,7 @@ class _ContinueCardState extends State<ContinueCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(c.title,
+                      Text(cleanTitle(c.title).title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
@@ -477,6 +494,28 @@ class _ContinueCardState extends State<ContinueCard> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Et merke fra navnet hos leverandøren («PRE», «KIDS») i hjørnet av en plakat.
+class PosterTag extends StatelessWidget {
+  const PosterTag({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: const Color(0xD9000000), borderRadius: BorderRadius.circular(5)),
+      child: Text(
+        text.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: scheme.primary, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.4),
       ),
     );
   }

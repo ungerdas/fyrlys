@@ -27,7 +27,10 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   `git clone --depth 1 --branch stable --filter=blob:none --sparse https://github.com/flutter/flutter.git`
   og `git sparse-checkout set packages/flutter/lib packages/flutter_test/lib` (tilsvarende for media-kit/media-kit).
   `unnecessary_import` er en advarsel og stopper bygget; sjekk hva `material.dart` eksporterer.
-- **Ikke lag ny versjon for hver rettelse** (Pål-Erik 25.10): push til `main`. Hver push oppdaterer releasen
+- **Versjoner** (Pål-Erik 26.10): hver levering til ham får neste patch-versjon i pubspec (2.0.2, 2.0.3 …), og det
+  er versjonen vi snakker om, ikke byggnummeret (det brukes bare av oppdateringen). Rettelser på veien til samme
+  levering beholder versjonen. Skriv avsnittet i `CHANGELOG.md`. GitHub-release (workflowen) bare når han ber om
+  det. (25.10 var det motsatt: «ikke ny versjon for hver rettelse».) Hver push oppdaterer releasen
   `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, navnet «Fyrlys X · bygg N (sha)»
   settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra via Fyrlys-serveren.
   Privat repo: 2000 gratis Actions-minutter i måneden på gratiskontoen, og hver push bruker rundt 25 (Windows

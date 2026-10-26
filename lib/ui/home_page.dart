@@ -261,8 +261,8 @@ class _HomePageState extends State<HomePage> {
       final text = info == null
           ? 'Du har siste versjon ($appBuildLabel).'
           : u.state == UpdateState.ready
-              ? '${info.title} er lastet ned og klar.'
-              : 'Fant ${info.title}. Den lastes ned nå.';
+              ? '${info.label} er lastet ned og klar.'
+              : 'Fant ${info.label}. Den lastes ned nå.';
       messenger.showSnackBar(SnackBar(content: Text(text)));
     } on UpdateException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Fikk ikke sjekket oppdateringer: ${e.message}')));
@@ -279,15 +279,15 @@ class _HomePageState extends State<HomePage> {
     final close = IconButton(tooltip: 'Lukk', icon: const Icon(Icons.close), onPressed: u.dismiss);
     switch (u.state) {
       case UpdateState.available:
-        text = 'Ny versjon: ${info?.title ?? ''}';
+        text = 'Ny versjon: ${info?.label ?? ''}';
         if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
         actions.add(FilledButton(onPressed: () => unawaited(u.download()), child: const Text('Last ned')));
       case UpdateState.downloading:
         final size = info != null && info.size > 0 ? ' av ${(info.size / 1048576).round()} MB' : '';
-        text = 'Laster ned ${info?.title ?? 'ny versjon'} … ${(u.progress * 100).round()} %$size';
+        text = 'Laster ned ${info?.label ?? 'ny versjon'} … ${(u.progress * 100).round()} %$size';
         progress = u.progress;
       case UpdateState.ready:
-        text = '${info?.title ?? 'En ny versjon'} er lastet ned og legges inn når du lukker Fyrlys.';
+        text = '${info?.label ?? 'En ny versjon'} er lastet ned og legges inn når du lukker Fyrlys.';
         if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
         actions.add(FilledButton(onPressed: () => unawaited(u.restartNow()), child: const Text('Start på nytt nå')));
       case UpdateState.failed:
@@ -335,7 +335,7 @@ class _HomePageState extends State<HomePage> {
         onPressed: () => unawaited(showDialog<void>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text(info.title),
+            title: Text(info.label),
             content: SingleChildScrollView(child: SelectableText(info.notes)),
             actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Lukk'))],
           ),

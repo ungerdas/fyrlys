@@ -28,6 +28,7 @@ void main() {
     final info = parseRelease(_release(7), '-windows.zip')!;
     expect(info.build, 7);
     expect(info.title, 'Fyrlys 0.1.0 · bygg 7 (abc1234)');
+    expect(info.label, 'Fyrlys 0.1.0');
     expect(info.url, 'https://example/w.zip');
     expect(info.size, 4);
     expect(info.notes, 'Siste endringer:\n- volum');
@@ -184,7 +185,7 @@ void main() {
 
     await tester.pumpWidget(FyrlysApp(session: session, updater: u));
     await tester.pumpAndSettle();
-    expect(find.text('Ny versjon: Fyrlys 0.1.0 · bygg 7 (abc1234)'), findsOneWidget);
+    expect(find.text('Ny versjon: Fyrlys 0.1.0'), findsOneWidget);
     expect(find.text('Last ned'), findsOneWidget);
 
     await tester.tap(find.text('Hva er nytt?'));

@@ -2,6 +2,15 @@
 
 Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
 
+## v2.0.2
+
+- Film- og seriesider med stort bakgrunnsbilde, plakat, merker for år, sjanger, spilletid, vurdering,
+  aldersgrense, land og kvalitet (4K, HDR, H.265, 5.1 …), og «Mer fra <kategori>» under filmer.
+- Titler uten merker: «[PRE] [2026]» blir et merke på plakaten og året under; episoder uten «Serie - S01E01 - ».
+- Fyllord som «Not yet available» vises ikke som beskrivelse.
+- Episodene har nummeret på bildet, også når de har eget bilde.
+- Versjonen (ikke byggnummeret) står i menyen og i beskjedene om oppdateringer.
+
 ## v2.0.0
 
 Første ordentlige utgave av Fyrlys-appen, for Windows, Android og Android TV. Den kommer i tillegg til
