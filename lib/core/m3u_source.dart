@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../l10n/tr.dart';
 import 'cache.dart' show stableHash;
 import 'failure.dart' show httpStatus;
 import 'models.dart';
@@ -225,10 +226,10 @@ class M3uSource implements TvSource {
   /// «http://iptv.example/liste.m3u» (uten http:// legges det til)
   static String normalize(String raw) {
     var text = raw.trim();
-    if (text.isEmpty) throw const SourceException('Lim inn M3U-lenken');
+    if (text.isEmpty) throw SourceException(tr('Lim inn M3U-lenken'));
     if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(text)) text = 'http://$text';
     final u = Uri.tryParse(text);
-    if (u == null || u.host.isEmpty) throw const SourceException('Ugyldig lenke');
+    if (u == null || u.host.isEmpty) throw SourceException(tr('Ugyldig lenke'));
     return text;
   }
 
@@ -249,7 +250,7 @@ class M3uSource implements TvSource {
   String get kind => 'm3u';
 
   @override
-  String get label => 'M3U-liste fra ${Uri.tryParse(url)?.host ?? url}';
+  String get label => tr('M3U-liste fra {host}', {'host': Uri.tryParse(url)?.host ?? url});
 
   @override
   Map<String, String> get httpHeaders => const {'User-Agent': xtreamUserAgent};
@@ -260,15 +261,25 @@ class M3uSource implements TvSource {
   /// EPG-lenkene som brukes: din, eller de lista selv oppgir
   List<String> get epgUrls => epgUrl.isNotEmpty ? [epgUrl] : _listEpg;
 
-  Future<Uint8List> _download(String address, String what) async {
+  /// M3U-lista, eller TV-guiden med [guide] (det står i feilmeldingene).
+  Future<Uint8List> _download(String address, {bool guide = false}) async {
     final http.Response r;
     try {
       r = await _http.get(Uri.parse(address), headers: httpHeaders).timeout(const Duration(minutes: 3));
     } on Exception {
-      throw SourceException('Får ikke hentet $what');
+      throw SourceException(guide ? tr('Får ikke hentet TV-guiden') : tr('Får ikke hentet M3U-lista'));
     }
-    if (r.statusCode == 401 || r.statusCode == 403) throw SourceException('Serveren avviste $what (HTTP ${r.statusCode})');
-    if (r.statusCode >= 400) throw SourceException('Serveren svarte HTTP ${r.statusCode} for $what');
+    final code = {'code': r.statusCode};
+    if (r.statusCode == 401 || r.statusCode == 403) {
+      throw SourceException(guide
+          ? tr('Serveren avviste TV-guiden (HTTP {code})', code)
+          : tr('Serveren avviste M3U-lista (HTTP {code})', code));
+    }
+    if (r.statusCode >= 400) {
+      throw SourceException(guide
+          ? tr('Serveren svarte HTTP {code} for TV-guiden', code)
+          : tr('Serveren svarte HTTP {code} for M3U-lista', code));
+    }
     return r.bodyBytes;
   }
 
@@ -280,17 +291,17 @@ class M3uSource implements TvSource {
   }
 
   Future<void> _load() async {
-    final bytes = await _download(url, 'M3U-lista');
+    final bytes = await _download(url);
     // store lister (titusenvis av linjer) leses i bakgrunnen, så bildet ikke henger imens
     final M3uList list;
     try {
       list = bytes.length > 200000 ? await _parseM3uInBackground(bytes) : parseM3u(_decodeText(bytes));
     } on Object {
-      throw const SourceException('Lenken ga ikke en M3U-liste');
+      throw SourceException(tr('Lenken ga ikke en M3U-liste'));
     }
     if (list.entries.isEmpty) {
       throw SourceException(
-        list.skipped > 0 ? 'Lista har bare filmer og serier, ingen TV-kanaler' : 'Fant ingen kanaler i lista',
+        list.skipped > 0 ? tr('Lista har bare filmer og serier, ingen TV-kanaler') : tr('Fant ingen kanaler i lista'),
       );
     }
     final channels = <Channel>[];
@@ -299,8 +310,9 @@ class M3uSource implements TvSource {
     _entries.clear();
     for (var i = 0; i < list.entries.length; i++) {
       final e = list.entries[i];
+      // id-en (og kanal-id-ene under) er den samme på alle språk; bare navnet oversettes
       final group = e.group.isEmpty ? 'Uten kategori' : e.group;
-      groups.putIfAbsent(group, () => Category(id: group, name: group));
+      groups.putIfAbsent(group, () => Category(id: group, name: e.group.isEmpty ? tr('Uten kategori') : group));
       // samme id neste gang (favoritter og «sist sett»), selv om adressene i lista skulle endre seg
       final key = e.tvgId.isNotEmpty ? 'id:${e.tvgId}|${e.name}' : 'n:$group|${e.name}';
       var id = stableHash(key);
@@ -353,7 +365,7 @@ class M3uSource implements TvSource {
   Future<XmltvGuide?> _fetchGuide() async {
     for (final address in epgUrls) {
       try {
-        final bytes = await _download(address, 'TV-guiden');
+        final bytes = await _download(address, guide: true);
         final now = DateTime.now();
         final guide = await _parseXmltvInBackground(bytes, now);
         _guide = guide;
@@ -391,7 +403,7 @@ class M3uSource implements TvSource {
   Future<PlayTarget> open(Channel channel) async {
     await _ensure();
     final e = _entries[channel.id];
-    if (e == null) throw const SourceException('Fant ikke kanalen i lista. Hent listene på nytt i innstillingene.');
+    if (e == null) throw SourceException(tr('Fant ikke kanalen i lista. Hent listene på nytt i innstillingene.'));
     // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
     return PlayTarget([e.url], localShift: true);
   }
@@ -403,7 +415,7 @@ class M3uSource implements TvSource {
 
   @override
   Future<ArchiveClip> archiveClip(Channel channel, EpgEntry program) async =>
-      throw const SourceException('Denne lista har ikke TV-arkiv');
+      throw SourceException(tr('Denne lista har ikke TV-arkiv'));
 
   // ── filmer og serier finnes ikke her (fanene skjules) ──
 
@@ -416,10 +428,10 @@ class M3uSource implements TvSource {
       pageOf(const [], category: category, query: query, sort: sort, start: start);
 
   @override
-  Future<MovieInfo> movieInfo(String id) async => throw const SourceException('M3U-lister har ikke filmer i Fyrlys');
+  Future<MovieInfo> movieInfo(String id) async => throw SourceException(tr('M3U-lister har ikke filmer i Fyrlys'));
 
   @override
-  Future<SeriesInfo> seriesInfo(String id) async => throw const SourceException('M3U-lister har ikke serier i Fyrlys');
+  Future<SeriesInfo> seriesInfo(String id) async => throw SourceException(tr('M3U-lister har ikke serier i Fyrlys'));
 
   @override
   String movieUrl(VodItem movie) => '';

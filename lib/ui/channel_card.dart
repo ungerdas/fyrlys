@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
+import '../l10n/tr.dart';
 import '../theme.dart';
 import 'motion.dart';
 import 'net_image.dart';
@@ -136,7 +137,7 @@ class _ChannelCardState extends State<ChannelCard> {
                 if (ch.number != null)
                   Padding(padding: const EdgeInsets.only(left: 8), child: Text(ch.number!, style: dim)),
                 IconButton(
-                  tooltip: fav ? 'Fjern fra favoritter' : 'Legg til i favoritter',
+                  tooltip: fav ? tr('Fjern fra favoritter') : tr('Legg til i favoritter'),
                   icon: Icon(fav ? Icons.star : Icons.star_border,
                       color: fav ? scheme.primary : scheme.onSurfaceVariant),
                   onPressed: () => unawaited(s.toggleFavorite(ch)),

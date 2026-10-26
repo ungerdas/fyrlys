@@ -7,6 +7,7 @@ import '../core/models.dart';
 import '../core/session.dart';
 import '../core/updater.dart';
 import '../core/vod.dart';
+import '../l10n/tr.dart';
 import 'archive_page.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
@@ -85,14 +86,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   String get _title => switch (_filter) {
-        'all' || 'home' => 'Alle kanaler',
-        'fav' => 'Favoritter',
-        'recent' => 'Sist sett',
+        'all' || 'home' => tr('Alle kanaler'),
+        'fav' => tr('Favoritter'),
+        'recent' => tr('Sist sett'),
         _ => s.categoryName(_filter),
       };
 
   void _play(List<Channel> list, int i) {
-    final title = _query.isEmpty ? _title : 'Treff i ${_title.toLowerCase()}';
+    final title = _query.isEmpty ? _title : tr('Treff i {list}', {'list': _title.toLowerCase()});
     _openPlayer(List.of(list), i, title, _filter == 'fav');
   }
 
@@ -157,11 +158,11 @@ class _HomePageState extends State<HomePage> {
     }
     final j = channelByNumber(s.channels, digits);
     if (j >= 0) {
-      _openPlayer(s.channels, j, 'Alle kanaler', false);
+      _openPlayer(s.channels, j, tr('Alle kanaler'), false);
     } else {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('Fant ikke kanal ${int.parse(digits)}')));
+        ..showSnackBar(SnackBar(content: Text(tr('Fant ikke kanal {n}', {'n': int.parse(digits)}))));
     }
   }
 
@@ -184,9 +185,9 @@ class _HomePageState extends State<HomePage> {
   _Section get _current => _sectionList.contains(_section) ? _section : _Section.tv;
 
   String get _searchHint => switch (_current) {
-        _Section.tv || _Section.guide => 'Søk etter kanal',
-        _Section.movies => 'Søk i filmer',
-        _Section.series => 'Søk i serier',
+        _Section.tv || _Section.guide => tr('Søk etter kanal'),
+        _Section.movies => tr('Søk i filmer'),
+        _Section.series => tr('Søk i serier'),
       };
 
   /// Valget i toppen; ikonene bare når det er god plass.
@@ -201,10 +202,10 @@ class _HomePageState extends State<HomePage> {
       );
 
   static String _sectionName(_Section x) => switch (x) {
-        _Section.tv => 'TV',
-        _Section.guide => 'TV-guide',
-        _Section.movies => 'Filmer',
-        _Section.series => 'Serier',
+        _Section.tv => tr('TV'),
+        _Section.guide => tr('TV-guide'),
+        _Section.movies => tr('Filmer'),
+        _Section.series => tr('Serier'),
       };
 
   static IconData _sectionIcon(_Section x) => switch (x) {
@@ -252,7 +253,7 @@ class _HomePageState extends State<HomePage> {
         actions: [
           if (!wide)
             IconButton(
-              tooltip: _searching ? 'Lukk søket' : 'Søk',
+              tooltip: _searching ? tr('Lukk søket') : tr('Søk'),
               icon: Icon(_searching ? Icons.close : Icons.search),
               onPressed: () => setState(() {
                 _searching = !_searching;
@@ -264,17 +265,17 @@ class _HomePageState extends State<HomePage> {
             ),
           if (s.canMultiview)
             IconButton(
-              tooltip: 'Multiview',
+              tooltip: tr('Multiview'),
               icon: const Icon(Icons.grid_view_outlined),
               onPressed: _openMultiview,
             ),
           IconButton(
-            tooltip: 'Lys eller mørk',
+            tooltip: tr('Lys eller mørk'),
             icon: Icon(theme.brightness == Brightness.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
             onPressed: () => s.toggleTheme(theme.brightness),
           ),
           IconButton(
-            tooltip: 'Innstillinger',
+            tooltip: tr('Innstillinger'),
             icon: const Icon(Icons.settings_outlined),
             onPressed: _openSettings,
           ),
@@ -378,24 +379,29 @@ class _HomePageState extends State<HomePage> {
     String? text;
     double? progress;
     final actions = <Widget>[];
-    final close = IconButton(tooltip: 'Lukk', icon: const Icon(Icons.close), onPressed: u.dismiss);
+    final close = IconButton(tooltip: tr('Lukk'), icon: const Icon(Icons.close), onPressed: u.dismiss);
     switch (u.state) {
       case UpdateState.available:
-        text = 'Ny versjon: ${info?.label ?? ''}';
+        text = tr('Ny versjon: {version}', {'version': info?.label ?? ''});
         if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
-        actions.add(FilledButton(onPressed: () => unawaited(u.download()), child: const Text('Last ned')));
+        actions.add(FilledButton(onPressed: () => unawaited(u.download()), child: Text(tr('Last ned'))));
       case UpdateState.downloading:
-        final size = info != null && info.size > 0 ? ' av ${(info.size / 1048576).round()} MB' : '';
-        text = 'Laster ned ${info?.label ?? 'ny versjon'} … ${(u.progress * 100).round()} %$size';
+        final version = info?.label ?? tr('ny versjon');
+        final percent = (u.progress * 100).round();
+        text = info != null && info.size > 0
+            ? tr('Laster ned {version} … {percent} % av {size} MB',
+                {'version': version, 'percent': percent, 'size': (info.size / 1048576).round()})
+            : tr('Laster ned {version} … {percent} %', {'version': version, 'percent': percent});
         progress = u.progress;
       case UpdateState.ready:
-        text = '${info?.label ?? 'En ny versjon'} er lastet ned og legges inn når du lukker Fyrlys.';
+        text = tr('{version} er lastet ned og legges inn når du lukker Fyrlys.',
+            {'version': info?.label ?? tr('En ny versjon')});
         if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
-        actions.add(FilledButton(onPressed: () => unawaited(u.restartNow()), child: const Text('Start på nytt nå')));
+        actions.add(FilledButton(onPressed: () => unawaited(u.restartNow()), child: Text(tr('Start på nytt nå'))));
       case UpdateState.failed:
-        text = u.error ?? 'Oppdateringen feilet.';
+        text = u.error ?? tr('Oppdateringen feilet.');
         actions
-          ..add(TextButton(onPressed: () => unawaited(u.check()), child: const Text('Prøv igjen')))
+          ..add(TextButton(onPressed: () => unawaited(u.check()), child: Text(tr('Prøv igjen'))))
           ..add(close);
       case UpdateState.idle:
       case UpdateState.checking:
@@ -439,10 +445,10 @@ class _HomePageState extends State<HomePage> {
           builder: (context) => AlertDialog(
             title: Text(info.label),
             content: SingleChildScrollView(child: SelectableText(info.notes)),
-            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Lukk'))],
+            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Lukk')))],
           ),
         )),
-        child: const Text('Hva er nytt?'),
+        child: Text(tr('Hva er nytt?')),
       );
 
   Widget _searchField({bool autofocus = false}) => TextField(
@@ -469,7 +475,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           Expanded(
             child: Text(
-              _query.isEmpty ? _title : 'Treff i ${_title.toLowerCase()}',
+              _query.isEmpty ? _title : tr('Treff i {list}', {'list': _title.toLowerCase()}),
               style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
@@ -491,32 +497,32 @@ class _HomePageState extends State<HomePage> {
             children: [
               Text(error, textAlign: TextAlign.center, style: TextStyle(color: scheme.error)),
               const SizedBox(height: 12),
-              FilledButton(onPressed: () => unawaited(s.load(force: true)), child: const Text('Prøv igjen')),
+              FilledButton(onPressed: () => unawaited(s.load(force: true)), child: Text(tr('Prøv igjen'))),
             ],
           ),
         ),
       );
     }
     if (s.channels.isEmpty && s.loading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Henter kanaler … Første gang kan det ta litt tid.'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(tr('Henter kanaler … Første gang kan det ta litt tid.')),
           ],
         ),
       );
     }
     if (list.isEmpty) {
       final text = _query.isNotEmpty
-          ? 'Fant ingenting.'
+          ? tr('Fant ingenting.')
           : _filter == 'fav'
-              ? 'Ingen favoritter ennå. Trykk ☆ på en kanal for å legge den til.'
+              ? tr('Ingen favoritter ennå. Trykk ☆ på en kanal for å legge den til.')
               : _filter == 'recent'
-                  ? 'Du har ikke sett noen kanaler ennå.'
-                  : 'Ingen kanaler her.';
+                  ? tr('Du har ikke sett noen kanaler ennå.')
+                  : tr('Ingen kanaler her.');
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -564,11 +570,11 @@ class _HomePageState extends State<HomePage> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        _categoryTile('home', 'Hjem', null, icon: Icons.home_outlined),
-        _categoryTile('all', 'Alle kanaler', s.channels.length, icon: Icons.apps),
-        _categoryTile('fav', 'Favoritter', s.favorites.length, icon: Icons.star_outline),
-        _categoryTile('recent', 'Sist sett', s.recent.length, icon: Icons.history),
-        if (g.pinned.isNotEmpty) head('Dine kategorier'),
+        _categoryTile('home', tr('Hjem'), null, icon: Icons.home_outlined),
+        _categoryTile('all', tr('Alle kanaler'), s.channels.length, icon: Icons.apps),
+        _categoryTile('fav', tr('Favoritter'), s.favorites.length, icon: Icons.star_outline),
+        _categoryTile('recent', tr('Sist sett'), s.recent.length, icon: Icons.history),
+        if (g.pinned.isNotEmpty) head(tr('Dine kategorier')),
         for (var i = 0; i < g.pinned.length; i++)
           _categoryTile(
             g.pinned[i].id,
@@ -578,7 +584,7 @@ class _HomePageState extends State<HomePage> {
             first: i == 0,
             last: i == g.pinned.length - 1,
           ),
-        head(g.pinned.isEmpty ? 'Kategorier · ☆ legger dem øverst' : 'Alle kategorier'),
+        head(g.pinned.isEmpty ? tr('Kategorier · ☆ legger dem øverst') : tr('Alle kategorier')),
         for (final c in g.rest) _categoryTile(c.id, c.name, s.categoryCounts[c.id] ?? 0, pinnable: true),
       ],
     );
@@ -619,13 +625,15 @@ class _HomePageState extends State<HomePage> {
                 ),
                 if (count != null) Text('$count', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
                 if (pinned) ...[
-                  _miniButton(Icons.arrow_upward, 'Flytt opp', first ? null : () => unawaited(s.moveFavoriteCategory(id, -1))),
-                  _miniButton(Icons.arrow_downward, 'Flytt ned', last ? null : () => unawaited(s.moveFavoriteCategory(id, 1))),
+                  _miniButton(
+                      Icons.arrow_upward, tr('Flytt opp'), first ? null : () => unawaited(s.moveFavoriteCategory(id, -1))),
+                  _miniButton(
+                      Icons.arrow_downward, tr('Flytt ned'), last ? null : () => unawaited(s.moveFavoriteCategory(id, 1))),
                 ],
                 if (pinnable)
                   _miniButton(
                     pinned ? Icons.star : Icons.star_border,
-                    pinned ? 'Fjern fra toppen' : 'Legg øverst',
+                    pinned ? tr('Fjern fra toppen') : tr('Legg øverst'),
                     () => unawaited(s.toggleFavoriteCategory(id)),
                     color: pinned ? scheme.primary : null,
                   )
@@ -653,10 +661,10 @@ class _HomePageState extends State<HomePage> {
     final g = _groups();
     final seen = <String>{'home', 'all', 'fav', 'recent'};
     final items = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: 'home', child: Text('Hjem')),
-      DropdownMenuItem(value: 'all', child: Text('Alle kanaler (${s.channels.length})')),
-      DropdownMenuItem(value: 'fav', child: Text('★ Favoritter (${s.favorites.length})')),
-      DropdownMenuItem(value: 'recent', child: Text('Sist sett (${s.recent.length})')),
+      DropdownMenuItem(value: 'home', child: Text(tr('Hjem'))),
+      DropdownMenuItem(value: 'all', child: Text(tr('Alle kanaler ({n})', {'n': s.channels.length}))),
+      DropdownMenuItem(value: 'fav', child: Text(tr('★ Favoritter ({n})', {'n': s.favorites.length}))),
+      DropdownMenuItem(value: 'recent', child: Text(tr('Sist sett ({n})', {'n': s.recent.length}))),
       for (final c in [...g.pinned, ...g.rest])
         if (seen.add(c.id))
           DropdownMenuItem(
@@ -683,7 +691,7 @@ class _HomePageState extends State<HomePage> {
           ),
           if (isCategory)
             IconButton(
-              tooltip: s.isFavoriteCategory(value) ? 'Fjern fra toppen' : 'Legg øverst',
+              tooltip: s.isFavoriteCategory(value) ? tr('Fjern fra toppen') : tr('Legg øverst'),
               icon: Icon(s.isFavoriteCategory(value) ? Icons.star : Icons.star_border),
               onPressed: () => unawaited(s.toggleFavoriteCategory(value)),
             ),

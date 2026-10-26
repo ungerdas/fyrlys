@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../core/vod.dart';
+import '../l10n/tr.dart';
 import 'motion.dart';
 import 'net_image.dart';
 import 'vod_browser.dart';
@@ -260,7 +261,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
             color: const Color(0x66000000),
             shape: const CircleBorder(),
             child: IconButton(
-              tooltip: 'Tilbake',
+              tooltip: tr('Tilbake'),
               icon: const Icon(Icons.arrow_back, color: Colors.white),
               onPressed: () => Navigator.of(context).maybePop(),
             ),
@@ -284,7 +285,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
             children: [
               Text('${snap.error}', textAlign: TextAlign.center, style: TextStyle(color: scheme.error)),
               const SizedBox(height: 12),
-              FilledButton(onPressed: _load, child: const Text('Prøv igjen')),
+              FilledButton(onPressed: _load, child: Text(tr('Prøv igjen'))),
             ],
           ),
         ),
@@ -314,9 +315,15 @@ class _VodDetailPageState extends State<VodDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (cast.isNotEmpty)
-            Padding(padding: const EdgeInsets.only(top: 12), child: Text('Skuespillere: $cast', style: style)),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(tr('Skuespillere: {cast}', {'cast': cast}), style: style),
+            ),
           if (director.isNotEmpty)
-            Padding(padding: const EdgeInsets.only(top: 4), child: Text('Regi: $director', style: style)),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(tr('Regi: {director}', {'director': director}), style: style),
+            ),
         ],
       ),
     );
@@ -359,14 +366,16 @@ class _VodDetailPageState extends State<VodDetailPage> {
                   style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
                   onPressed: () => _playMovie(resume: true),
                   icon: const Icon(Icons.play_arrow),
-                  label: Text(resumeAt == null ? 'Spill av' : 'Fortsett fra ${formatDuration(resumeAt)}'),
+                  label: Text(resumeAt == null
+                      ? tr('Spill av')
+                      : tr('Fortsett fra {time}', {'time': formatDuration(resumeAt)})),
                 ),
                 if (resumeAt != null)
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)),
                     onPressed: () => _playMovie(resume: false),
                     icon: const Icon(Icons.replay),
-                    label: const Text('Fra begynnelsen'),
+                    label: Text(tr('Fra begynnelsen')),
                   ),
               ],
             ),
@@ -401,7 +410,9 @@ class _VodDetailPageState extends State<VodDetailPage> {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: pad),
             child: Text(
-              category.isEmpty ? 'Mer som dette' : 'Mer fra ${cleanTitle(category).title}',
+              category.isEmpty
+                  ? tr('Mer som dette')
+                  : tr('Mer fra {category}', {'category': cleanTitle(category).title}),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
           ),
@@ -439,8 +450,9 @@ class _VodDetailPageState extends State<VodDetailPage> {
     final chips = [
       if (year.isNotEmpty) year,
       if (info.genre.isNotEmpty) info.genre,
-      if (seasons.length > 1) '${seasons.length} sesonger',
-      if (episodes > 0) '$episodes episoder',
+      if (seasons.length > 1) tr('{n} sesonger', {'n': seasons.length}),
+      if (episodes == 1) tr('1 episode'),
+      if (episodes > 1) tr('{n} episoder', {'n': episodes}),
       if (ratingText(info.rating ?? item.rating).isNotEmpty) ratingText(info.rating ?? item.rating),
     ];
     final plot = hasText(info.plot) ? info.plot : (hasText(item.plot) ? item.plot : '');
@@ -456,13 +468,15 @@ class _VodDetailPageState extends State<VodDetailPage> {
       final code = episodeCode(season.number, e.number);
       final at = start.at;
       // «Fortsett S01E03» der du slapp, «Spill av S01E04» når den forrige er sett ferdig, ellers «Spill av S01E01»
-      final label = at != null ? 'Fortsett $code' : 'Spill av $code';
+      final label = code.isEmpty
+          ? (at != null ? tr('Fortsett') : tr('Spill av'))
+          : (at != null ? tr('Fortsett {code}', {'code': code}) : tr('Spill av {code}', {'code': code}));
       play = FilledButton.icon(
         autofocus: true,
         style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
         onPressed: () => unawaited(_play(_episodes(info, season), start.episode)),
         icon: const Icon(Icons.play_arrow),
-        label: Text(label.trim()),
+        label: Text(label),
       );
       if (start.current && at != null) {
         // hvor du er i episoden, ved siden av knappen
@@ -478,7 +492,9 @@ class _VodDetailPageState extends State<VodDetailPage> {
             Text(
               [
                 if (title.isNotEmpty) title,
-                runtime.isNotEmpty ? '${formatDuration(at)} av $runtime' : 'Stoppet ved ${formatDuration(at)}',
+                runtime.isNotEmpty
+                    ? tr('{time} av {length}', {'time': formatDuration(at), 'length': runtime})
+                    : tr('Stoppet ved {time}', {'time': formatDuration(at)}),
               ].join(' · '),
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
@@ -514,14 +530,14 @@ class _VodDetailPageState extends State<VodDetailPage> {
           padding: EdgeInsets.fromLTRB(pad, 24, pad, 8),
           sliver: SliverToBoxAdapter(
             child: seasons.isEmpty
-                ? Text('Serien har ingen episoder hos leverandøren.', style: TextStyle(color: scheme.onSurfaceVariant))
+                ? Text(tr('Serien har ingen episoder hos leverandøren.'), style: TextStyle(color: scheme.onSurfaceVariant))
                 : Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
                       for (var i = 0; i < seasons.length; i++)
                         ChoiceChip(
-                          label: Text('Sesong ${seasons[i].number}'),
+                          label: Text(tr('Sesong {n}', {'n': seasons[i].number})),
                           selected: i == index,
                           onSelected: (_) => setState(() => _season = i),
                         ),
@@ -622,7 +638,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
                       TextSpan(children: [
                         if (code.isNotEmpty)
                           TextSpan(text: '$code  ', style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700)),
-                        TextSpan(text: title.isNotEmpty ? title : 'Episode ${e.number ?? i + 1}'),
+                        TextSpan(text: title.isNotEmpty ? title : tr('Episode {n}', {'n': e.number ?? i + 1})),
                       ]),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

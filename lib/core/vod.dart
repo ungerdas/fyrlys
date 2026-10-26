@@ -1,26 +1,37 @@
 // Filmer og serier fra leverandøren (Xtream Codes): det appen vet om dem.
 
-enum VodKind {
-  movies('vod', 'Filmer'),
-  series('series', 'Serier');
+import '../l10n/tr.dart';
 
-  const VodKind(this.api, this.title);
+enum VodKind {
+  movies('vod'),
+  series('series');
+
+  const VodKind(this.api);
 
   /// navnet i Xtream-API-et (vod / series)
   final String api;
-  final String title;
+
+  String get title => switch (this) {
+        VodKind.movies => tr('Filmer'),
+        VodKind.series => tr('Serier'),
+      };
 }
 
 /// Rekkefølgen i lista.
 enum VodSort {
-  provider('', 'Leverandørens rekkefølge'),
-  newest('added', 'Nyeste først'),
-  name('name', 'A–Å');
+  provider(''),
+  newest('added'),
+  name('name');
 
-  const VodSort(this.api, this.title);
+  const VodSort(this.api);
 
   final String api;
-  final String title;
+
+  String get title => switch (this) {
+        VodSort.provider => tr('Leverandørens rekkefølge'),
+        VodSort.newest => tr('Nyeste først'),
+        VodSort.name => tr('A–Å'),
+      };
 }
 
 class VodCategory {
@@ -184,10 +195,10 @@ String runtimeText(int seconds, [String duration = '']) {
   }
   if (s <= 0) return duration.trim();
   final minutes = (s / 60).round();
-  if (minutes < 60) return '$minutes min';
+  if (minutes < 60) return tr('{n} min', {'n': minutes});
   final h = minutes ~/ 60;
   final m = minutes % 60;
-  return m == 0 ? '$h t' : '$h t $m min';
+  return m == 0 ? tr('{h} t', {'h': h}) : tr('{h} t {m} min', {'h': h, 'm': m});
 }
 
 final _endTag = RegExp(r'\s*[\[(]([^\[\]()]{1,24})[\])]\s*$');
@@ -395,11 +406,11 @@ String episodeCode(String season, int? episode) {
   return 'S${s.toString().padLeft(2, '0')}E${episode.toString().padLeft(2, '0')}';
 }
 
-/// «★ 7,5»
+/// «★ 7,5» (engelsk: «★ 7.5»)
 String ratingText(double? rating) {
   if (rating == null || rating <= 0) return '';
   final text = rating == rating.roundToDouble() ? rating.toStringAsFixed(0) : rating.toStringAsFixed(1);
-  return '★ ${text.replaceAll('.', ',')}';
+  return '★ ${appLanguage == 'en' ? text : text.replaceAll('.', ',')}';
 }
 
 /// Lister filtreres og sorteres i appen (leverandøren gir hele lista), i sider à [vodPageSize].

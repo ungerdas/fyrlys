@@ -6,6 +6,8 @@ import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
 import '../core/vod.dart';
+import '../l10n/dates.dart';
+import '../l10n/tr.dart';
 import 'channel_card.dart';
 import 'motion.dart';
 import 'vod_browser.dart';
@@ -14,36 +16,17 @@ import 'vod_detail_page.dart';
 /// Spiller kanal nummer [index] i [list]; [title] er navnet på lista i spilleren.
 typedef PlayChannels = void Function(List<Channel> list, int index, String title, bool fromFavorites);
 
-const _weekdays = ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag'];
-const _months = [
-  'januar',
-  'februar',
-  'mars',
-  'april',
-  'mai',
-  'juni',
-  'juli',
-  'august',
-  'september',
-  'oktober',
-  'november',
-  'desember',
-];
-
 /// «God kveld» etter tiden på døgnet.
 String greetingAt(DateTime t) => switch (t.hour) {
-      < 5 => 'God natt',
-      < 10 => 'God morgen',
-      < 18 => 'God dag',
-      < 23 => 'God kveld',
-      _ => 'God natt',
+      < 5 => tr('God natt'),
+      < 10 => tr('God morgen'),
+      < 18 => tr('God dag'),
+      < 23 => tr('God kveld'),
+      _ => tr('God natt'),
     };
 
-/// «Mandag 26. oktober»
-String dateLine(DateTime t) {
-  final day = _weekdays[t.weekday - 1];
-  return '${day[0].toUpperCase()}${day.substring(1)} ${t.day}. ${_months[t.month - 1]}';
-}
+/// «Mandag 26. oktober» / «Monday 26 October»
+String dateLine(DateTime t) => longDate(t);
 
 /// Startsiden på TV-fanen («Hjem»): hilsen og klokke, kanalen du så sist (med programmet nå og etterpå),
 /// favorittene med det som går nå og etterpå, de andre kanalene du har sett, kategoriene dine, og nederst filmen
@@ -101,25 +84,25 @@ class _StartViewState extends State<StartView> {
                         key: ValueKey('sist:${recent.first.id}'),
                         session: s,
                         channel: recent.first,
-                        onTap: () => widget.onPlay(recent, 0, 'Sist sett', false),
+                        onTap: () => widget.onPlay(recent, 0, tr('Sist sett'), false),
                       )
                     : _Welcome(onAll: () => widget.onShow('all')),
               ),
             ),
             // favorittene, med det som går nå og etterpå
             section(_Heading(
-              title: 'Favoritter',
+              title: tr('Favoritter'),
               count: favorites.length,
-              action: favorites.length > shownFavorites.length ? 'Alle favoritter' : null,
+              action: favorites.length > shownFavorites.length ? tr('Alle favoritter') : null,
               onAction: () => widget.onShow('fav'),
             )),
             if (shownFavorites.isEmpty)
               SliverPadding(
                 padding: EdgeInsets.symmetric(horizontal: pad),
-                sliver: const SliverToBoxAdapter(
+                sliver: SliverToBoxAdapter(
                   child: _Hint(
                     icon: Icons.star_border,
-                    text: 'Trykk ☆ på kanalene du ser mest, så samles de her med det som går nå og etterpå.',
+                    text: tr('Trykk ☆ på kanalene du ser mest, så samles de her med det som går nå og etterpå.'),
                   ),
                 ),
               )
@@ -139,13 +122,13 @@ class _StartViewState extends State<StartView> {
                     session: s,
                     channel: shownFavorites[i],
                     showNext: true,
-                    onTap: () => widget.onPlay(favorites, i, 'Favoritter', true),
+                    onTap: () => widget.onPlay(favorites, i, tr('Favoritter'), true),
                   ),
                 ),
               ),
             // de andre kanalene du har sett
             if (others.isNotEmpty) ...[
-              section(_Heading(title: 'Sist sett', action: 'Vis alle', onAction: () => widget.onShow('recent'))),
+              section(_Heading(title: tr('Sist sett'), action: tr('Vis alle'), onAction: () => widget.onShow('recent'))),
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: 84,
@@ -160,7 +143,7 @@ class _StartViewState extends State<StartView> {
                         key: ValueKey('start-recent:${others[i].id}'),
                         session: s,
                         channel: others[i],
-                        onTap: () => widget.onPlay(recent, i + 1, 'Sist sett', false),
+                        onTap: () => widget.onPlay(recent, i + 1, tr('Sist sett'), false),
                       ),
                     ),
                   ),
@@ -170,7 +153,7 @@ class _StartViewState extends State<StartView> {
             ..._categories(pad),
             // filmen eller serien du holder på med: liten, nederst
             if (continues.isNotEmpty) ...[
-              section(const _Heading(title: 'Fortsett å se', small: true)),
+              section(_Heading(title: tr('Fortsett å se'), small: true)),
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: 112,
@@ -215,8 +198,8 @@ class _StartViewState extends State<StartView> {
     if (shown.isEmpty) return const [];
     return [
       _section(pad, _Heading(
-        title: pinned.isNotEmpty ? 'Dine kategorier' : 'Kategorier',
-        action: 'Alle kanaler',
+        title: pinned.isNotEmpty ? tr('Dine kategorier') : tr('Kategorier'),
+        action: tr('Alle kanaler'),
         onAction: () => widget.onShow('all'),
       )),
       SliverPadding(
@@ -344,15 +327,15 @@ class _Welcome extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Velkommen til Fyrlys', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+          Text(tr('Velkommen til Fyrlys'), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           Text(
-            'Velg en kanal fra lista eller en kategori under. Kanalen du så sist, kommer hit, og stjernemerkede kanaler '
-            'samles med det som går nå.',
+            tr('Velg en kanal fra lista eller en kategori under. Kanalen du så sist, kommer hit, og stjernemerkede '
+                'kanaler samles med det som går nå.'),
             style: TextStyle(color: scheme.onSurfaceVariant, height: 1.45),
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(onPressed: onAll, icon: const Icon(Icons.live_tv), label: const Text('Se alle kanaler')),
+          FilledButton.icon(onPressed: onAll, icon: const Icon(Icons.live_tv), label: Text(tr('Se alle kanaler'))),
         ],
       ),
     );
@@ -429,12 +412,12 @@ class _LastWatchedCardState extends State<LastWatchedCard> {
           children: [
             Icon(Icons.play_arrow, color: scheme.onPrimary),
             const SizedBox(width: 6),
-            Text('Se videre', style: TextStyle(color: scheme.onPrimary, fontWeight: FontWeight.w700)),
+            Text(tr('Se videre'), style: TextStyle(color: scheme.onPrimary, fontWeight: FontWeight.w700)),
           ],
         ),
       );
       final label = Text(
-        'SIST SETT',
+        tr('SIST SETT'),
         style: TextStyle(color: scheme.primary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.2),
       );
       final info = Column(
@@ -518,7 +501,8 @@ class _LastWatchedCardState extends State<LastWatchedCard> {
             style: TextStyle(fontSize: wide ? 17 : 15, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         Text(
-          '${hhmm(cur.start)}–${hhmm(cur.stop)}  ·  ${left.inMinutes >= 1 ? '${left.inMinutes} min igjen' : 'snart slutt'}',
+          '${hhmm(cur.start)}–${hhmm(cur.stop)}  ·  '
+          '${left.inMinutes >= 1 ? tr('{n} min igjen', {'n': left.inMinutes}) : tr('snart slutt')}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: dim,
@@ -535,7 +519,7 @@ class _LastWatchedCardState extends State<LastWatchedCard> {
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
-              'Deretter ${hhmm(next.start)}: ${next.title}',
+              tr('Deretter {time}: {title}', {'time': hhmm(next.start), 'title': next.title}),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: dim,

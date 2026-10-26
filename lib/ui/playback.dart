@@ -7,6 +7,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../core/languages.dart';
 import '../core/names.dart';
 import '../core/picture.dart';
+import '../l10n/tr.dart';
 
 /// Et lydspor eller en undertekst man kan velge i spilleren.
 class TrackChoice {
@@ -245,7 +246,7 @@ class MpvPlayback implements Playback {
 
   static String _name(String? title, String? language, String id) {
     final parts = [title, language].whereType<String>().where((s) => s.trim().isNotEmpty).toList();
-    return parts.isEmpty ? 'Spor $id' : parts.join(' · ');
+    return parts.isEmpty ? tr('Spor {id}', {'id': id}) : parts.join(' · ');
   }
 
   @override
@@ -269,7 +270,7 @@ class MpvPlayback implements Playback {
           if (t.id != 'auto' && t.id != 'no') TrackChoice(_name(t.title, t.language, t.id), selected: t.id == aid, value: t),
       ],
       subtitles: [
-        TrackChoice('Av', selected: sid == 'no' || sid.isEmpty, value: SubtitleTrack.no()),
+        TrackChoice(tr('Av'), selected: sid == 'no' || sid.isEmpty, value: SubtitleTrack.no()),
         for (final t in tracks.subtitle)
           if (t.id != 'auto' && t.id != 'no')
             TrackChoice(_name(t.title, t.language, t.id), selected: t.id == sid, value: t),
@@ -357,13 +358,19 @@ class MpvPlayback implements Playback {
     return [
       if (video.isNotEmpty) codecName(video),
       if (fps != null && fps > 0)
-        '${fps.round()} fps${deint ? ' (deinterlacet)' : interlaced ? ' (interlacet)' : ''}',
-      if (video.isNotEmpty && hwdec.isNotEmpty) hwdec == 'no' ? 'programvaredekoding' : 'maskinvaredekoding ($hwdec)',
+        deint
+            ? tr('{fps} fps (deinterlacet)', {'fps': fps.round()})
+            : interlaced
+                ? tr('{fps} fps (interlacet)', {'fps': fps.round()})
+                : '${fps.round()} fps',
+      if (video.isNotEmpty && hwdec.isNotEmpty)
+        hwdec == 'no' ? tr('programvaredekoding') : tr('maskinvaredekoding ({hwdec})', {'hwdec': hwdec}),
       if (bitrate != null && bitrate > 0) bitrateText(bitrate),
       if (audio.isNotEmpty) [codecName(audio), if (channels.isNotEmpty) channelLayout(channels)].join(' '),
-      if (sync == 'yes') 'jevn bevegelse',
-      if (sync.isNotEmpty && sync != 'yes') 'jevn bevegelse virker ikke her',
-      if (dropped > 0) '$dropped tapte bilder',
+      if (sync == 'yes') tr('jevn bevegelse'),
+      if (sync.isNotEmpty && sync != 'yes') tr('jevn bevegelse virker ikke her'),
+      if (dropped == 1) tr('1 tapt bilde'),
+      if (dropped > 1) tr('{n} tapte bilder', {'n': dropped}),
     ].join(' · ');
   }
 
@@ -392,8 +399,11 @@ class MpvPlayback implements Playback {
   Future<void> dispose() => _player.dispose();
 }
 
-/// «8,1 Mbit/s» (eller «850 kbit/s») fra bit per sekund
+/// «8,1 Mbit/s» (eller «850 kbit/s») fra bit per sekund; desimalpunktum på engelsk
 String bitrateText(double bits) {
-  if (bits >= 1e6) return '${(bits / 1e6).toStringAsFixed(1).replaceAll('.', ',')} Mbit/s';
+  if (bits >= 1e6) {
+    final n = (bits / 1e6).toStringAsFixed(1);
+    return '${appLanguage == 'en' ? n : n.replaceAll('.', ',')} Mbit/s';
+  }
   return '${(bits / 1e3).round()} kbit/s';
 }

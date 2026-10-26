@@ -1,5 +1,7 @@
 // Det appen vet om kategorier, kanaler, programmer, kontoen og favorittene.
 
+import '../l10n/tr.dart';
+
 class Category {
   const Category({required this.id, required this.name, this.count = 0});
 
@@ -150,8 +152,11 @@ List<EpgEntry> cleanEpg(List<EpgEntry> list) {
 /// Når abonnementet er fullt: en forklaring (ellers null).
 String? busyText(Account a) {
   if (a.maxConnections <= 0 || a.activeConnections < a.maxConnections) return null;
-  final all = a.maxConnections == 1 ? 'Tilkoblingen' : 'Alle de ${a.maxConnections} tilkoblingene';
-  return '$all i abonnementet er i bruk akkurat nå. Ser noen på en annen enhet? Prøv igjen om litt.';
+  if (a.maxConnections == 1) {
+    return tr('Tilkoblingen i abonnementet er i bruk akkurat nå. Ser noen på en annen enhet? Prøv igjen om litt.');
+  }
+  return tr('Alle de {n} tilkoblingene i abonnementet er i bruk akkurat nå. Ser noen på en annen enhet? Prøv igjen '
+      'om litt.', {'n': a.maxConnections});
 }
 
 class Account {

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
+import '../l10n/tr.dart';
 import 'failure.dart' show httpStatus;
 import 'models.dart';
 import 'source.dart';
@@ -25,10 +26,10 @@ final _scheme = RegExp(r'^https?://', caseSensitive: false);
 /// Godtar «host:port», «http://host:port» og hele M3U-lenker (get.php?username=…&password=…).
 XtreamLogin cleanServer(String raw) {
   var text = raw.trim();
-  if (text.isEmpty) throw const SourceException('Skriv inn serveradressen');
+  if (text.isEmpty) throw SourceException(tr('Skriv inn serveradressen'));
   if (!_scheme.hasMatch(text)) text = 'http://$text';
   final u = Uri.tryParse(text);
-  if (u == null || u.host.isEmpty) throw const SourceException('Ugyldig serveradresse');
+  if (u == null || u.host.isEmpty) throw SourceException(tr('Ugyldig serveradresse'));
   var path = u.path;
   for (final tail in const ['get.php', 'player_api.php', 'xmltv.php']) {
     if (path.endsWith(tail)) path = path.substring(0, path.length - tail.length);
@@ -128,7 +129,7 @@ MediaTech mediaTech(Map<Object?, Object?> info) {
 
 /// get_series_info: sesongene kommer som et kart (sesong → episoder) eller, hos noen, som en liste av lister.
 SeriesInfo parseSeriesInfo(Object? d) {
-  if (d is! Map) throw const SourceException('Fant ikke serien');
+  if (d is! Map) throw SourceException(tr('Fant ikke serien'));
   final info = d['info'] is Map ? d['info'] as Map : const <Object?, Object?>{};
   final rawEpisodes = d['episodes'];
   final Map<Object?, Object?> bySeason = rawEpisodes is List
@@ -266,11 +267,11 @@ class XtreamSource implements TvSource {
     final l = cleanServer(serverInput);
     final u = user.trim().isNotEmpty ? user.trim() : (l.user ?? '').trim();
     final p = password.trim().isNotEmpty ? password.trim() : (l.password ?? '').trim();
-    if (u.isEmpty || p.isEmpty) throw const SourceException('Skriv inn brukernavn og passord');
+    if (u.isEmpty || p.isEmpty) throw SourceException(tr('Skriv inn brukernavn og passord'));
     final src = XtreamSource(server: l.server, user: u, password: p, client: client);
     try {
       final info = await src._userInfo();
-      if (info == null || '${info['auth']}' != '1') throw const SourceException('Feil brukernavn eller passord');
+      if (info == null || '${info['auth']}' != '1') throw SourceException(tr('Feil brukernavn eller passord'));
       src._info = info;
       return src;
     } on SourceException {
@@ -283,7 +284,7 @@ class XtreamSource implements TvSource {
   String get kind => 'xtream';
 
   @override
-  String get label => '$user på ${Uri.tryParse(server)?.host ?? server}';
+  String get label => tr('{user} på {host}', {'user': user, 'host': Uri.tryParse(server)?.host ?? server});
 
   @override
   Map<String, String> get httpHeaders => const {'User-Agent': xtreamUserAgent};
@@ -302,16 +303,16 @@ class XtreamSource implements TvSource {
     try {
       r = await _http.get(uri, headers: httpHeaders).timeout(timeout);
     } on Exception {
-      throw const SourceException('Får ikke kontakt med IPTV-serveren');
+      throw SourceException(tr('Får ikke kontakt med IPTV-serveren'));
     }
-    if (r.statusCode == 401 || r.statusCode == 403) throw const SourceException('Serveren avviste innloggingen');
-    if (r.statusCode >= 400) throw SourceException('IPTV-serveren svarte HTTP ${r.statusCode}');
+    if (r.statusCode == 401 || r.statusCode == 403) throw SourceException(tr('Serveren avviste innloggingen'));
+    if (r.statusCode >= 400) throw SourceException(tr('IPTV-serveren svarte HTTP {code}', {'code': r.statusCode}));
     final text = utf8.decode(r.bodyBytes, allowMalformed: true);
     try {
       // kanallista kan være mange megabyte: tolkes i bakgrunnen, så bildet ikke henger imens
       return text.length > 200000 ? await Isolate.run(() => jsonDecode(text)) : jsonDecode(text);
     } on Object {
-      throw const SourceException('Serveren svarte ikke som en Xtream-server');
+      throw SourceException(tr('Serveren svarte ikke som en Xtream-server'));
     }
   }
 
@@ -446,7 +447,7 @@ class XtreamSource implements TvSource {
 
   @override
   Future<ArchiveClip> archiveClip(Channel channel, EpgEntry program) async {
-    if (!channel.hasArchive) throw const SourceException('Kanalen har ikke TV-arkiv');
+    if (!channel.hasArchive) throw SourceException(tr('Kanalen har ikke TV-arkiv'));
     final clock = await _serverClock();
     return ArchiveClip(
       start: program.start,

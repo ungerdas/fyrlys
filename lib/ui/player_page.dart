@@ -44,7 +44,7 @@ class PlayerPage extends StatelessWidget {
     required this.session,
     required this.channels,
     required this.index,
-    this.listTitle = 'Kanaler',
+    this.listTitle,
     this.fromFavorites = false,
     this.playback,
   });
@@ -55,8 +55,8 @@ class PlayerPage extends StatelessWidget {
   final List<Channel> channels;
   final int index;
 
-  /// navnet på lista, vises på fanen i kanallista
-  final String listTitle;
+  /// navnet på lista, vises på fanen i kanallista (uten: «Kanaler»)
+  final String? listTitle;
 
   /// valgt fra favorittene: kanallista viser dem, og den andre fanen blir alle kanaler
   final bool fromFavorites;
@@ -205,7 +205,7 @@ class _PlayerState extends State<_Player> {
       ..add(_pb.heightStream.listen((h) => _set(() => _height = h)))
       ..add(_pb.errorStream.listen(_onError))
       ..add(_pb.completedStream.listen((done) {
-        if (done && _started) _ended('sendingen stoppet');
+        if (done && _started) _ended(tr('Kanalen stoppet (sendingen stoppet).'));
       }));
     _watchdog = Timer.periodic(const Duration(seconds: 2), (_) => _check());
     unawaited(_start());
@@ -338,14 +338,14 @@ class _PlayerState extends State<_Player> {
   }
 
   /// Strømmen stoppet etter at den hadde startet. Åpne kanalen på nytt via kilden (så «alle tilkoblinger
-  /// i bruk» vises om noen har tatt over), inntil tre ganger i minuttet.
-  void _ended(String why) {
+  /// i bruk» vises om noen har tatt over), inntil tre ganger i minuttet. [message] vises når det er prøvd nok.
+  void _ended(String message) {
     final now = DateTime.now();
     _retries.removeWhere((t) => now.difference(t) > const Duration(minutes: 1));
     if (_retries.length >= 3) {
       unawaited(_pb.stop());
       _set(() {
-        _status = 'Kanalen stoppet ($why).';
+        _status = message;
         _buffering = false;
       });
       return;
@@ -373,13 +373,13 @@ class _PlayerState extends State<_Player> {
     final still = now.difference(_lastMove);
     if (_started && still > const Duration(seconds: 20)) {
       _lastMove = now;
-      _ended('bildet sto fast');
+      _ended(tr('Kanalen stoppet (bildet sto fast).'));
     } else if (!_started && still > const Duration(seconds: 30)) {
       _lastMove = now;
       if (!_nextUrl()) {
         unawaited(_pb.stop());
         _set(() {
-          _status = 'Fikk ikke bilde fra kanalen.';
+          _status = tr('Fikk ikke bilde fra kanalen.');
           _buffering = false;
         });
       }
@@ -522,7 +522,7 @@ class _PlayerState extends State<_Player> {
     if (!_canShift) return;
     if (seconds > 0 && _shiftTarget == null && _atLive) {
       // allerede direkte: ingenting å spole fram til (og ikke last strømmen på nytt)
-      _showFlash('Direkte');
+      _showFlash(tr('Direkte'));
       _wake();
       return;
     }
@@ -530,7 +530,7 @@ class _PlayerState extends State<_Player> {
     if (to < Duration.zero) to = Duration.zero;
     if (to > _window) to = _window;
     _shiftTarget = to;
-    _showFlash(to < const Duration(seconds: 3) ? 'Direkte' : '−${formatDuration(to)}');
+    _showFlash(to < const Duration(seconds: 3) ? tr('Direkte') : '−${formatDuration(to)}');
     _shiftTimer?.cancel();
     _shiftTimer = Timer(const Duration(milliseconds: 450), () {
       final target = _shiftTarget;
@@ -542,7 +542,7 @@ class _PlayerState extends State<_Player> {
   void _goLive() {
     if (!_canShift) return;
     if (_atLive && _playing) {
-      _showFlash('Direkte');
+      _showFlash(tr('Direkte'));
       return;
     }
     _shiftTimer?.cancel();
@@ -570,13 +570,15 @@ class _PlayerState extends State<_Player> {
       if (!_muted && _volume == 0) _volume = 50;
     });
     _applyVolume();
-    _showFlash(_muted ? 'Lyd av' : 'Lyd ${_volume.round()} %');
+    _showVolume();
   }
 
   void _nudgeVolume(double step) {
     _setVolume((_muted ? 0 : _volume) + step);
-    _showFlash(_muted ? 'Lyd av' : 'Lyd ${_volume.round()} %');
+    _showVolume();
   }
+
+  void _showVolume() => _showFlash(_muted ? tr('Lyd av') : tr('Lyd {n} %', {'n': _volume.round()}));
 
   /// musehjulet over bildet styrer lyden (PC)
   void _onWheel(PointerSignalEvent event) {
@@ -778,7 +780,7 @@ class _PlayerState extends State<_Player> {
     if (j >= 0) {
       _switchTo(all, j);
     } else {
-      _showFlash('Fant ikke kanal ${int.parse(digits)}');
+      _showFlash(tr('Fant ikke kanal {n}', {'n': int.parse(digits)}));
     }
   }
 
@@ -893,8 +895,10 @@ class _PlayerState extends State<_Player> {
     unawaited(_session.toggleFavorite(ch));
     final name = nameParts(ch.name).main;
     final text = named
-        ? (on ? '$name er lagt til i favoritter' : '$name er fjernet fra favoritter')
-        : (on ? 'Lagt til i favoritter' : 'Fjernet fra favoritter');
+        ? (on
+            ? tr('{name} er lagt til i favoritter', {'name': name})
+            : tr('{name} er fjernet fra favoritter', {'name': name}))
+        : (on ? tr('Lagt til i favoritter') : tr('Fjernet fra favoritter'));
     ScaffoldMessenger.maybeOf(context)
       ?..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 2)));
@@ -1039,8 +1043,9 @@ class _PlayerState extends State<_Player> {
     final t = _target;
     if (t == null) return '';
     final url = t.urls[math.min(_url, t.urls.length - 1)];
-    final kind = url.contains('.m3u8') ? 'HLS ' : (url.contains('.ts') ? 'MPEG-TS ' : '');
-    return '${kind}rett fra leverandøren';
+    if (url.contains('.m3u8')) return tr('HLS rett fra leverandøren');
+    if (url.contains('.ts')) return tr('MPEG-TS rett fra leverandøren');
+    return tr('rett fra leverandøren');
   }
 
   @override
@@ -1223,7 +1228,7 @@ class _PlayerState extends State<_Player> {
                 ),
               ),
             ),
-            if (status != null) _card(text: status, action: 'Prøv igjen', onPressed: _retry),
+            if (status != null) _card(text: status, action: tr('Prøv igjen'), onPressed: _retry),
           ],
         ),
       ),
@@ -1245,7 +1250,7 @@ class _PlayerState extends State<_Player> {
               color: const Color(0x8C000000),
               shape: const CircleBorder(side: BorderSide(color: Color(0x2EFFFFFF))),
               child: IconButton(
-                tooltip: 'Lukk (Esc)',
+                tooltip: tr('Lukk (Esc)'),
                 icon: const Icon(Icons.close, size: 20),
                 color: Colors.white,
                 onPressed: _close,
@@ -1297,7 +1302,7 @@ class _PlayerState extends State<_Player> {
                       Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _dim)),
                     if (next != null)
                       Text(
-                        'Deretter ${hhmm(next.start)}: ${next.title}',
+                        tr('Deretter {time}: {title}', {'time': hhmm(next.start), 'title': next.title}),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: _dim, fontSize: 13),
@@ -1347,36 +1352,37 @@ class _PlayerState extends State<_Player> {
               Row(
                 children: [
                   _ctl(_playing ? Icons.pause : Icons.play_arrow,
-                      _playing ? 'Pause (mellomrom)' : 'Spill av (mellomrom)', _togglePlay,
+                      _playing ? tr('Pause (mellomrom)') : tr('Spill av (mellomrom)'), _togglePlay,
                       size: 30),
                   if (shift && !compact) ...[
-                    _ctl(Icons.replay_10, '10 sekunder tilbake (←)', () => _nudgeShift(-10)),
-                    _ctl(Icons.forward_10, '10 sekunder fram (→)', _atLive ? null : () => _nudgeShift(10)),
+                    _ctl(Icons.replay_10, tr('10 sekunder tilbake (←)'), () => _nudgeShift(-10)),
+                    _ctl(Icons.forward_10, tr('10 sekunder fram (→)'), _atLive ? null : () => _nudgeShift(10)),
                   ],
                   _liveBadge(compact: compact),
                   const Spacer(),
                   // smal skjerm med tidslinje: kanallista under bildet bytter kanal, så pilene får vike
                   if (!compact || !shift) ...[
-                    _ctl(Icons.keyboard_arrow_up, 'Forrige kanal (↑)', () => _zap(-1)),
-                    _ctl(Icons.keyboard_arrow_down, 'Neste kanal (↓)', () => _zap(1)),
+                    _ctl(Icons.keyboard_arrow_up, tr('Forrige kanal (↑)'), () => _zap(-1)),
+                    _ctl(Icons.keyboard_arrow_down, tr('Neste kanal (↓)'), () => _zap(1)),
                   ],
                   if (!compact)
-                    _ctl(Icons.swap_horiz, 'Kanalen du så sist (Backspace)', _last == null ? null : _lastChannel),
+                    _ctl(Icons.swap_horiz, tr('Kanalen du så sist (Backspace)'), _last == null ? null : _lastChannel),
                   // smalt vindu: knappene står under bildet
                   if (_hasArchive && (!compact || full)) ...[
-                    _ctl(Icons.restart_alt, 'Se fra start', _startable == null ? null : () => unawaited(_startOver())),
-                    _ctl(Icons.history, 'TV-arkiv (A)', () => unawaited(_openArchive())),
+                    _ctl(Icons.restart_alt, tr('Se fra start'),
+                        _startable == null ? null : () => unawaited(_startOver())),
+                    _ctl(Icons.history, tr('TV-arkiv (A)'), () => unawaited(_openArchive())),
                   ],
                   if (_session.canMultiview && (!compact || full))
-                    _ctl(Icons.grid_view_outlined, 'Multiview (V)', () => unawaited(_openMultiview())),
-                  _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
+                    _ctl(Icons.grid_view_outlined, tr('Multiview (V)'), () => unawaited(_openMultiview())),
+                  _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
                   if (!compact) _volumeSlider(volume),
-                  if (full) _ctl(Icons.list, 'Kanaler (C)', _toggleSide, on: _sideOpen),
+                  if (full) _ctl(Icons.list, tr('Kanaler (C)'), _toggleSide, on: _sideOpen),
                   _tracksButton(),
                   if (!compact || full)
                     _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
-                  _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen, full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
-                      _toggleFull),
+                  _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen,
+                      full ? tr('Avslutt fullskjerm (F)') : tr('Fullskjerm (F)'), _toggleFull),
                 ],
               ),
             ],
@@ -1391,7 +1397,7 @@ class _PlayerState extends State<_Player> {
     final window = _window.inMilliseconds / 1000;
     final behindSec = _shiftDrag ?? math.min(_behind.inMilliseconds / 1000, window);
     final label = _shiftDrag != null
-        ? (behindSec < 3 ? 'Direkte' : '−${formatDuration(Duration(milliseconds: (behindSec * 1000).round()))}')
+        ? (behindSec < 3 ? tr('Direkte') : '−${formatDuration(Duration(milliseconds: (behindSec * 1000).round()))}')
         : '−${formatDuration(_window)}';
     const timeStyle = TextStyle(color: Colors.white, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()]);
     return Row(
@@ -1415,7 +1421,9 @@ class _PlayerState extends State<_Player> {
               max: window,
               semanticFormatterCallback: (v) {
                 final back = window - v;
-                return back < 3 ? 'Direkte' : '${formatDuration(Duration(seconds: back.round()))} bak direkte';
+                return back < 3
+                    ? tr('Direkte')
+                    : tr('{time} bak direkte', {'time': formatDuration(Duration(seconds: back.round()))});
               },
               onChangeStart: (v) {
                 _dragging = true;
@@ -1435,7 +1443,7 @@ class _PlayerState extends State<_Player> {
             ),
           ),
         ),
-        const Text('Direkte', style: timeStyle),
+        Text(tr('Direkte'), style: timeStyle),
         const SizedBox(width: 8),
       ],
     );
@@ -1464,17 +1472,17 @@ class _PlayerState extends State<_Player> {
         color: at ? FyrlysColors.live : Colors.white24,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          DecoratedBox(
+          const DecoratedBox(
             decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
             child: SizedBox(width: 8, height: 8),
           ),
-          SizedBox(width: 7),
+          const SizedBox(width: 7),
           Text(
-            'DIREKTE',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.7),
+            tr('DIREKTE'),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.7),
           ),
         ],
       ),
@@ -1488,7 +1496,7 @@ class _PlayerState extends State<_Player> {
         children: [
           if (shift && !at)
             Tooltip(
-              message: 'Gå til direkte (L)',
+              message: tr('Gå til direkte (L)'),
               child: InkWell(borderRadius: BorderRadius.circular(14), onTap: _goLive, child: badge),
             )
           else
@@ -1522,7 +1530,7 @@ class _PlayerState extends State<_Player> {
         child: Slider(
           value: volume,
           max: 100,
-          semanticFormatterCallback: (v) => 'Volum ${v.round()} %',
+          semanticFormatterCallback: (v) => tr('Volum {n} %', {'n': v.round()}),
           onChangeStart: (_) => _dragging = true,
           onChanged: (v) {
             _setVolume(v, save: false);
@@ -1597,7 +1605,7 @@ class _PlayerState extends State<_Player> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Så ${hhmm(next.start)}  ${next.title}',
+                tr('Så {time}  {title}', {'time': hhmm(next.start), 'title': next.title}),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: _dim, fontSize: 12.5),
@@ -1775,7 +1783,7 @@ class _PlayerState extends State<_Player> {
     final fav = _session.isFavorite(ch.id);
     return IconButton(
       key: const ValueKey('player-star'),
-      tooltip: fav ? 'Fjern fra favoritter' : 'Legg til i favoritter',
+      tooltip: fav ? tr('Fjern fra favoritter') : tr('Legg til i favoritter'),
       icon: Icon(fav ? Icons.star : Icons.star_border, size: 26, color: fav ? scheme.primary : idle),
       onPressed: () => _toggleFav(ch),
     );
@@ -1819,7 +1827,7 @@ class _PlayerState extends State<_Player> {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                'Deretter ${hhmm(next.start)}: ${next.title}',
+                tr('Deretter {time}: {title}', {'time': hhmm(next.start), 'title': next.title}),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: _ink2, fontSize: 14),
@@ -1836,19 +1844,19 @@ class _PlayerState extends State<_Player> {
                     OutlinedButton.icon(
                       onPressed: _startable == null ? null : () => unawaited(_startOver()),
                       icon: const Icon(Icons.restart_alt, size: 18),
-                      label: const Text('Se fra start'),
+                      label: Text(tr('Se fra start')),
                     ),
                     OutlinedButton.icon(
                       onPressed: () => unawaited(_openArchive()),
                       icon: const Icon(Icons.history, size: 18),
-                      label: const Text('TV-arkiv'),
+                      label: Text(tr('TV-arkiv')),
                     ),
                   ],
                   if (_session.canMultiview)
                     OutlinedButton.icon(
                       onPressed: () => unawaited(_openMultiview()),
                       icon: const Icon(Icons.grid_view_outlined, size: 18),
-                      label: const Text('Multiview'),
+                      label: Text(tr('Multiview')),
                     ),
                 ],
               ),
@@ -1888,7 +1896,7 @@ class _PlayerState extends State<_Player> {
       child: ChannelSideList(
         key: _sideKey,
         session: _session,
-        title: page.fromFavorites ? 'Alle kanaler' : page.listTitle,
+        title: page.fromFavorites ? tr('Alle kanaler') : (page.listTitle ?? tr('Kanaler')),
         channels: page.fromFavorites ? _session.channels : page.channels,
         tab: _tab,
         onTab: (t) => setState(() => _tab = t),

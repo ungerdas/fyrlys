@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
+import '../l10n/tr.dart';
 import 'channel_card.dart';
 
 /// Hvilken liste kanallista i spilleren viser.
@@ -166,13 +167,13 @@ class ChannelSideListState extends State<ChannelSideList> {
             children: [
               Expanded(
                 child: Text(
-                  'Kanaler',
+                  tr('Kanaler'),
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: scheme.onSurface),
                 ),
               ),
               if (widget.onClose != null)
                 IconButton(
-                  tooltip: 'Lukk kanallista (Esc)',
+                  tooltip: tr('Lukk kanallista (Esc)'),
                   icon: const Icon(Icons.close),
                   color: scheme.onSurface,
                   onPressed: widget.onClose,
@@ -186,7 +187,7 @@ class ChannelSideListState extends State<ChannelSideList> {
             children: [
               Expanded(child: _tabButton(SideTab.list, widget.title, focusNode: _tabFocus)),
               const SizedBox(width: 6),
-              Expanded(child: _tabButton(SideTab.fav, '★ Favoritter')),
+              Expanded(child: _tabButton(SideTab.fav, tr('★ Favoritter'))),
             ],
           ),
         ),
@@ -198,11 +199,15 @@ class ChannelSideListState extends State<ChannelSideList> {
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
               isDense: true,
-              hintText: 'Søk i lista',
+              hintText: tr('Søk i lista'),
               prefixIcon: const Icon(Icons.search, size: 20),
               suffixIcon: _query.isEmpty
                   ? null
-                  : IconButton(tooltip: 'Tøm søket', icon: const Icon(Icons.close, size: 18), onPressed: _clearSearch),
+                  : IconButton(
+                      tooltip: tr('Tøm søket'),
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: _clearSearch,
+                    ),
             ),
             onChanged: (v) => setState(() => _query = v.trim()),
           ),
@@ -213,10 +218,10 @@ class ChannelSideListState extends State<ChannelSideList> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                   child: Text(
                     _query.isNotEmpty
-                        ? 'Fant ingenting.'
+                        ? tr('Fant ingenting.')
                         : widget.tab == SideTab.fav
-                            ? 'Ingen favoritter ennå. Trykk ☆ på en kanal for å legge den til.'
-                            : 'Ingen kanaler her.',
+                            ? tr('Ingen favoritter ennå. Trykk ☆ på en kanal for å legge den til.')
+                            : tr('Ingen kanaler her.'),
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                 )
@@ -426,7 +431,7 @@ class _SideRowState extends State<_SideRow> {
                   child: Text(ch.number!, style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
                 ),
               IconButton(
-                tooltip: fav ? 'Fjern fra favoritter' : 'Legg til i favoritter',
+                tooltip: fav ? tr('Fjern fra favoritter') : tr('Legg til i favoritter'),
                 visualDensity: VisualDensity.compact,
                 icon: Icon(
                   fav ? Icons.star : Icons.star_border,

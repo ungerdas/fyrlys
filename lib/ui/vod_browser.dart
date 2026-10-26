@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../core/vod.dart';
+import '../l10n/tr.dart';
 import 'motion.dart';
 import 'vod_detail_page.dart';
 
@@ -67,7 +68,7 @@ class _VodBrowserState extends State<VodBrowser> {
       final c = await src.vodCatalog(widget.kind, force: force);
       if (mounted) setState(() => _catalog = c);
     } on Object catch (e) {
-      if (mounted) setState(() => _error = e is SourceException ? e.message : 'Uventet svar fra serveren');
+      if (mounted) setState(() => _error = e is SourceException ? e.message : tr('Uventet svar fra serveren'));
     }
   }
 
@@ -107,7 +108,7 @@ class _VodBrowserState extends State<VodBrowser> {
     } on Object catch (e) {
       if (!mounted || my != _seq) return;
       setState(() {
-        _error = e is SourceException ? e.message : 'Uventet svar fra serveren';
+        _error = e is SourceException ? e.message : tr('Uventet svar fra serveren');
         _loading = false;
       });
     }
@@ -161,7 +162,7 @@ class _VodBrowserState extends State<VodBrowser> {
     final count = !_loadedOnce
         ? ''
         : _total > _items.length
-            ? 'Viser ${_items.length} av $_total'
+            ? tr('Viser {shown} av {total}', {'shown': _items.length, 'total': _total})
             : '$_total';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -172,7 +173,10 @@ class _VodBrowserState extends State<VodBrowser> {
               isExpanded: true,
               value: _category,
               items: [
-                DropdownMenuItem(value: '', child: Text('Alle kategorier${c == null ? '' : ' (${c.total})'}')),
+                DropdownMenuItem(
+                  value: '',
+                  child: Text(c == null ? tr('Alle kategorier') : tr('Alle kategorier ({n})', {'n': c.total})),
+                ),
                 for (final cat in c?.categories ?? const <VodCategory>[])
                   DropdownMenuItem(value: cat.id, child: Text('${cat.name} (${cat.count})', overflow: TextOverflow.ellipsis)),
               ],
@@ -214,7 +218,7 @@ class _VodBrowserState extends State<VodBrowser> {
                   unawaited(_loadCatalog(force: true));
                   unawaited(_reload());
                 },
-                child: const Text('Prøv igjen'),
+                child: Text(tr('Prøv igjen')),
               ),
             ],
           ),
@@ -228,14 +232,16 @@ class _VodBrowserState extends State<VodBrowser> {
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
-            Text('Henter ${widget.kind.title.toLowerCase()} … Første gang kan det ta litt tid.'),
+            Text(widget.kind == VodKind.movies
+                ? tr('Henter filmer … Første gang kan det ta litt tid.')
+                : tr('Henter serier … Første gang kan det ta litt tid.')),
           ],
         ),
       );
     }
     if (_items.isEmpty) {
       return Center(
-        child: Text(widget.query.isNotEmpty ? 'Fant ingenting.' : 'Ingenting her.',
+        child: Text(widget.query.isNotEmpty ? tr('Fant ingenting.') : tr('Ingenting her.'),
             style: TextStyle(color: scheme.onSurfaceVariant)),
       );
     }
@@ -243,10 +249,10 @@ class _VodBrowserState extends State<VodBrowser> {
     return CustomScrollView(
       slivers: [
         if (continues.isNotEmpty) ...[
-          const SliverPadding(
-            padding: EdgeInsets.fromLTRB(16, 10, 16, 8),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             sliver: SliverToBoxAdapter(
-              child: Text('Fortsett å se', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              child: Text(tr('Fortsett å se'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             ),
           ),
           SliverToBoxAdapter(
@@ -270,7 +276,7 @@ class _VodBrowserState extends State<VodBrowser> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
             sliver: SliverToBoxAdapter(
-              child: Text('Alle ${widget.kind.title.toLowerCase()}',
+              child: Text(widget.kind == VodKind.movies ? tr('Alle filmer') : tr('Alle serier'),
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             ),
           ),
@@ -310,7 +316,7 @@ class _VodBrowserState extends State<VodBrowser> {
                       setState(() => _error = null);
                       unawaited(_more());
                     },
-                    child: const Text('Prøv igjen'),
+                    child: Text(tr('Prøv igjen')),
                   ),
                 ],
               ),
@@ -428,10 +434,10 @@ class _ContinueCardState extends State<ContinueCard> {
     final String status;
     if (state != null) {
       final left = state.length - state.position;
-      status = left.inMinutes >= 1 ? '${left.inMinutes} min igjen' : 'Snart ferdig';
+      status = left.inMinutes >= 1 ? tr('{n} min igjen', {'n': left.inMinutes}) : tr('Snart ferdig');
     } else if (seen >= 0.95 || seen == 0) {
       // en serie der forrige episode er sett: denne er den neste
-      status = c.kind == VodKind.series ? 'Neste episode' : '';
+      status = c.kind == VodKind.series ? tr('Neste episode') : '';
     } else {
       status = '';
     }
@@ -497,7 +503,7 @@ class _ContinueCardState extends State<ContinueCard> {
                 Align(
                   alignment: Alignment.topRight,
                   child: IconButton(
-                    tooltip: 'Fjern fra «Fortsett å se»',
+                    tooltip: tr('Fjern fra «Fortsett å se»'),
                     iconSize: 18,
                     visualDensity: VisualDensity.compact,
                     icon: Icon(Icons.close, color: scheme.onSurfaceVariant),

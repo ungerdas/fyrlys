@@ -35,7 +35,7 @@ class SavedLogin {
 
   String get kindName => switch (kind) {
         'xtream' => 'Xtream Codes',
-        'm3u' => 'M3U-liste',
+        'm3u' => tr('M3U-liste'),
         _ => kind,
       };
 
@@ -339,7 +339,7 @@ class Session extends ChangeNotifier {
     if (id == activeLogin && source != null) return;
     if (!logins.any((l) => l.id == id)) return;
     final src = await _openLogin(id);
-    if (src == null) throw const SourceException('Fikk ikke åpnet innloggingen. Fjern den og logg inn på nytt.');
+    if (src == null) throw SourceException(tr('Fikk ikke åpnet innloggingen. Fjern den og logg inn på nytt.'));
     await _activate(id, src);
   }
 
@@ -493,7 +493,7 @@ class Session extends ChangeNotifier {
     } on Object catch (e) {
       debugPrint('Listene: ${src.redact('$e')}');
       // uventet svar (ikke en Xtream-server eller M3U-liste): vis en feil i stedet for en tom liste
-      if (source == src) error = 'Uventet svar fra serveren da lista ble hentet';
+      if (source == src) error = tr('Uventet svar fra serveren da lista ble hentet');
     } finally {
       if (source == src) {
         loading = false;
@@ -541,7 +541,7 @@ class Session extends ChangeNotifier {
     for (final c in categories) {
       if (c.id == id) return c.name;
     }
-    return 'Kanaler';
+    return tr('Kanaler');
   }
 
   // ── programinfo ──
@@ -605,7 +605,7 @@ class Session extends ChangeNotifier {
   /// Strømmen for et program i arkivet (kaster SourceException når det ikke går).
   Future<ArchiveClip> archiveClip(Channel channel, EpgEntry program) async {
     final src = source;
-    if (src == null) throw const SourceException('Ikke logget inn');
+    if (src == null) throw SourceException(tr('Ikke logget inn'));
     return src.archiveClip(channel, program);
   }
 

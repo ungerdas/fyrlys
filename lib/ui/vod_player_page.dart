@@ -152,9 +152,6 @@ class _VodPlayerState extends State<_VodPlayer> {
   bool get _hasPrev => _index > 0;
   ArchiveClip? get _clip => _item.archive;
 
-  /// «episode» eller «program» (TV-arkivet)
-  String get _unit => _item.archive != null ? 'program' : 'episode';
-
   @override
   void initState() {
     super.initState();
@@ -224,7 +221,7 @@ class _VodPlayerState extends State<_VodPlayer> {
     debugPrint('Spiller ${item.key}');
     final start = resume ? _session.resumeAt(item.key) : null;
     if (item.archive != null) {
-      if (start != null) _showFlash('Fortsetter fra ${formatDuration(start)}');
+      if (start != null) _showFlash(tr('Fortsetter fra {time}', {'time': formatDuration(start)}));
       await _openArchive(start ?? Duration.zero);
       return;
     }
@@ -236,12 +233,12 @@ class _VodPlayerState extends State<_VodPlayer> {
       _position = start ?? Duration.zero;
       _duration = Duration.zero;
     });
-    if (start != null) _showFlash('Fortsetter fra ${formatDuration(start)}');
+    if (start != null) _showFlash(tr('Fortsetter fra {time}', {'time': formatDuration(start)}));
     try {
       await _pb.open(item.url, _session.source?.httpHeaders ?? const {}, start: start);
     } on Object catch (e) {
       _set(() {
-        _status = 'Kunne ikke spille av (${_session.source?.redact('$e') ?? e}).';
+        _status = tr('Kunne ikke spille av ({message}).', {'message': _session.source?.redact('$e') ?? e});
         _buffering = false;
       });
     }
@@ -321,7 +318,7 @@ class _VodPlayerState extends State<_VodPlayer> {
     }
     if (_hasNext) {
       final next = _items[_index + 1];
-      _showFlash('Neste: ${next.archive != null ? next.title : next.subtitle}');
+      _showFlash(tr('Neste: {title}', {'title': next.archive != null ? next.title : next.subtitle}));
       _nextTimer?.cancel();
       _nextTimer = Timer(const Duration(milliseconds: 1500), () {
         if (mounted && _ending) _go(_index + 1);
@@ -401,7 +398,7 @@ class _VodPlayerState extends State<_VodPlayer> {
       await _pb.open(_urls[_urlIndex], _session.source?.httpHeaders ?? const {});
     } on Object catch (e) {
       _set(() {
-        _status = 'Kunne ikke spille av (${_session.source?.redact('$e') ?? e}).';
+        _status = tr('Kunne ikke spille av ({message}).', {'message': _session.source?.redact('$e') ?? e});
         _buffering = false;
       });
     }
@@ -481,8 +478,8 @@ class _VodPlayerState extends State<_VodPlayer> {
     if (_reopens.length >= 3) {
       _set(() {
         _status = clip.stop.isAfter(now)
-            ? 'Du har tatt igjen sendingen. Prøv igjen om litt for å se resten.'
-            : 'Arkivet stoppet før programmet var slutt.';
+            ? tr('Du har tatt igjen sendingen. Prøv igjen om litt for å se resten.')
+            : tr('Arkivet stoppet før programmet var slutt.');
         _buffering = false;
       });
       return;
@@ -543,12 +540,12 @@ class _VodPlayerState extends State<_VodPlayer> {
       if (!_muted && _volume == 0) _volume = 50;
     });
     _applyVolume();
-    _showFlash(_muted ? 'Lyd av' : 'Lyd ${_volume.round()} %');
+    _showFlash(_muted ? tr('Lyd av') : tr('Lyd {n} %', {'n': _volume.round()}));
   }
 
   void _nudgeVolume(double step) {
     _setVolume((_muted ? 0 : _volume) + step);
-    _showFlash(_muted ? 'Lyd av' : 'Lyd ${_volume.round()} %');
+    _showFlash(_muted ? tr('Lyd av') : tr('Lyd {n} %', {'n': _volume.round()}));
   }
 
   void _onWheel(PointerSignalEvent event) {
@@ -807,7 +804,7 @@ class _VodPlayerState extends State<_VodPlayer> {
                 color: const Color(0x8C000000),
                 shape: const CircleBorder(side: BorderSide(color: Color(0x2EFFFFFF))),
                 child: IconButton(
-                  tooltip: 'Lukk (Esc)',
+                  tooltip: tr('Lukk (Esc)'),
                   icon: const Icon(Icons.close, size: 20),
                   color: Colors.white,
                   onPressed: _close,
@@ -913,23 +910,25 @@ class _VodPlayerState extends State<_VodPlayer> {
               ),
               Row(
                 children: [
-                  _ctl(_playing ? Icons.pause : Icons.play_arrow, _playing ? 'Pause (mellomrom)' : 'Spill av (mellomrom)',
-                      _togglePlay,
+                  _ctl(_playing ? Icons.pause : Icons.play_arrow,
+                      _playing ? tr('Pause (mellomrom)') : tr('Spill av (mellomrom)'), _togglePlay,
                       size: 30),
-                  _ctl(Icons.replay_10, '10 sekunder tilbake (←)', () => _seekBy(-10)),
-                  _ctl(Icons.forward_10, '10 sekunder fram (→)', () => _seekBy(10)),
+                  _ctl(Icons.replay_10, tr('10 sekunder tilbake (←)'), () => _seekBy(-10)),
+                  _ctl(Icons.forward_10, tr('10 sekunder fram (→)'), () => _seekBy(10)),
                   if (_items.length > 1) ...[
-                    _ctl(Icons.skip_previous, 'Forrige $_unit (P)', _hasPrev ? () => _go(_index - 1) : null),
-                    _ctl(Icons.skip_next, 'Neste $_unit (N)', _hasNext ? () => _go(_index + 1) : null),
+                    _ctl(Icons.skip_previous, _clip != null ? tr('Forrige program (P)') : tr('Forrige episode (P)'),
+                        _hasPrev ? () => _go(_index - 1) : null),
+                    _ctl(Icons.skip_next, _clip != null ? tr('Neste program (N)') : tr('Neste episode (N)'),
+                        _hasNext ? () => _go(_index + 1) : null),
                   ],
                   const Spacer(),
-                  _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
+                  _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
                   if (!compact) _volumeSlider(volume),
                   _tracksButton(),
                   if (!compact)
                     _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
-                  _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen, _full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
-                      _toggleFull),
+                  _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen,
+                      _full ? tr('Avslutt fullskjerm (F)') : tr('Fullskjerm (F)'), _toggleFull),
                 ],
               ),
             ],
@@ -966,7 +965,7 @@ class _VodPlayerState extends State<_VodPlayer> {
         child: Slider(
           value: volume,
           max: 100,
-          semanticFormatterCallback: (v) => 'Volum ${v.round()} %',
+          semanticFormatterCallback: (v) => tr('Volum {n} %', {'n': v.round()}),
           onChangeStart: (_) => _dragging = true,
           onChanged: (v) {
             _setVolume(v, save: false);
@@ -1009,7 +1008,7 @@ class _VodPlayerState extends State<_VodPlayer> {
             children: [
               Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
               const SizedBox(height: 16),
-              FilledButton(autofocus: true, onPressed: _retry, child: const Text('Prøv igjen')),
+              FilledButton(autofocus: true, onPressed: _retry, child: Text(tr('Prøv igjen'))),
             ],
           ),
         ),
