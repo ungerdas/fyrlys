@@ -161,8 +161,14 @@ jobs:
       - name: Pakk filene og skriv endringene
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
-          # appen leser byggnummeret fra navnet («bygg N»)
-          echo "TITLE=Fyrlys $version · bygg ${{ github.run_number }} (${GITHUB_SHA::7})" | tee -a "$GITHUB_ENV"
+          build=${{ github.run_number }}
+          # Appen leser byggnummeret fra en skjult kommentar i teksten (2.1.9 og nyere). Apper til og med 2.1.8 leser
+          # det fra navnet, så 2.1.9 (broen dit) har det der også; senere versjoner heter bare «Fyrlys X».
+          if [ "$version" = "2.1.9" ]; then
+            echo "TITLE=Fyrlys $version · bygg $build" | tee -a "$GITHUB_ENV"
+          else
+            echo "TITLE=Fyrlys $version" | tee -a "$GITHUB_ENV"
+          fi
           mkdir -p out
           (cd dist/Fyrlys-windows && zip -qr ../../out/Fyrlys-testbygg-windows.zip .)
           for f in dist/Fyrlys-android/*.apk; do
@@ -170,11 +176,13 @@ jobs:
             cp "$f" "out/Fyrlys-testbygg-android-${abi}.apk"
           done
           ls -la out
+          # det som er nytt i versjonen (avsnittet «## vX.Y.Z» i CHANGELOG.md), og byggnummeret skjult
+          awk -v v="## v${version}" 'index($0, v) == 1 {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > changes.md || true
           {
-            echo "Siste bygg fra main, laget automatisk ved hver endring. Fyrlys på Windows oppdaterer seg selv herfra."
+            echo "Nyeste versjon av Fyrlys. På Windows oppdaterer appen seg selv herfra."
             echo
-            echo "Siste endringer:"
-            git log -10 --format='- %s (%h)' | sed 's/^- Fyrlys: /- /'
+            if [ -s changes.md ]; then cat changes.md; fi
+            [ "$version" = "2.1.9" ] || printf '\n<!-- bygg %s -->\n' "$build"
           } > notes.md
           cat notes.md
       - name: Oppdater releasen «testbygg»

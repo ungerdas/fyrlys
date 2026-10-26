@@ -37,11 +37,14 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   Feiler bygget i CI, har han ikke fått noe, og rettelsen beholder nummeret. Det er versjonen vi snakker om, ikke
   byggnummeret (det brukes bare av oppdateringen). Skriv avsnittet i `CHANGELOG.md`. GitHub-release (workflowen)
   bare når han ber om det. Hver push oppdaterer releasen
-  `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, navnet «Fyrlys X · bygg N (sha)»
-  settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra (rett fra GitHub).
+  `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, så navnet «Fyrlys X» og teksten:
+  avsnittet `## vX.Y.Z` fra CHANGELOG.md og byggnummeret skjult som `<!-- bygg N -->`, som appen leser (2.1.9+);
+  Pål-Erik 26.10: «bygg 30 sånt kan du droppe», så aldri byggnummer eller commit i det han ser), og Fyrlys på Windows oppdaterer seg selv derfra (rett fra GitHub).
   Offentlig repo: Actions-minuttene er gratis; et bygg tar rundt 10 minutter. Bruk `[skip ci]` når en endring
-  bare gjelder notater eller README. Versjon, byggnummer
-  og commit står nederst i menyen (`--dart-define` FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`).
+  bare gjelder notater eller README. Versjonen står nederst i menyen (`appBuildLabel`; `--dart-define`
+  FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`). **Broen:** apper til og med 2.1.8 leser byggnummeret
+  fra navnet, så 2.1.9 heter «Fyrlys 2.1.9 · bygg N» (fast i workflowen); fra 2.1.10 bare «Fyrlys X». Push ikke
+  2.1.10 før Pål-Erik har 2.1.9 eller nyere på Windows-PC-en (står nederst i menyen), ellers må han hente den for hånd.
 - Release: oppdater `version` i pubspec.yaml, push, og start
   `gh workflow run build.yml --repo ungerdas/fyrlys -f release=vX.Y.Z`. Jobben `release` lager taggen og en
   GitHub-release med `Fyrlys-vX.Y.Z-windows.zip` og APK-er per ABI (v0.x som forhåndsutgivelse). Tagger kan
@@ -235,4 +238,6 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 - 26.10.2026: repoet gjort offentlig (Pål-Erik), README skrevet om som forside. 2.1.8: oppdateringene rett fra
   GitHub (oppdateringsserveren valgfri, ikke lenger satt av seg selv fra en gammel innlogging). Notatene flyttet til
   `.claude/CLAUDE.md`.
+- 26.10.2026: 2.1.9: versjonen uten byggnummer og commit (menyen, releasen), CHANGELOG-avsnittet som tekst i
+  releasen, byggnummeret i `<!-- bygg N -->` (bro, se Versjoner).
 - Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.

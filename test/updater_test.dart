@@ -15,8 +15,9 @@ import 'fakes.dart';
 const _json = {'content-type': 'application/json; charset=utf-8'};
 
 Map<String, Object?> _release(int build, {int size = 4}) => {
-      'name': 'Fyrlys 0.1.0 · bygg $build (abc1234)',
-      'body': 'Siste endringer:\n- volum',
+      'name': 'Fyrlys 0.1.0',
+      // byggnummeret står skjult (vises ikke på GitHub)
+      'body': 'Siste endringer:\n- volum\n\n<!-- bygg $build -->',
       'assets': [
         {'name': 'Fyrlys-testbygg-android-arm64-v8a.apk', 'browser_download_url': 'https://example/a.apk', 'size': 10},
         {'name': 'Fyrlys-testbygg-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': size},
@@ -27,11 +28,20 @@ void main() {
   test('leser byggnummeret og fila for plattformen fra releasen', () {
     final info = parseRelease(_release(7), '-windows.zip')!;
     expect(info.build, 7);
-    expect(info.title, 'Fyrlys 0.1.0 · bygg 7 (abc1234)');
+    expect(info.title, 'Fyrlys 0.1.0');
     expect(info.label, 'Fyrlys 0.1.0');
     expect(info.url, 'https://example/w.zip');
     expect(info.size, 4);
     expect(info.notes, 'Siste endringer:\n- volum');
+    // releaser fra før 2.1.10 hadde byggnummeret i navnet
+    final old = parseRelease({
+      'name': 'Fyrlys 2.1.8 · bygg 31 (abc1234)',
+      'assets': [
+        {'name': 'Fyrlys-testbygg-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': 4},
+      ],
+    }, '-windows.zip')!;
+    expect(old.build, 31);
+    expect(old.label, 'Fyrlys 2.1.8');
     expect(parseRelease({'name': 'Fyrlys v0.1.0', 'assets': <Object>[]}, '-windows.zip'), isNull);
     expect(parseRelease(_release(7), '-macos.zip'), isNull);
   });

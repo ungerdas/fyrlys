@@ -38,7 +38,7 @@ class UpdateInfo {
 
   final int build;
 
-  /// «Fyrlys 2.0.2 · bygg 22 (abc1234)» (byggnummeret er for oppdateringen)
+  /// «Fyrlys 2.1.10» (eldre: «Fyrlys 2.1.8 · bygg 31 (abc1234)»)
   final String title;
 
   /// det som vises: «Fyrlys 2.0.2»
@@ -50,12 +50,19 @@ class UpdateInfo {
   final String notes;
 }
 
-/// Leser releasen (fra GitHub eller Fyrlys-serveren, samme form): byggnummeret står i navnet, og fila for denne
+final _buildComment = RegExp(r'<!--\s*bygg\s+(\d+)\s*-->');
+final _comments = RegExp(r'<!--.*?-->', dotAll: true);
+
+/// Leser releasen (fra GitHub eller Fyrlys-serveren, samme form): byggnummeret står skjult i teksten
+/// (`<!-- bygg N -->`, så det ikke vises på GitHub), eller i navnet («bygg N», før 2.1.10), og fila for denne
 /// plattformen blant vedleggene. Relative adresser (serveren svarer `download/fil.zip`) løses mot [base].
 UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
   if (json is! Map) return null;
   final title = '${json['name'] ?? ''}';
-  final build = int.tryParse(RegExp(r'bygg (\d+)').firstMatch(title)?.group(1) ?? '');
+  final body = '${json['body'] ?? ''}';
+  final build = int.tryParse(
+    _buildComment.firstMatch(body)?.group(1) ?? RegExp(r'bygg (\d+)').firstMatch(title)?.group(1) ?? '',
+  );
   final assets = json['assets'];
   if (build == null || assets is! List) return null;
   for (final a in assets) {
@@ -69,7 +76,8 @@ UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
         title: title,
         url: base == null ? url : base.resolve(url).toString(),
         size: size is int ? size : 0,
-        notes: '${json['body'] ?? ''}'.trim(),
+        // teksten fra CHANGELOG.md, uten markdown-utheving (vises som vanlig tekst)
+        notes: body.replaceAll(_comments, '').replaceAll('**', '').trim(),
       );
     }
   }

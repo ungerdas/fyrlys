@@ -1,5 +1,10 @@
 # Endringer
 
+## v2.1.9
+
+- Versjonen vises uten byggnummer og kode, i menyen og på GitHub. Teksten til hver versjon på GitHub er nå det som
+  er nytt, i stedet for en liste over endringer i koden.
+
 ## v2.1.8
 
 - **Oppdateringene kommer rett fra GitHub.** Du trenger ingen oppdateringsserver lenger. Har du valgt en i menyen,
