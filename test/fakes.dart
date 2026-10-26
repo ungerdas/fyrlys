@@ -10,7 +10,19 @@ import 'package:fyrlys/ui/playback.dart';
 
 /// En kilde uten nett, med tre kanaler i to kategorier. NRK 1 har program nå og etterpå.
 class FakeSource implements TvSource {
-  FakeSource({this.localShift = false, this.hasVod = true, this.name = 'Test', this.withArchive = false});
+  FakeSource({
+    this.localShift = false,
+    this.hasVod = true,
+    this.name = 'Test',
+    this.withArchive = false,
+    this.connections = 0,
+  });
+
+  /// tilkoblinger i abonnementet (0: oppgir det ikke)
+  final int connections;
+
+  /// lukket med dispose
+  bool disposed = false;
 
   /// direktesendinger der avspilleren tar vare på det siste (pause og spoling)
   final bool localShift;
@@ -38,7 +50,7 @@ class FakeSource implements TvSource {
   Map<String, String> get httpHeaders => const {};
 
   @override
-  Future<Account> account() async => const Account();
+  Future<Account> account() async => Account(maxConnections: connections);
 
   @override
   Future<List<Category>> categories({bool force = false}) async =>
@@ -185,7 +197,7 @@ class FakeSource implements TvSource {
   Map<String, String> toPrefs() => name == 'Test' ? const {'kind': 'fake'} : {'kind': 'fake', 'name': name};
 
   @override
-  void dispose() {}
+  void dispose() => disposed = true;
 }
 
 /// En avspiller uten mpv: husker adressene og volumet, og «spiller» med en gang.

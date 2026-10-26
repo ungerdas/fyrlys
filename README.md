@@ -24,7 +24,7 @@ Fyrlys spiller abonnementet ditt hos en IPTV-leverandør, med M3U-lenke eller Xt
 - TV-guide, og TV-arkiv når leverandøren har det
 - Pause og spol tilbake i direktesendinger
 - Filmer og serier med «Fortsett å se» (Xtream Codes)
-- Flere innlogginger, hver med sine egne favoritter
+- Flere innlogginger, hver med sine egne favoritter, og multiview med en kanal fra hvert abonnement
 - mpv som avspiller: de fleste formater, lydspor og undertekster
 - Oppdaterer seg selv
 

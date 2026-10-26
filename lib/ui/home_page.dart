@@ -12,6 +12,7 @@ import 'channel_card.dart';
 import 'channel_number.dart';
 import 'guide_view.dart';
 import 'motion.dart';
+import 'multiview_page.dart';
 import 'player_page.dart';
 import 'settings_page.dart';
 import 'start_view.dart';
@@ -261,6 +262,12 @@ class _HomePageState extends State<HomePage> {
                 }
               }),
             ),
+          if (s.canMultiview)
+            IconButton(
+              tooltip: 'Multiview',
+              icon: const Icon(Icons.grid_view_outlined),
+              onPressed: _openMultiview,
+            ),
           IconButton(
             tooltip: 'Lys eller mørk',
             icon: Icon(theme.brightness == Brightness.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
@@ -355,6 +362,10 @@ class _HomePageState extends State<HomePage> {
             ),
     );
   }
+
+  /// Flere kanaler samtidig, med kanalen du så sist i det første bildet.
+  void _openMultiview() => unawaited(Navigator.of(context).push(fadeRoute<void>(
+      (_) => MultiviewPage(session: s, first: s.recent.isEmpty ? null : s.recent.first))));
 
   /// Innstillingene: innloggingene, utseende, avspilling, listene og oppdateringer.
   void _openSettings() => unawaited(Navigator.of(context)

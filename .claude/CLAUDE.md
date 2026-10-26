@@ -140,6 +140,16 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `session.epg(id, limit: 14)` etter 150 ms framme (`epgCached` gir det som alt er hentet uten å vente). Trykk på
   det som går nå eller på kanalnavnet = spill; senere/tidligere program = info med «Se kanalen». På PC kan
   guiden dras med musa, og programmene har verktøytips. Kanaler med arkiv har en klokke-knapp («TV-arkiv») ved navnet.
+- `ui/multiview_page.dart` (2.1.17, Pål-Erik: «Hvis man har flere abo så burde man få se multiview») – ett bilde per
+  tilkobling i alle innloggingene (den i bruk først; `account().maxConnections`, 0/ukjent = 1), høyst `multiviewMax` 4:
+  to side om side (over hverandre i et høyt vindu), tre–fire i 2×2. Hvert `_Slot` har sin kilde (`Session.sourceFor`:
+  den i bruk deles, de andre åpnes og lukkes av siden), avspiller (`setup()` uten det store bufferet), kanal, EPG
+  (hvert minutt) og nye forsøk (HLS → TS, tre per minutt). Lyd bare i det valgte (`_applyVolumes`, volumet fra
+  Session), klikk = velg, dobbeltklikk/Enter = stort bilde (`_big`), C = kanalvalg (`_ChannelPicker`: favorittene til
+  den innloggingen via `Session.favoritesOf`, ellers alle, med søk), 1–4/piler, M, F, Esc. `Session.canMultiview` (to
+  innlogginger, eller `_connections` ≥ 2 fra `account()` etter `_attach`) styrer knappen «Multiview» i toppen av
+  TV-siden (med kanalen du så sist) og i spilleren (V; `_away` stopper direktesendingen og tar kanalen med,
+  `startFull`). Testet i `multiview_test.dart`; fire mpv-er samtidig i ekte bruk er ikke prøvd.
 - `ui/archive_page.dart` (2.1.14) – TV-arkivet for én kanal: programmene nyeste øverst, dag for dag (`archiveDay`:
   I dag / I går / «Lørdag 24. oktober»), «Går nå», «Ikke i arkivet» dempet, strek for det du har sett. Et trykk lager
   `VodPlayItem`-er for alle som kan ses (`archiveItems`/`archivePlayItem`, nøkkel `arkiv:<kanal>:<start>`) og åpner
@@ -301,7 +311,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   2.1.15: fire rettelser fra en uavhengig gjennomlesing (fullskjerm etter «Se fra start», kanalliste-nøkkelen,
   kanalnummer under arkivet, favoritter når den gamle innloggingen ikke kunne flyttes).
 - 26.10.2026: 2.1.16: innstillingssiden (Pål-Erik: «kanskje de tre prikkene skal byttes ut med et tannhjul og så åpner
-  det et innstillingsvindu?»). Testet med widget-tester.
+  det et innstillingsvindu?»). Testet med widget-tester. Den virker hos ham (skjermbilde 26.10: abonnementet viser
+  «aktiv til … · 1 tilkobling»).
+- 26.10.2026: 2.1.17: multiview over flere abonnementer. Testet med widget-tester.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

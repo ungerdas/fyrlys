@@ -16,6 +16,7 @@ import 'channel_card.dart';
 import 'channel_number.dart';
 import 'language_dialog.dart';
 import 'motion.dart';
+import 'multiview_page.dart';
 import 'playback.dart';
 import 'side_list.dart';
 import 'vod_player_page.dart';
@@ -765,6 +766,18 @@ class _PlayerState extends State<_Player> {
     });
   }
 
+  /// Flere kanaler samtidig, med denne i det første bildet (i fullskjerm om du er der).
+  Future<void> _openMultiview() async {
+    if (!_session.canMultiview) return;
+    final ch = _channel;
+    final nav = Navigator.of(context);
+    final full = _full;
+    await _away(() async {
+      await nav.push(fadeRoute<void>((_) => MultiviewPage(session: _session, first: ch, startFull: full)));
+      _shownFull = null;
+    });
+  }
+
   /// TV-arkivet for kanalen.
   Future<void> _openArchive() async {
     if (!_hasArchive) return;
@@ -887,6 +900,8 @@ class _PlayerState extends State<_Player> {
       _toggleSide();
     } else if (key == LogicalKeyboardKey.keyA && _hasArchive) {
       unawaited(_openArchive());
+    } else if (key == LogicalKeyboardKey.keyV && _session.canMultiview) {
+      unawaited(_openMultiview());
     } else if (key == LogicalKeyboardKey.backspace) {
       _lastChannel();
     } else if (key == LogicalKeyboardKey.escape) {
@@ -1245,6 +1260,8 @@ class _PlayerState extends State<_Player> {
                     _ctl(Icons.restart_alt, 'Se fra start', _startable == null ? null : () => unawaited(_startOver())),
                     _ctl(Icons.history, 'TV-arkiv (A)', () => unawaited(_openArchive())),
                   ],
+                  if (_session.canMultiview && (!compact || full))
+                    _ctl(Icons.grid_view_outlined, 'Multiview (V)', () => unawaited(_openMultiview())),
                   _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
                   if (!compact) _volumeSlider(volume),
                   if (full) _ctl(Icons.list, 'Kanaler (C)', _toggleSide, on: _sideOpen),
@@ -1694,23 +1711,31 @@ class _PlayerState extends State<_Player> {
                 style: const TextStyle(color: _ink2, fontSize: 14),
               ),
             ),
-          if (_hasArchive)
+          if (_hasArchive || _session.canMultiview)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: _startable == null ? null : () => unawaited(_startOver()),
-                    icon: const Icon(Icons.restart_alt, size: 18),
-                    label: const Text('Se fra start'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => unawaited(_openArchive()),
-                    icon: const Icon(Icons.history, size: 18),
-                    label: const Text('TV-arkiv'),
-                  ),
+                  if (_hasArchive) ...[
+                    OutlinedButton.icon(
+                      onPressed: _startable == null ? null : () => unawaited(_startOver()),
+                      icon: const Icon(Icons.restart_alt, size: 18),
+                      label: const Text('Se fra start'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => unawaited(_openArchive()),
+                      icon: const Icon(Icons.history, size: 18),
+                      label: const Text('TV-arkiv'),
+                    ),
+                  ],
+                  if (_session.canMultiview)
+                    OutlinedButton.icon(
+                      onPressed: () => unawaited(_openMultiview()),
+                      icon: const Icon(Icons.grid_view_outlined, size: 18),
+                      label: const Text('Multiview'),
+                    ),
                 ],
               ),
             ),

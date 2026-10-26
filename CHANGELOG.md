@@ -1,5 +1,12 @@
 # Endringer
 
+## v2.1.17
+
+- **Multiview:** har du flere abonnementer (eller ett med flere tilkoblinger), kan du se flere kanaler samtidig: ett
+  bilde per tilkobling, opptil fire. Hvert bilde får sin kanal fra sitt abonnement. Lyden kommer fra bildet du
+  klikker på, og et dobbeltklikk (eller Enter) gjør det stort. Knappen «Multiview» står øverst på TV-siden og i
+  spilleren (V), og kanalen du ser på, blir med.
+
 ## v2.1.16
 
 - **Innstillinger:** menyen med tre prikker er byttet ut med et tannhjul øverst, som åpner en egen side med

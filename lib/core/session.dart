@@ -381,14 +381,17 @@ class Session extends ChangeNotifier {
     recent = _readChannels(_k('recent'));
     _resume = null;
     _continue = null;
+    _connections = null;
     notifyListeners();
     unawaited(_startLists(src));
+    unawaited(_loadConnections(src));
   }
 
   void _detach() {
     source?.dispose();
     source = null;
     activeLogin = null;
+    _connections = null;
     categories = const [];
     channels = const [];
     categoryCounts = const {};
@@ -403,6 +406,32 @@ class Session extends ChangeNotifier {
     error = null;
     loading = false;
   }
+
+  // ── flere bilder samtidig (multiview) ──
+
+  /// hvor mange tilkoblinger abonnementet i bruk har (null: vet ikke ennå)
+  int? _connections;
+
+  Future<void> _loadConnections(TvSource src) async {
+    try {
+      final a = await src.account();
+      if (source != src) return;
+      _connections = a.maxConnections;
+      if (a.maxConnections >= 2) notifyListeners();
+    } on Object {
+      // vet ikke: én
+    }
+  }
+
+  /// Flere bilder samtidig går når du har flere abonnementer, eller ett med flere tilkoblinger.
+  bool get canMultiview => logins.length >= 2 || (_connections ?? 0) >= 2;
+
+  /// Kilden for en lagret innlogging: den i bruk, eller en ny for de andre (den som spør, lukker den med dispose).
+  Future<TvSource?> sourceFor(String id) async =>
+      id == activeLogin && source != null ? source : await _openLogin(id);
+
+  /// favorittkanalene til en innlogging (også en som ikke er i bruk)
+  List<Channel> favoritesOf(String id) => id == activeLogin ? favorites : _readChannels('favorites@$id');
 
   /// Lista fra sist vises med en gang, og den nye hentes i bakgrunnen.
   Future<void> _startLists(TvSource src) async {
