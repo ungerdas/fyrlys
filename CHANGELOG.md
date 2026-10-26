@@ -1,5 +1,13 @@
 # Endringer
 
+## v2.1.21
+
+- **English:** Fyrlys is now available in English. It follows the Windows language; change it under the gear →
+  Appearance → Language. / **Engelsk:** Fyrlys kan nå vises på engelsk. Den følger språket i Windows; byttes under
+  tannhjulet → Utseende → Språk.
+- Installasjonsprogrammet er på engelsk når Windows ikke er på norsk.
+- Skjemaene for feil og ønsker på GitHub er på norsk og engelsk, og README finnes på engelsk.
+
 ## v2.1.20
 
 - **Tydeligere feilmeldinger:** kan ikke en kanal (eller film) spilles, står det hvorfor når Fyrlys finner det ut:

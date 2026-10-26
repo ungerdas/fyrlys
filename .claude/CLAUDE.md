@@ -248,8 +248,16 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `saveReport` i Nedlastinger, `showInExplorer`, `openUrl` byttes ut i testene). Innstillinger → Hjelp. Skjemaene for
   GitHub-saker ligger i `.github/ISSUE_TEMPLATE` (feil, ønske).
 - Språk (grunnlaget i 2.1.20, engelsk i 2.1.21): `l10n/tr.dart` (`tr('norsk tekst', {'navn': verdi})` slår opp i
-  `english` i `l10n/en.dart` når `appLanguage` er 'en'; norsken er nøkkelen), `Session.language` ('auto'/'no'/'en' i
-  `language`) og `systemLanguage` fra Windows (`languageOfLocale`). Nye tekster skrives med `tr()`.
+  `english` når `appLanguage` er 'en'; norsken er nøkkelen). `english` i `l10n/en.dart` slår sammen `en_core`,
+  `en_home`, `en_player`, `en_settings` og `en_vod` (etter hvor teksten står; samme nøkkel i flere filer må ha samme
+  engelsk). `l10n/dates.dart`: `weekdayName`, `monthName`, `longDate`, `shortDate`. `Session.language` ('auto'/'no'/
+  'en' i `language`, valget i Innstillinger → Utseende) og `systemLanguage` fra Windows (`languageOfLocale`; `main.dart`
+  setter `appLanguage` før oppdateringen leses). Ved bytte bygger `app.dart` alt på nytt (`_rebuildAll`, uten at sider
+  lukkes). Regler: all tekst brukeren ser i `tr()` (ikke debugPrint, nøkler, id-er), aldri `$` i nøkkelen, ikke tr() i
+  `const` eller toppnivå-/static-verdier, hele setninger som nøkler (egne for entall/flertall).
+  `test/l10n_test.dart` finner alle `tr('…')` i lib/ og krever engelsk med de samme `{navnene}`. Testene ellers venter
+  norsk (`appLanguage` er 'no' i testene). Installasjonsprogrammet har engelsk (`Default.isl`, først = reserven) og
+  norsk, valgt etter Windows. `README.en.md` er den engelske forsiden.
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
 - Tester i `test/`: navn, Xtream-kilden (også arkivet: klokka, tidene, `parseArchive`, adressene), M3U-kilden og
   innloggingen (`m3u_source_test.dart`, med MockClient og `http.runWithClient`; også krypteringen av innloggingen),
@@ -357,6 +365,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 26.10.2026: 2.1.20 (eierens valg 4, 5, 11 og 13 fra lista over forbedringer; 3, engelsk, kommer i 2.1.21):
   tydeligere feilmeldinger med HTTP-koden, bildeformat og lydforsinkelse, minispiller, feilrapport og skjemaer for
   GitHub-saker. Testet med tester; mpv-egenskapene, minivinduet og Utforsker/nettleser fra appen er ikke prøvd på Windows.
+- 26.10.2026: 2.1.21: engelsk (eierens valg 3), oversatt av fem agenter i hver sin del av lib/ og sett over etterpå.
+  Testet med tester (bl.a. at alt er oversatt og at språket byttes i innstillingene).
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

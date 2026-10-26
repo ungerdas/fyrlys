@@ -1,9 +1,15 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fyrlys/app.dart';
+import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/l10n/dates.dart';
 import 'package:fyrlys/l10n/en.dart';
 import 'package:fyrlys/l10n/tr.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'fakes.dart';
 
 /// Én Dart-streng fra [i] ('…', "…", r'…', '''…'''): teksten, hvor den slutter, og om den har $-innsetting.
 ({String text, int end, bool interpolated})? _string(String src, int i) {
@@ -121,6 +127,41 @@ void main() {
     expect(languageOfLocale('NN'), 'no');
     expect(languageOfLocale('en'), 'en');
     expect(languageOfLocale('sv'), 'en');
+  });
+
+  testWidgets('språket byttes i innstillingene, og alt bygges på nytt uten at noe lukkes', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
+    final session = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource());
+    await session.restore();
+    await tester.pumpWidget(FyrlysApp(session: session));
+    await tester.pumpAndSettle();
+    expect(session.language, 'auto');
+    await tester.tap(find.byTooltip('Innstillinger'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    expect(session.language, 'en');
+    expect(appLanguage, 'en');
+    expect((await SharedPreferences.getInstance()).getString('language'), 'en');
+    // innstillingene er fortsatt åpne, nå på engelsk
+    expect(find.text(english['Innstillinger']!), findsOneWidget);
+    expect(find.text('Innstillinger'), findsNothing);
+    expect(find.text(english['Språk']!), findsWidgets);
+    // og TV-siden under
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byTooltip(english['Innstillinger']!), findsOneWidget);
+
+    await tester.tap(find.byTooltip(english['Innstillinger']!));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Norsk'));
+    await tester.pumpAndSettle();
+    expect(appLanguage, 'no');
+    expect(find.text('Innstillinger'), findsOneWidget);
   });
 
   test('datoene på begge språk', () {
