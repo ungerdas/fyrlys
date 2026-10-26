@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import '../core/names.dart';
 import '../core/session.dart';
 import '../core/vod.dart';
-import '../platform.dart';
 import '../theme.dart';
 import 'language_dialog.dart';
 import 'playback.dart';
@@ -70,7 +69,7 @@ class _VodPlayer extends StatefulWidget {
   State<_VodPlayer> createState() => _VodPlayerState();
 }
 
-class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
+class _VodPlayerState extends State<_VodPlayer> {
   late final Playback _pb = (widget.page.playback ?? playbackFactory)();
   final FocusNode _focus = FocusNode(debugLabel: 'filmspiller');
   final List<StreamSubscription<Object?>> _subs = [];
@@ -89,7 +88,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   bool _dragging = false;
   late double _volume = _session.volume;
   late bool _muted = _session.muted;
-  PointerDeviceKind _pointer = isDesktop ? PointerDeviceKind.mouse : PointerDeviceKind.touch;
+  PointerDeviceKind _pointer = PointerDeviceKind.mouse;
   String? _flash;
   Timer? _flashTimer;
   Timer? _hideTimer;
@@ -105,7 +104,6 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _subs
       ..add(_pb.playingStream.listen((v) => _set(() => _playing = v)))
       ..add(_pb.bufferingStream.listen((v) => _set(() => _buffering = v)))
@@ -116,14 +114,12 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
         if (done && _started) _onEnd();
       }));
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
-    if (!isDesktop) unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky));
     unawaited(_start());
     _wake();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _save();
     for (final s in _subs) {
       unawaited(s.cancel());
@@ -134,25 +130,12 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     _nextTimer?.cancel();
     unawaited(_pb.dispose());
     _focus.dispose();
-    if (isDesktop) {
-      if (_full) unawaited(WindowFullscreen.instance.set(false));
-    } else {
-      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
-    }
+    if (_full) unawaited(WindowFullscreen.instance.set(false));
     super.dispose();
   }
 
   void _set(VoidCallback fn) {
     if (mounted) setState(fn);
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // telefon/TV: lagt bort → pause (og husk hvor du var)
-    if (!isDesktop && state == AppLifecycleState.paused && _playing) {
-      _save();
-      unawaited(_pb.playOrPause());
-    }
   }
 
   // ── avspilling ──
@@ -325,7 +308,6 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   }
 
   void _toggleFull() {
-    if (!isDesktop) return;
     setState(() => _full = !_full);
     unawaited(WindowFullscreen.instance.set(_full));
     _wake();
@@ -423,7 +405,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
           onKeyEvent: _onKey,
           child: Listener(
             onPointerDown: (e) => _pointer = e.kind,
-            onPointerSignal: isDesktop ? _onWheel : null,
+            onPointerSignal: _onWheel,
             child: MouseRegion(
               cursor: showBars ? MouseCursor.defer : SystemMouseCursors.none,
               onHover: (_) => _wake(),
@@ -433,7 +415,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: _onTap,
-                    onDoubleTap: isDesktop ? _toggleFull : null,
+                    onDoubleTap: _toggleFull,
                     child: _pb.view(),
                   ),
                   if (_buffering && status == null) const IgnorePointer(child: Center(child: CircularProgressIndicator())),
@@ -614,11 +596,10 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
                   ],
                   const Spacer(),
                   _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
-                  if (isDesktop && !compact) _volumeSlider(volume),
+                  if (!compact) _volumeSlider(volume),
                   _tracksButton(),
-                  if (isDesktop)
-                    _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen,
-                        _full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)', _toggleFull),
+                  _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen, _full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
+                      _toggleFull),
                 ],
               ),
             ],

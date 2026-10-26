@@ -11,7 +11,6 @@ import 'app.dart';
 import 'core/cache.dart';
 import 'core/session.dart';
 import 'core/updater.dart';
-import 'platform.dart';
 import 'ui/playback.dart';
 
 Future<void> main() async {
@@ -21,7 +20,7 @@ Future<void> main() async {
   final updater = Updater();
   if (await updater.beforeStart()) exit(0);
   MediaKit.ensureInitialized();
-  if (isDesktop) await windowManager.ensureInitialized();
+  await windowManager.ensureInitialized();
   // kanallista fra sist og bildene på disk, så appen er klar med en gang (uten mapper: hentes hver gang)
   ListCache? lists;
   try {

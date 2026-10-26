@@ -46,7 +46,7 @@ void main() {
     expect(find.text('Filmer'), findsNothing);
     expect(find.text('Serier'), findsNothing);
 
-    // telefon: fanene nederst
+    // smalt vindu: fanene nederst
     tester.view.physicalSize = const Size(400, 800);
     await tester.pumpAndSettle();
     expect(find.byType(NavigationDestination), findsNWidgets(2));

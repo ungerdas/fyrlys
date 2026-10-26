@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
-import '../platform.dart';
 import '../theme.dart';
 import 'channel_card.dart';
 
@@ -742,13 +741,11 @@ class _ProgramBlockState extends State<_ProgramBlock> {
       ),
     );
     if (widget.past) block = Opacity(opacity: 0.5, child: block);
-    if (isDesktop) {
-      block = Tooltip(
-        message: '${e.title}\n$time${e.description.isEmpty ? '' : '\n\n${e.description}'}',
-        waitDuration: const Duration(milliseconds: 600),
-        child: block,
-      );
-    }
+    block = Tooltip(
+      message: '${e.title}\n$time${e.description.isEmpty ? '' : '\n\n${e.description}'}',
+      waitDuration: const Duration(milliseconds: 600),
+      child: block,
+    );
     return block;
   }
 }

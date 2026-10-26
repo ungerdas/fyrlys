@@ -17,7 +17,7 @@ import 'player_page.dart';
 import 'start_view.dart';
 import 'vod_browser.dart';
 
-/// TV-siden: startsiden («Hjem»), kategorier (sidemeny på PC og TV, nedtrekksliste på telefon), søk og kanalkort.
+/// TV-siden: startsiden («Hjem»), kategorier (sidemeny i et bredt vindu, ellers nedtrekksliste), søk og kanalkort.
 /// Tall på tastaturet eller fjernkontrollen går rett til kanalen med det nummeret.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.session, this.updater});
@@ -31,7 +31,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-/// TV, TV-guide, Filmer og Serier: valget i toppen (PC og TV) eller nederst (telefon).
+/// TV, TV-guide, Filmer og Serier: valget i toppen (bredt vindu) eller nederst (smalt vindu).
 /// Filmer og Serier bare når kilden har dem (Xtream Codes, ikke en vanlig M3U-liste).
 enum _Section { tv, guide, movies, series }
 
@@ -671,7 +671,7 @@ class _HomePageState extends State<HomePage> {
         constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
       );
 
-  /// Telefon: kategoriene i en nedtrekksliste, med stjerne for å legge kategorien øverst.
+  /// Smalt vindu: kategoriene i en nedtrekksliste, med stjerne for å legge kategorien øverst.
   Widget _picker() {
     final g = _groups();
     final seen = <String>{'home', 'all', 'fav', 'recent'};

@@ -74,7 +74,7 @@ enum UpdateState { idle, checking, available, downloading, ready, failed }
 /// «testbygg»).
 /// Ser etter nye bygg ved oppstart og hver 6. time, laster ned i bakgrunnen og legger inn når appen lukkes
 /// (eller med «Start på nytt nå»). Ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
-/// starter. På Windows og Linux (x64), og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
+/// starter. Bare på Windows, og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
 class Updater extends ChangeNotifier {
   Updater({
     http.Client? client,
@@ -85,8 +85,8 @@ class Updater extends ChangeNotifier {
     String? repo,
   })  : _client = client ?? http.Client(),
         currentBuild = currentBuild ?? int.tryParse(appBuild),
-        assetSuffix = assetSuffix ?? _platformAsset(),
-        canInstall = canInstall ?? (Platform.isWindows || _isLinuxX64),
+        assetSuffix = assetSuffix ?? (Platform.isWindows ? '-windows.zip' : null),
+        canInstall = canInstall ?? Platform.isWindows,
         repo = repo ?? appRepo,
         workDir = workDir ?? _defaultWorkDir();
 
@@ -98,11 +98,11 @@ class Updater extends ChangeNotifier {
   /// slutten på filnavnet for denne plattformen, f.eks. «-windows.zip» (null: ingen oppdatering her)
   final String? assetSuffix;
 
-  /// kan legge inn oppdateringen selv (Windows og Linux)
+  /// kan legge inn oppdateringen selv (Windows)
   final bool canInstall;
   final String repo;
 
-  /// nedlastinger og skriptet: %LOCALAPPDATA%\Fyrlys\oppdatering på Windows, ~/.local/share/fyrlys/oppdatering på Linux
+  /// nedlastinger og skriptet, i %LOCALAPPDATA%\Fyrlys\oppdatering
   final String workDir;
 
   UpdateState state = UpdateState.idle;
@@ -118,31 +118,12 @@ class Updater extends ChangeNotifier {
 
   bool get enabled => currentBuild != null && assetSuffix != null;
 
-  static bool get _isLinuxX64 => Platform.isLinux && Platform.version.contains('linux_x64');
-
-  /// fila i releasen for denne plattformen
-  static String? _platformAsset() {
-    if (Platform.isWindows) return '-windows.zip';
-    if (_isLinuxX64) return '-linux-x64.tar.gz';
-    return null;
-  }
-
   static String _defaultWorkDir() {
     final sep = Platform.pathSeparator;
-    final env = Platform.environment;
-    if (Platform.isLinux) {
-      final data = env['XDG_DATA_HOME'];
-      final home = env['HOME'];
-      final base = data != null && data.isNotEmpty ? data : (home != null && home.isNotEmpty ? '$home/.local/share' : null);
-      if (base != null) return '$base/fyrlys/oppdatering';
-    }
-    final base = env['LOCALAPPDATA'];
+    final base = Platform.environment['LOCALAPPDATA'];
     if (base != null && base.isNotEmpty) return '$base${sep}Fyrlys${sep}oppdatering';
     return '${Directory.systemTemp.path}${sep}fyrlys-oppdatering';
   }
-
-  /// filendelsen på pakken: «.tar.gz» på Linux, ellers «.zip»
-  String get _archiveExt => (assetSuffix ?? '').endsWith('.tar.gz') ? '.tar.gz' : '.zip';
 
   String _path(String name) => '$workDir${Platform.pathSeparator}$name';
 
@@ -249,7 +230,7 @@ class Updater extends ChangeNotifier {
       final sep = Platform.pathSeparator;
       final dir = Directory(_path('bygg-${info.build}'));
       await dir.create(recursive: true);
-      final part = File('${dir.path}${sep}Fyrlys$_archiveExt.part');
+      final part = File('${dir.path}${sep}Fyrlys.zip.part');
       final request = http.Request('GET', Uri.parse(info.url))..headers['User-Agent'] = 'Fyrlys';
       final response = await _client.send(request).timeout(const Duration(seconds: 30));
       if (response.statusCode != 200) throw UpdateException('nedlastingen svarte ${response.statusCode}');
@@ -271,7 +252,7 @@ class Updater extends ChangeNotifier {
         await sink.close();
       }
       if (info.size > 0 && got != info.size) throw const UpdateException('nedlastingen ble ikke fullført');
-      final zip = await part.rename('${dir.path}${sep}Fyrlys$_archiveExt');
+      final zip = await part.rename('${dir.path}${sep}Fyrlys.zip');
       await File(_path('klar.json')).writeAsString(
         jsonEncode({'build': info.build, 'title': info.title, 'zip': zip.path, 'size': got}),
       );
@@ -292,14 +273,14 @@ class Updater extends ChangeNotifier {
       await probe.writeAsString('ok');
       await probe.delete();
     } on FileSystemException {
-      final where = Platform.isWindows ? 'f.eks. Dokumenter' : 'f.eks. i hjemmemappen';
-      throw UpdateException('Fyrlys kan ikke oppdatere seg selv i ${dir.path}. Flytt mappen til et sted du eier, $where.');
+      throw UpdateException(
+        'Fyrlys kan ikke oppdatere seg selv i ${dir.path}. Flytt mappen til et sted du eier, f.eks. Dokumenter.',
+      );
     }
   }
 
-  /// Legger inn en nedlastet oppdatering: et lite skript (PowerShell på Windows, bash på Linux) venter til Fyrlys
-  /// er lukket, pakker ut den nye utgaven over den gamle og starter den igjen ([restart]) eller ikke (når du lukker
-  /// appen selv).
+  /// Legger inn en nedlastet oppdatering: et lite PowerShell-skript venter til Fyrlys er lukket, pakker ut den
+  /// nye utgaven over den gamle og starter den igjen ([restart]) eller ikke (når du lukker appen selv).
   /// klar.json slettes før skriptet startes, så en oppdatering som feiler aldri gir en løkke.
   Future<bool> apply({required bool restart}) async {
     final current = currentBuild;
@@ -314,20 +295,9 @@ class Updater extends ChangeNotifier {
       final zip = File('${j['zip']}');
       if (build is! int || build <= current || !await zip.exists() || await zip.length() != j['size']) return false;
       final exe = File(Platform.resolvedExecutable);
-      await _log('Fyrlys bygg $current (prosess $pid) starter oppdateringen til bygg $build');
-      if (!Platform.isWindows) {
-        // Linux: bash i egen prosess, som lever videre når Fyrlys avslutter
-        final script = File(_path('oppdater.sh'));
-        await script.writeAsString(_shScript);
-        await Process.start(
-          '/bin/bash',
-          [script.path, '$pid', zip.path, exe.parent.path, exe.path, workDir, if (restart) '1' else '0'],
-          mode: ProcessStartMode.detached,
-        );
-        return true;
-      }
       final script = File(_path('oppdater.ps1'));
       await script.writeAsString(_script);
+      await _log('Fyrlys bygg $current (prosess $pid) starter oppdateringen til bygg $build');
       // Vanlig modus, ikke «detached»: Dart starter da prosessen helt uten konsoll (DETACHED_PROCESS), og der
       // kommer ikke Windows PowerShell i gang. I vanlig modus får den en skjult konsoll (CREATE_NO_WINDOW), og
       // den lever videre når Fyrlys avslutter. i-gang.txt skrives av skriptet selv, så et skript som ikke
@@ -519,56 +489,3 @@ if ($Restart) {
 class _Missing implements Exception {
   const _Missing();
 }
-
-/// Det samme på Linux: bash venter til Fyrlys er lukket, pakker ut (mappen «Fyrlys» i pakken) over den gamle
-/// utgaven med en sikkerhetskopi, skriver resultat.txt og starter Fyrlys igjen når det er bedt om.
-/// oppdater.sh <prosess> <pakke> <mappe> <program> <arbeidsmappe> <1: start igjen>
-const _shScript = r'''#!/bin/bash
-pid="$1"; archive="$2"; target="$3"; exe="$4"; work="$5"; restart="$6"
-log="$work/oppdatering.log"
-result="$work/resultat.txt"
-busy="$work/i-gang.txt"
-date -Iseconds > "$busy"
-say() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$log"; }
-fail() { echo "feil: $*" > "$result"; say "Feil: $*"; }
-running() {
-  for p in /proc/[0-9]*; do
-    [ "$(readlink "$p/exe" 2>/dev/null)" = "$exe" ] && return 0
-  done
-  return 1
-}
-install() {
-  say "Venter til Fyrlys ($pid) er lukket"
-  for _ in $(seq 1 240); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
-  if kill -0 "$pid" 2>/dev/null; then fail "Fyrlys ble ikke lukket"; return 1; fi
-  # Ble Fyrlys startet igjen før skriptet kom i gang, ventes det litt; ellers venter oppdateringen til neste gang.
-  for _ in $(seq 1 30); do running || break; sleep 1; done
-  if running; then fail "Fyrlys kjører fortsatt, oppdateringen legges inn neste gang"; return 1; fi
-  new="$work/ny"
-  rm -rf "$new" && mkdir -p "$new"
-  say "Pakker ut $archive"
-  tar -xzf "$archive" -C "$new" || { fail "kunne ikke pakke ut oppdateringen"; return 1; }
-  src="$new"
-  [ -d "$new/Fyrlys" ] && src="$new/Fyrlys"
-  [ -x "$src/$(basename "$exe")" ] || { fail "pakken mangler $(basename "$exe")"; return 1; }
-  # sikkerhetskopi først: feiler kopieringen halvveis, legges den forrige utgaven tilbake
-  old="$work/forrige"
-  rm -rf "$old"
-  cp -a "$target" "$old" || { fail "fikk ikke tatt sikkerhetskopi"; return 1; }
-  say "Kopierer til $target"
-  if ! cp -a "$src/." "$target/"; then
-    cp -a "$old/." "$target/"
-    fail "kopieringen feilet, den forrige utgaven er lagt tilbake"
-    return 1
-  fi
-  rm -rf "$new" "$old" "$(dirname "$archive")"
-  echo ok > "$result"
-  say "Ferdig"
-}
-install
-rm -f "$busy"
-if [ "$restart" = 1 ]; then
-  cd "$target" && setsid "$exe" > /dev/null 2>&1 < /dev/null &
-  say "Startet Fyrlys igjen"
-fi
-''';

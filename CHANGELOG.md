@@ -2,10 +2,7 @@
 
 ## v2.1.12
 
-- **Fyrlys for Linux:** `Fyrlys-linux-x64.tar.gz`, for Fedora, Ubuntu 24.04, Debian 12 og nyere. Den bruker mpv fra
-  systemet (`mpv-libs` på Fedora, `libmpv2` på Ubuntu og Debian), oppdaterer seg selv som på Windows, og
-  `lag-snarvei.sh` i mappen legger den i programmenyen.
-- Android er lagt bort inntil videre: det kommer ingen nye APK-er.
+- Fyrlys er nå bare for Windows. Android-versjonen er lagt ned, og det kommer ingen nye APK-er.
 
 ## v2.1.11
 

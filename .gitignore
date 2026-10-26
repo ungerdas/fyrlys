@@ -7,10 +7,3 @@ build/
 *.iml
 .idea/
 .vscode/
-
-# Android
-android/.gradle/
-android/local.properties
-android/key.properties
-*.jks
-*.keystore

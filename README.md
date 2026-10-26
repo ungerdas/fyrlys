@@ -5,14 +5,12 @@
 <h1 align="center">Fyrlys</h1>
 
 <p align="center">
-  IPTV-spiller for Windows og Linux.<br>
+  IPTV-spiller for Windows.<br>
   TV med TV-guide, filmer og serier fra en M3U-lenke eller Xtream Codes, spilt av med mpv.
 </p>
 
 <p align="center">
   <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip"><b>Last ned for Windows</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-linux-x64.tar.gz"><b>Last ned for Linux</b></a>
   &nbsp;·&nbsp;
   <a href="CHANGELOG.md">Hva er nytt</a>
 </p>
@@ -41,28 +39,10 @@
 
 ### 1. Last ned
 
-Lenkene gir alltid siste versjon ([alle filene](https://github.com/ungerdas/fyrlys/releases/latest)).
-
-**Windows 10 og 11:** [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip).
-Pakk ut i en mappe du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe`. Windows kan advare fordi
-programmet ikke er signert: velg *Mer informasjon → Kjør likevel*.
-
-**Linux (x64):** [`Fyrlys-linux-x64.tar.gz`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-linux-x64.tar.gz).
-Fyrlys bruker avspilleren mpv fra systemet, så installer den først:
-
-```bash
-sudo dnf install mpv-libs        # Fedora
-sudo apt install libmpv2         # Ubuntu 24.04 og nyere, Debian 12 og nyere
-```
-
-Pakk ut i hjemmemappen og start den:
-
-```bash
-tar -xzf Fyrlys-linux-x64.tar.gz -C ~
-~/Fyrlys/fyrlys
-```
-
-`~/Fyrlys/lag-snarvei.sh` legger Fyrlys i programmenyen, med ikon.
+[`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip) for Windows 10
+og 11 er alltid siste versjon ([alle filene](https://github.com/ungerdas/fyrlys/releases/latest)). Pakk den ut i en
+mappe du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe`. Windows kan advare fordi programmet ikke er
+signert: velg *Mer informasjon → Kjør likevel*.
 
 ### 2. Logg inn
 
@@ -93,9 +73,9 @@ tilbake.
 
 ## Oppdateringer
 
-Fyrlys oppdaterer seg selv, på Windows og Linux. Den ser etter nye versjoner når den starter og hver 6. time,
-laster dem ned i bakgrunnen og legger dem inn når du lukker appen, eller straks med «Start på nytt nå». Menyen har
-også «Se etter oppdateringer». Mappen Fyrlys ligger i må være din (ikke Programfiler eller `/opt`).
+Fyrlys oppdaterer seg selv. Den ser etter nye versjoner når den starter og hver 6. time, laster dem ned i
+bakgrunnen og legger dem inn når du lukker appen, eller straks med «Start på nytt nå». Menyen har også «Se etter
+oppdateringer». Mappen Fyrlys ligger i må være din (ikke Programfiler).
 
 ## Bygge selv
 
@@ -104,9 +84,9 @@ Fyrlys er laget i [Flutter](https://flutter.dev), med [media_kit](https://github
 ([`.github/workflows/build.yml`](.github/workflows/build.yml)). Lokalt:
 
 ```bash
-flutter create --org no.peag --project-name fyrlys --platforms=windows,linux .
+flutter create --org no.peag --project-name fyrlys --platforms=windows .
 flutter run
 ```
 
-`flutter create` lager det som mangler av plattformmappene, og skriver ikke over det som ligger i repoet. På Linux
-trengs også `libmpv-dev` (Ubuntu) eller `mpv-devel` (Fedora). Testene kjøres med `flutter test`.
+`flutter create` lager det som mangler av Windows-mappen, og skriver ikke over det som ligger i repoet. Testene
+kjøres med `flutter test`.

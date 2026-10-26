@@ -10,7 +10,6 @@ import '../core/models.dart';
 import '../core/names.dart';
 import '../core/session.dart';
 import '../core/source.dart';
-import '../platform.dart';
 import '../theme.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
@@ -69,7 +68,7 @@ class _Player extends StatefulWidget {
   State<_Player> createState() => _PlayerState();
 }
 
-class _PlayerState extends State<_Player> with WidgetsBindingObserver {
+class _PlayerState extends State<_Player> {
   late final Playback _pb = (widget.page.playback ?? playbackFactory)();
   final FocusNode _focus = FocusNode(debugLabel: 'spiller');
   final FocusNode _searchFocus = FocusNode(debugLabel: 'søk i kanallista');
@@ -94,8 +93,6 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   bool _playing = false;
   bool _userPaused = false;
 
-  /// appen er lagt bort på telefon/TV: kanalen er stoppet og startes igjen når du kommer tilbake
-  bool _suspended = false;
   late double _volume = widget.page.session.volume;
   late bool _muted = widget.page.session.muted;
   bool _dragging = false;
@@ -103,16 +100,16 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// du har valgt fullskjerm (bare bildet)
   bool _full = false;
 
-  /// fullskjerm nå, også når en telefon holdes på tvers (satt i build)
+  /// fullskjerm nå (satt i build)
   bool _fullNow = false;
 
-  /// det vinduet og systemlinjene sist ble satt til
+  /// det vinduet sist ble satt til
   bool? _shownFull;
 
   /// kanallista over bildet i fullskjerm
   bool _sideOpen = false;
   bool _controls = true;
-  PointerDeviceKind _pointer = isDesktop ? PointerDeviceKind.mouse : PointerDeviceKind.touch;
+  PointerDeviceKind _pointer = PointerDeviceKind.mouse;
   String? _status;
   BusyException? _busy;
   List<EpgEntry> _epg = const [];
@@ -173,7 +170,6 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _session.addListener(_onSession);
     _subs
       ..add(_pb.playingStream.listen((v) => _set(() => _playing = v)))
@@ -200,7 +196,6 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _session.removeListener(_onSession);
     for (final s in _subs) {
       unawaited(s.cancel());
@@ -221,11 +216,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _focus.dispose();
     _searchFocus.dispose();
     _sideFocus.dispose();
-    if (isDesktop) {
-      if (_shownFull == true) unawaited(_windowFull(false));
-    } else {
-      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
-    }
+    if (_shownFull == true) unawaited(_windowFull(false));
     super.dispose();
   }
 
@@ -235,27 +226,6 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   /// favoritter og «sist sett» er endret
   void _onSession() => _set(() {});
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (isDesktop) return;
-    if (state == AppLifecycleState.paused && !_suspended) {
-      // Telefon/TV: appen er lagt bort. Gi fra deg tilkoblingen, og start kanalen igjen når du kommer tilbake.
-      _suspended = true;
-      _seq++;
-      _shiftTimer?.cancel();
-      _target = null;
-      unawaited(_pb.stop());
-      final ch = _opened;
-      final src = _source;
-      _opened = null;
-      if (ch != null && src != null) unawaited(src.close(ch));
-    } else if (state == AppLifecycleState.resumed && _suspended) {
-      _suspended = false;
-      _retries.clear();
-      unawaited(_open());
-    }
-  }
 
   // ── avspilling ──
 
@@ -269,8 +239,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   Future<void> _open({bool takeOver = false}) async {
     final src = _source;
-    // lagt bort (telefon/TV) mens noe var på vei: startes igjen når du kommer tilbake
-    if (src == null || !mounted || _suspended) return;
+    if (src == null || !mounted) return;
     final my = ++_seq;
     final ch = _channel;
     final prev = _opened;
@@ -293,7 +262,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _resetShift();
     try {
       final t = await src.open(ch, takeOver: takeOver);
-      if (my != _seq || !mounted || _suspended) return;
+      if (my != _seq || !mounted) return;
       _target = t;
       _url = 0;
       await _pb.open(t.urls.first, src.httpHeaders);
@@ -331,7 +300,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     // mpv sier «Failed to open <hele adressen>»: rett mot leverandøren står brukernavn og passord i den
     final message = _source?.redact(raw) ?? raw;
     debugPrint('mpv: $message');
-    if (!mounted || _suspended || _started || _busy != null || _status != null || _target == null) return;
+    if (!mounted || _started || _busy != null || _status != null || _target == null) return;
     if (_nextUrl()) return;
     // Siste adresse: mpv kan fortsatt komme seg, så vent litt før feilen vises.
     final my = _seq;
@@ -348,7 +317,6 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// Strømmen stoppet etter at den hadde startet. Åpne kanalen på nytt via kilden (så «alle tilkoblinger
   /// i bruk» vises om noen har tatt over), inntil tre ganger i minuttet.
   void _ended(String why) {
-    if (_suspended) return;
     final now = DateTime.now();
     _retries.removeWhere((t) => now.difference(t) > const Duration(minutes: 1));
     if (_retries.length >= 3) {
@@ -370,7 +338,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// på (pause og tilbakespoling).
   void _check() {
     final t = _target;
-    if (!mounted || _suspended || _status != null || _busy != null || t == null) return;
+    if (!mounted || _status != null || _busy != null || t == null) return;
     if (t.localShift && (_started || _userPaused)) unawaited(_pollCache());
     final now = DateTime.now();
     final pos = _pb.position;
@@ -505,7 +473,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   /// Hopper i det avspilleren har tatt vare på, [back] bak direkte (0 = direkte), uten å åpne strømmen på nytt.
   Future<void> _shiftTo(Duration back) async {
-    if (!_canShift || _suspended) return;
+    if (!_canShift) return;
     final c = _cache;
     final live = _liveAhead;
     if (c == null || live == null) return;
@@ -612,16 +580,12 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _wake();
   }
 
-  /// Vinduet (PC) og systemlinjene (telefon/TV) følger fullskjermen.
+  /// Vinduet følger fullskjermen.
   void _syncFull(bool full) {
     if (_shownFull == full) return;
     final first = _shownFull == null;
     _shownFull = full;
-    if (isDesktop) {
-      if (!first || full) unawaited(_windowFull(full));
-    } else {
-      unawaited(SystemChrome.setEnabledSystemUIMode(full ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge));
-    }
+    if (!first || full) unawaited(_windowFull(full));
   }
 
   Future<void> _windowFull(bool on) => WindowFullscreen.instance.set(on);
@@ -839,8 +803,8 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       _nudgeShift(-10);
     } else if (_canShift &&
         (key == LogicalKeyboardKey.mediaFastForward ||
-            (key == LogicalKeyboardKey.arrowRight && (isDesktop || _fullNow) && _focus.hasPrimaryFocus))) {
-      // → spoler fram på PC og i fullskjerm; ellers går den inn i kanallista (fjernkontroll)
+            (key == LogicalKeyboardKey.arrowRight && _focus.hasPrimaryFocus))) {
+      // → spoler fram
       _nudgeShift(10);
     } else if (_canShift && (key == LogicalKeyboardKey.keyL || key == LogicalKeyboardKey.end)) {
       _goLive();
@@ -903,23 +867,20 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final pad = MediaQuery.paddingOf(context);
-    // telefon på tvers: bare bildet, som i fullskjerm
-    final autoFull = !isDesktop && size.width > size.height && size.height < 500;
-    final full = _full || autoFull;
+    final full = _full;
     _fullNow = full;
-    // telefonen snudd tilbake til høyden: kanallista over bildet finnes ikke lenger (ellers virker ikke Tilbake)
+    // ute av fullskjerm: kanallista over bildet finnes ikke lenger
     if (!full) _sideOpen = false;
     if (_shownFull != full) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _syncFull(full);
       });
     }
-    final canToggleFull = _full || !autoFull;
     final wide = size.width >= 860;
     final stageWidth = full ? size.width : (wide ? size.width - 404 - pad.horizontal : size.width - pad.horizontal);
     final stage = KeyedSubtree(
       key: _stageKey,
-      child: _stage(full: full, compact: stageWidth < 680, canToggleFull: canToggleFull),
+      child: _stage(full: full, compact: stageWidth < 680),
     );
     final scheme = Theme.of(context).colorScheme;
     final Widget body;
@@ -1004,7 +965,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   /// Bildet med det som ligger over: kontroller, venting, beskjeder. Samme widget i alle oppsett (GlobalKey),
   /// så avspillingen ikke forstyrres når du går inn og ut av fullskjerm.
-  Widget _stage({required bool full, required bool compact, required bool canToggleFull}) {
+  Widget _stage({required bool full, required bool compact}) {
     final busy = _busy;
     final status = _status;
     final flash = _flash;
@@ -1014,7 +975,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
         _pointer = e.kind;
         if (!_focus.hasPrimaryFocus) _focus.requestFocus();
       },
-      onPointerSignal: isDesktop ? _onWheel : null,
+      onPointerSignal: _onWheel,
       child: MouseRegion(
         cursor: showBars ? MouseCursor.defer : SystemMouseCursors.none,
         onHover: (_) => _wake(),
@@ -1025,7 +986,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _onStageTap,
-              onDoubleTap: canToggleFull ? _toggleFull : null,
+              onDoubleTap: _toggleFull,
               child: _pb.view(),
             ),
             if (_buffering && busy == null && status == null)
@@ -1068,7 +1029,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
                 child: AnimatedOpacity(
                   opacity: showBars ? 1 : 0,
                   duration: const Duration(milliseconds: 250),
-                  child: _overlay(full: full, compact: compact, canToggleFull: canToggleFull),
+                  child: _overlay(full: full, compact: compact),
                 ),
               ),
             ),
@@ -1086,7 +1047,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     );
   }
 
-  Widget _overlay({required bool full, required bool compact, required bool canToggleFull}) {
+  Widget _overlay({required bool full, required bool compact}) {
     return Stack(
       children: [
         // kanalinfoen nederst viser det samme mens den er framme
@@ -1113,7 +1074,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
           left: 0,
           right: 0,
           bottom: 0,
-          child: _bottomBar(full: full, compact: compact, canToggleFull: canToggleFull),
+          child: _bottomBar(full: full, compact: compact),
         ),
       ],
     );
@@ -1179,7 +1140,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     );
   }
 
-  Widget _bottomBar({required bool full, required bool compact, required bool canToggleFull}) {
+  Widget _bottomBar({required bool full, required bool compact}) {
     final volume = _muted ? 0.0 : _volume;
     final volumeIcon = volume == 0 ? Icons.volume_off : (volume < 50 ? Icons.volume_down : Icons.volume_up);
     final shift = _canShift;
@@ -1219,12 +1180,11 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
                   if (!compact)
                     _ctl(Icons.swap_horiz, 'Kanalen du så sist (Backspace)', _last == null ? null : _lastChannel),
                   _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
-                  if (isDesktop && !compact) _volumeSlider(volume),
+                  if (!compact) _volumeSlider(volume),
                   if (full) _ctl(Icons.list, 'Kanaler (C)', _toggleSide, on: _sideOpen),
                   _tracksButton(),
-                  if (canToggleFull)
-                    _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen,
-                        full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)', _toggleFull),
+                  _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen, full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
+                      _toggleFull),
                 ],
               ),
             ],

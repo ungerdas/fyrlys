@@ -7,7 +7,6 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../core/languages.dart';
 import '../core/names.dart';
 import '../core/picture.dart';
-import '../platform.dart';
 
 /// Et lydspor eller en undertekst man kan velge i spilleren.
 class TrackChoice {
@@ -153,8 +152,8 @@ class MpvPlayback implements Playback {
       await _try(() => p.setProperty('cache-on-disk', 'yes'));
     }
     final disk = dir != null;
-    await _try(() => p.setProperty('demuxer-max-back-bytes', disk ? (isDesktop ? '2000MiB' : '600MiB') : (isDesktop ? '400MiB' : '120MiB')));
-    await _try(() => p.setProperty('demuxer-max-bytes', disk ? (isDesktop ? '1000MiB' : '300MiB') : (isDesktop ? '200MiB' : '60MiB')));
+    await _try(() => p.setProperty('demuxer-max-back-bytes', disk ? '2000MiB' : '400MiB'));
+    await _try(() => p.setProperty('demuxer-max-bytes', disk ? '1000MiB' : '200MiB'));
   }
 
   @override
