@@ -64,7 +64,7 @@ const enPlayer = <String, String>{
   'Ingen kanaler her.': 'No channels here.',
 
   // minispilleren
-  'Stort vindu (I)': 'Large window (I)',
+  'Stort vindu (I)': 'Exit mini player (I)',
   'Lukk': 'Close',
 
   // bildeformat og lydforsinkelse

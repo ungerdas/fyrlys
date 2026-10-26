@@ -34,7 +34,7 @@ const enHome = <String, String>{
   'Fjern fra toppen': 'Unpin from top',
   'Legg øverst': 'Pin to top',
   'Prøv igjen': 'Try again',
-  'Henter kanaler … Første gang kan det ta litt tid.': 'Loading channels … This may take a while the first time.',
+  'Henter kanaler … Første gang kan det ta litt tid.': 'Loading channels… This may take a while the first time.',
   'Fant ingenting.': 'Nothing found.',
   'Ingen favoritter ennå. Trykk ☆ på en kanal for å legge den til.': 'No favorites yet. Click ☆ on a channel to add it.',
   'Du har ikke sett noen kanaler ennå.': "You haven't watched any channels yet.",
@@ -44,8 +44,8 @@ const enHome = <String, String>{
   'Ny versjon: {version}': 'New version: {version}',
   'Last ned': 'Download',
   'ny versjon': 'the new version',
-  'Laster ned {version} … {percent} % av {size} MB': 'Downloading {version} … {percent}% of {size} MB',
-  'Laster ned {version} … {percent} %': 'Downloading {version} … {percent}%',
+  'Laster ned {version} … {percent} % av {size} MB': 'Downloading {version}… {percent}% of {size} MB',
+  'Laster ned {version} … {percent} %': 'Downloading {version}… {percent}%',
   'En ny versjon': 'A new version',
   '{version} er lastet ned og legges inn når du lukker Fyrlys.':
       '{version} has been downloaded and will be installed when you close Fyrlys.',
@@ -79,7 +79,7 @@ const enHome = <String, String>{
   // guide_view.dart: TV-guiden
   '★ Favorittkanaler ({n})': '★ Favorite channels ({n})',
   'Til nå': 'Jump to now',
-  'Henter kanaler …': 'Loading channels …',
+  'Henter kanaler …': 'Loading channels…',
   'Ingen favoritter ennå. Trykk ☆ på en kanal under TV, eller velg en kategori over.':
       'No favorites yet. Click ☆ on a channel under TV, or choose a category above.',
   'I morgen {time}': 'Tomorrow {time}',
@@ -89,7 +89,7 @@ const enHome = <String, String>{
   'Ingen programinformasjon': 'No program information',
 
   // multiview_page.dart
-  'Kobler til abonnementene …': 'Connecting to the subscriptions …',
+  'Kobler til abonnementene …': 'Connecting to the subscriptions…',
   'Fant bare én tilkobling. Legg til et abonnement til i innstillingene.':
       'Only one connection found. Add another subscription in settings.',
   'Kanalen kunne ikke spilles ({message}).': "Couldn't play the channel ({message}).",

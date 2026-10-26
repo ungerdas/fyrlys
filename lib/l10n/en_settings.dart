@@ -47,7 +47,7 @@ const enSettings = <String, String>{
   // settings_page.dart: listene
   'Kanaler og TV-guide': 'Channels and TV guide',
   'Hent listene på nytt': 'Reload lists',
-  'Henter …': 'Loading …',
+  'Henter …': 'Loading…',
   'Kanalene og kategoriene fra leverandøren (1 kanal)': 'Channels and categories from the provider (1 channel)',
   'Kanalene og kategoriene fra leverandøren ({n} kanaler)': 'Channels and categories from the provider ({n} channels)',
   'Listene er hentet på nytt (1 kanal).': 'The lists have been reloaded (1 channel).',
@@ -66,10 +66,10 @@ const enSettings = <String, String>{
   // settings_page.dart: oppdateringer
   'Oppdateringer': 'Updates',
   'Se etter oppdateringer': 'Check for updates',
-  'Ser etter …': 'Checking …',
+  'Ser etter …': 'Checking…',
   'Ny versjon: {version}': 'New version: {version}',
   'ny versjon': 'the new version',
-  'Laster ned {version} … {percent} %': 'Downloading {version} … {percent}%',
+  'Laster ned {version} … {percent} %': 'Downloading {version}… {percent}%',
   'En ny versjon legges inn når du lukker Fyrlys': 'A new version will be installed when you close Fyrlys',
   '{version} legges inn når du lukker Fyrlys': '{version} will be installed when you close Fyrlys',
   '{version} er lastet ned og legges inn når du lukker Fyrlys.':
@@ -98,7 +98,7 @@ const enSettings = <String, String>{
       'The login you got from your IPTV provider (Xtream Codes).',
   'Brukernavn': 'Username',
   'Passord': 'Password',
-  'Kobler til …': 'Connecting …',
+  'Kobler til …': 'Connecting…',
   'Logg inn': 'Sign in',
   'Kunne ikke koble til. Sjekk lenken eller adressen.': "Couldn't connect. Check the link or address.",
 
@@ -111,10 +111,10 @@ const enSettings = <String, String>{
       'Turned on when the audio is in another language. With none picked: only when the movie turns them on itself.',
   'Av': 'Off',
   'Bare ett': 'Only one',
-  'Foretrukne språk …': 'Preferred languages …',
+  'Foretrukne språk …': 'Preferred languages…',
   'Bilde': 'Picture',
-  'Bildeformat: {name} …': 'Picture format: {name} …',
-  'Lydforsinkelse: {value} …': 'Audio delay: {value} …',
+  'Bildeformat: {name} …': 'Picture format: {name}…',
+  'Lydforsinkelse: {value} …': 'Audio delay: {value}…',
   'Lydspor og undertekster': 'Audio and subtitles',
 
   // languages.dart: språkene for lyd og undertekster
