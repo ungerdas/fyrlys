@@ -374,8 +374,12 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   GitHub-saker. Testet med tester; mpv-egenskapene, minivinduet og Utforsker/nettleser fra appen er ikke prøvd på Windows.
 - 26.10.2026: 2.1.21: engelsk (eierens valg 3), oversatt av fem agenter i hver sin del av lib/ og sett over etterpå.
   Testet med tester (bl.a. at alt er oversatt og at språket byttes i innstillingene).
-- 27.10.2026: 2.1.22: TV-arkivet ga opp på grunn av dekoderfeil i starten (se `ui/playback.dart`). Ikke bekreftet på
-  Windows ennå; virker det ikke, står mpv sine egne feil i feilrapporten.
+- 27.10.2026: 2.1.22: TV-arkivet ga opp på grunn av dekoderfeil i starten (se `ui/playback.dart`). Eieren 27.10:
+  «Tror det fungerte» (feilrapport: et program fra arkivet kom i gang etter ca. 10 s). Samme feilrapport viste at
+  mpv-en i media_kit ikke kan `deinterlace=auto` («Invalid parameter for deinterlace flag: auto») og ikke har lavfi-
+  filteret `yadif` («filter 'yadif' not found»), så «Fjern striper» virker ikke (ikke rettet ennå; mulig vei:
+  `deinterlace=yes` og maskinvarens `d3d11vpp`). Ellers i loggen: «property not found _setProperty(osc, 1)» og
+  «dxva2-egl: Failed to create EGL surface» fra media_kit (ufarlig så langt).
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,
