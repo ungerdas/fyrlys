@@ -16,22 +16,6 @@ class UpdateException implements Exception {
   String toString() => message;
 }
 
-/// «192.168.1.10:8766» → «http://192.168.1.10:8766» (adressen til Fyrlys-serveren); null når den ikke kan tolkes.
-String? normalizeServerAddress(String raw) {
-  var text = raw.trim();
-  if (text.isEmpty) return null;
-  if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(text)) text = 'http://$text';
-  final u = Uri.tryParse(text);
-  if (u == null || u.host.isEmpty) return null;
-  var path = u.path;
-  while (path.endsWith('/')) {
-    path = path.substring(0, path.length - 1);
-  }
-  final host = u.host.contains(':') ? '[${u.host}]' : u.host;
-  final port = u.hasPort ? ':${u.port}' : '';
-  return '${u.scheme.toLowerCase()}://$host$port$path';
-}
-
 /// En nyere utgave av appen: siste release på GitHub.
 class UpdateInfo {
   const UpdateInfo({required this.build, required this.title, required this.url, required this.size, this.notes = ''});
@@ -87,8 +71,7 @@ UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
 enum UpdateState { idle, checking, available, downloading, ready, failed }
 
 /// Oppdaterer appen fra siste release på GitHub (CI lager en for hver versjon på main; før 2.1.10 releasen
-/// «testbygg»). Med en oppdateringsserver i menyen (Fyrlys-serveren, som har en lesenøkkel til GitHub) hentes den
-/// via serveren i stedet; det trengs bare om repoet er privat.
+/// «testbygg»).
 /// Ser etter nye bygg ved oppstart og hver 6. time, laster ned i bakgrunnen og legger inn når appen lukkes
 /// (eller med «Start på nytt nå»). Ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
 /// starter. Bare på Windows, og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
@@ -130,11 +113,6 @@ class Updater extends ChangeNotifier {
   /// en kort beskjed i banneret, f.eks. at appen nettopp ble oppdatert
   String? notice;
 
-  /// adressen til serveren byggene hentes via (null: rett fra GitHub)
-  String? Function()? serverBase;
-
-  /// hvem vi spør, til feilmeldingene
-  String _via = 'GitHub';
   Timer? _first;
   Timer? _timer;
 
@@ -156,8 +134,8 @@ class Updater extends ChangeNotifier {
 
   String _describe(Object e) => switch (e) {
         UpdateException(:final message) => message,
-        TimeoutException() => '$_via svarte ikke',
-        SocketException() => 'fikk ikke kontakt med $_via',
+        TimeoutException() => 'GitHub svarte ikke',
+        SocketException() => 'fikk ikke kontakt med GitHub',
         FileSystemException(:final message, :final path) => path == null ? message : '$message ($path)',
         _ => '$e',
       };
@@ -171,43 +149,29 @@ class Updater extends ChangeNotifier {
     _timer = Timer.periodic(const Duration(hours: 6), (_) => unawaited(check()));
   }
 
-  /// Spør GitHub (eller oppdateringsserveren) etter siste versjon. Er den nyere, lastes den ned med en gang (Windows).
+  /// Spør GitHub etter siste versjon. Er den nyere, lastes den ned med en gang (Windows).
   /// Med [manual] kastes en [UpdateException] med forklaringen når det ikke går; ellers prøves det igjen senere.
   Future<UpdateInfo?> check({bool manual = false}) async {
     if (!enabled || state == UpdateState.checking || state == UpdateState.downloading) return available;
     final before = state;
     _set(UpdateState.checking);
-    final server = serverBase?.call();
-    _via = server != null ? 'Fyrlys-serveren' : 'GitHub';
     try {
+      // Siste release. Før 2.1.10 lå versjonene i releasen «testbygg», så den er reserven.
+      final releases = 'https://api.github.com/repos/$repo/releases';
       UpdateInfo? info;
-      if (server != null) {
+      var visible = false;
+      try {
+        info = await _release(Uri.parse('$releases/latest'));
+        visible = true;
+      } on _Missing {
+        // ingen vanlige releaser ennå (eller et privat repo)
+      }
+      if (info == null) {
         try {
-          info = await _release(Uri.parse('$server/api/app/release'));
-        } on _Missing catch (m) {
-          throw UpdateException(m.message ?? 'Fant ikke oppdateringene på $server (HTTP 404). Er adressen riktig?');
-        }
-      } else {
-        // Siste release. Før 2.1.10 lå versjonene i releasen «testbygg», så den er reserven.
-        final releases = 'https://api.github.com/repos/$repo/releases';
-        var visible = false;
-        try {
-          info = await _release(Uri.parse('$releases/latest'));
-          visible = true;
+          info = await _release(Uri.parse('$releases/tags/testbygg'));
         } on _Missing {
-          // ingen vanlige releaser ennå (eller et privat repo)
-        }
-        if (info == null) {
-          try {
-            info = await _release(Uri.parse('$releases/tags/testbygg'));
-          } on _Missing {
-            // Et privat repo svarer 404 på alt uten nøkkel: ikke «du har siste versjon».
-            if (!visible) {
-              throw const UpdateException(
-                'GitHub viser ikke de nye versjonene (er repoet privat?). Velg oppdateringsserver i menyen.',
-              );
-            }
-          }
+          // Et privat repo svarer 404 på alt uten nøkkel: ikke «du har siste versjon».
+          if (!visible) throw const UpdateException('GitHub viser ikke de nye versjonene (er repoet privat?)');
         }
       }
       if (info == null || info.build <= currentBuild!) {
@@ -238,20 +202,9 @@ class Updater extends ChangeNotifier {
       url,
       headers: const {'Accept': 'application/vnd.github+json', 'User-Agent': 'Fyrlys'},
     ).timeout(const Duration(seconds: 20));
-    if (r.statusCode == 404) throw _Missing(_serverError(r));
-    if (r.statusCode != 200) throw UpdateException(_serverError(r) ?? '$_via svarte ${r.statusCode}');
+    if (r.statusCode == 404) throw const _Missing();
+    if (r.statusCode != 200) throw UpdateException('GitHub svarte ${r.statusCode}');
     return parseRelease(jsonDecode(r.body), assetSuffix!, base: url);
-  }
-
-  /// Fyrlys-serveren forklarer feil som {"error": …}, f.eks. at den mangler GitHub-nøkkelen.
-  static String? _serverError(http.Response r) {
-    try {
-      final j = jsonDecode(r.body);
-      if (j is Map && j['error'] is String) return j['error'] as String;
-    } on FormatException {
-      // ikke JSON
-    }
-    return null;
   }
 
   Future<bool> _isDownloaded(UpdateInfo info) async {
@@ -532,9 +485,7 @@ if ($Restart) {
 }
 ''';
 
-/// 404: releasen finnes ikke (eller er ikke synlig), med serverens forklaring når den har en.
+/// 404: releasen finnes ikke (eller er ikke synlig).
 class _Missing implements Exception {
-  const _Missing(this.message);
-
-  final String? message;
+  const _Missing();
 }

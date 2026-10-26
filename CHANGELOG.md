@@ -1,5 +1,9 @@
 # Endringer
 
+## v2.1.11
+
+- «Oppdateringsserver» er borte fra menyen. Nye versjoner kommer alltid rett fra GitHub.
+
 ## v2.1.10
 
 - Første vanlige release: hver versjon ligger nå under Releases på GitHub, og lenkene på forsiden gir alltid siste

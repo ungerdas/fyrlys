@@ -127,7 +127,7 @@ void main() {
       expect(await updater(9, client).check(), isNull);
     });
 
-    test('testbyggene er ikke synlige (privat repo): ikke «siste versjon», men en forklaring', () async {
+    test('versjonene er ikke synlige (privat repo): ikke «siste versjon», men en forklaring', () async {
       final missing = MockClient((r) async => http.Response('{"message":"Not Found"}', 404, headers: _json));
       final u = updater(5, missing);
       expect(await u.check(), isNull);
@@ -135,13 +135,6 @@ void main() {
       await expectLater(
         u.check(manual: true),
         throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('ikke de nye versjonene'))),
-      );
-      // fra oppdateringsserveren: forklaringen derfra
-      final server = MockClient((r) async => http.Response('{"error": "Fant ikke testbyggene på GitHub"}', 404));
-      final v = updater(5, server)..serverBase = () => 'http://192.168.1.10:8766';
-      await expectLater(
-        v.check(manual: true),
-        throwsA(isA<UpdateException>().having((e) => e.message, 'message', 'Fant ikke testbyggene på GitHub')),
       );
     });
 
@@ -163,56 +156,6 @@ void main() {
       expect(await u.check(), isNull);
       expect(u.state, UpdateState.idle);
       await expectLater(u.check(manual: true), throwsA(isA<UpdateException>()));
-    });
-
-    test('via Fyrlys-serveren: spør serveren, og laster ned derfra', () async {
-      final urls = <String>[];
-      final client = MockClient((r) async {
-        urls.add(r.url.toString());
-        if (r.url.path == '/api/app/release') {
-          return http.Response(
-            jsonEncode({
-              'name': 'Fyrlys 0.1.0 · bygg 7 (abc1234)',
-              'body': '',
-              'assets': [
-                {
-                  'name': 'Fyrlys-windows.zip',
-                  'size': 4,
-                  'browser_download_url': 'download/Fyrlys-windows.zip',
-                },
-              ],
-            }),
-            200,
-            headers: _json,
-          );
-        }
-        return http.Response.bytes([1, 2, 3, 4], 200);
-      });
-      final u = updater(5, client)..serverBase = () => 'http://192.168.1.10:8766';
-      final info = await u.check();
-      expect(info?.url, 'http://192.168.1.10:8766/api/app/download/Fyrlys-windows.zip');
-      await u.download();
-      expect(u.state, UpdateState.ready);
-      expect(urls, [
-        'http://192.168.1.10:8766/api/app/release',
-        'http://192.168.1.10:8766/api/app/download/Fyrlys-windows.zip',
-      ]);
-    });
-
-    test('serveren uten GitHub-nøkkel: forklaringen vises ved manuell sjekk', () async {
-      final client = MockClient(
-        (r) async => http.Response(
-          jsonEncode({'error': 'Serveren har ingen GitHub-nøkkel (data/github.json)'}),
-          503,
-          headers: _json,
-        ),
-      );
-      final u = updater(5, client)..serverBase = () => 'http://192.168.1.10:8766';
-      expect(await u.check(), isNull);
-      await expectLater(
-        u.check(manual: true),
-        throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('GitHub-nøkkel'))),
-      );
     });
 
     test('egne bygg (uten byggnummer) ser ikke etter oppdateringer', () async {

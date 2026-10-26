@@ -238,8 +238,6 @@ void main() {
         }),
       );
       expect(s.source, isNull);
-      // oppdateringene kommer rett fra GitHub
-      expect(s.updateServer, isNull);
       expect(asked, ['http://192.168.1.10:8766/api/streams/favs']);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('source'), isNull);
@@ -247,17 +245,6 @@ void main() {
       expect(favs.single, containsPair('id', '101'));
       expect(favs.single, containsPair('num', '1'));
       expect(prefs.getStringList('favoriteCategories'), ['5', '7']);
-    });
-
-    test('oppdateringsserveren: adressen ryddes, og tom = ingen', () async {
-      final s = await session();
-      expect(s.updateServer, isNull);
-      await s.saveUpdateServer(' 192.168.1.10:8766/ ');
-      expect(s.updateServer, 'http://192.168.1.10:8766');
-      await expectLater(s.saveUpdateServer('http://'), throwsA(isA<SourceException>()));
-      expect(s.updateServer, 'http://192.168.1.10:8766');
-      await s.saveUpdateServer('');
-      expect(s.updateServer, isNull);
     });
   });
 }

@@ -117,12 +117,3 @@ Legg inn tre hemmeligheter under *Settings → Secrets and variables → Actions
 gamle. Første bygg med nøkkelen må installeres etter at den gamle appen er avinstallert; etter det går det rett.
 
 </details>
-
-<details>
-<summary>Oppdateringer fra en egen server</summary>
-
-Er repoet ditt privat, kan ikke appen lese releasene på GitHub selv. Da kan den hente dem via en server som har
-en lesenøkkel til repoet og svarer på `/api/app/release` i samme form som GitHub (med `download/<fil>` for filene).
-Adressen settes i menyen under «Oppdateringsserver …». Uten den spør appen GitHub direkte.
-
-</details>

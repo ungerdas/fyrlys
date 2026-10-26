@@ -13,7 +13,6 @@ import 'models.dart';
 import 'names.dart';
 import 'picture.dart';
 import 'source.dart';
-import 'updater.dart' show normalizeServerAddress;
 import 'vod.dart';
 import 'xtream_source.dart';
 
@@ -91,6 +90,8 @@ class Session extends ChangeNotifier {
         src = null;
       }
     }
+    // oppdateringsserveren fra 2.1.6–2.1.10 brukes ikke lenger: nye versjoner kommer rett fra GitHub
+    await _prefs.remove('update_server');
     recent = _readChannels('recent');
     restoring = false;
     if (src != null) {
@@ -169,21 +170,6 @@ class Session extends ChangeNotifier {
 
   Future<void> loginXtream(String server, String user, String password) async =>
       _use(await XtreamSource.login(server, user, password));
-
-  /// serveren oppdateringene på Windows hentes via (Fyrlys-serveren); null: rett fra GitHub
-  String? get updateServer => _prefs.getString('update_server');
-
-  /// [address] tom: ingen oppdateringsserver. Kaster SourceException ved en ugyldig adresse.
-  Future<void> saveUpdateServer(String address) async {
-    if (address.trim().isEmpty) {
-      await _prefs.remove('update_server');
-    } else {
-      final base = normalizeServerAddress(address);
-      if (base == null) throw const SourceException('Ugyldig adresse');
-      await _prefs.setString('update_server', base);
-    }
-    notifyListeners();
-  }
 
   Future<void> _use(TvSource src) async {
     await _prefs.setString('source', jsonEncode(src.toPrefs()));

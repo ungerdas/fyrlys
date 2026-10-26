@@ -4,7 +4,8 @@ Egen app for Fyrlys, Pål-Eriks IPTV-spiller: Flutter med media_kit (mpv) som av
 Android og Android TV (senere macOS, Linux og iOS). Den kommer **i tillegg til** Docker-versjonen
 (nettside + server med ffmpeg) i det private repoet `ungerdas/peagstreams`, som kjører på hjemmeserveren hans.
 Fra 2.1.6 (Pål-Erik 26.10: «Fyrlys server dropper vi») logger appen inn med M3U-lenke eller Xtream Codes og henter
-alt rett fra leverandøren; Fyrlys-serveren trengs ikke (den kan være valgfri oppdateringsserver).
+alt rett fra leverandøren, og oppdateringene rett fra GitHub (fra 2.1.11 uten valg av oppdateringsserver); appen
+bruker ikke Fyrlys-serveren til noe.
 Ikke bland inn endringer der herfra. Repoet er **offentlig** (Pål-Erik åpnet det 26.10, så oppdateringene kommer
 rett fra GitHub): hold det fritt for detaljer om hjemmenettet hans, hemmeligheter og e-postadressen hans, verken i
 koden, testene, commit-meldingene eller disse notatene (eksempeladresser som 192.168.1.10 er greit). Noen gamle
@@ -42,7 +43,7 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   (faste navn, så `releases/latest/download/<fil>` alltid er siste versjon), teksten fra CHANGELOG.md og
   byggnummeret skjult som `<!-- bygg N -->` (appen leser det). Finnes releasen alt (samme versjon på nytt), byttes
   filene (andre filnavn slettes først) og teksten. Appen (2.1.9+) spør `releases/latest`, med `releases/tags/testbygg`
-  som reserve når siste release ikke har byggnummer (Fyrlys-serveren gjør det samme).
+  som reserve når siste release ikke har byggnummer.
   **Broen:** apper til og med 2.1.8 kjenner bare releasen `testbygg` og leser byggnummeret i navnet, så 2.1.9 legges
   ut der én gang til («Fyrlys 2.1.9 · bygg N», fast i workflowen). Fra 2.1.10 er alt vanlige releaser, og
   `testbygg` slettes av workflowen (2.1.10 ble sendt da Pål-Erik hadde 2.1.9). README-lenkene går til
@@ -80,10 +81,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 - `core/session.dart` – tilstanden (ChangeNotifier): innlogging (lagres i shared_preferences, også
   Xtream-passordet – vurder flutter_secure_storage senere), lister, EPG-mellomlager (5 min, 4 om gangen),
   `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene; `cleanEpg` i `models.dart` slår sammen
-  doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt), «sist sett», lys/mørk,
-  oppdateringsserveren (`updateServer`/`saveUpdateServer`, `update_server` i shared_preferences, valgfri; en lagret
-  innlogging med `kind: fyrlys` fra før 2.1.6 fjernes ved `restore`, og favorittene hentes da én gang fra
-  `/api/streams/favs` når appen ikke har egne), og «fortsett der du
+  doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt), «sist sett», lys/mørk
+  (`restore` rydder: en innlogging med `kind: fyrlys` fra før 2.1.6 fjernes, og favorittene hentes da én gang fra
+  `/api/streams/favs` når appen ikke har egne; `update_server` fra 2.1.6–2.1.10 slettes), og «fortsett der du
   slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
   `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken). Språkene (`languages`/`saveLanguages`,
   `lang_audio`/`lang_subs` i shared_preferences; `LanguagePrefs` og kodene i `core/languages.dart`). Lista fra
@@ -91,8 +91,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   favoritter og 8 sist sett når lista er klar.
 - `ui/login_page.dart` (to valg: «M3U-lenke» med valgfri EPG-lenke, og «Xtream Codes»), `ui/home_page.dart`
   (TV/TV-guide/Filmer/Serier, de to siste bare med `hasVod` (`_sectionList`/`_current`): SegmentedButton i toppen
-  ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; «Oppdateringsserver …» i menyen (`_UpdateServerDialog`,
-  bare når oppdateringen er på; tom = rett fra GitHub); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
+  ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; «Se etter oppdateringer» i menyen når oppdateringen er
+  på (Pål-Erik 26.10: oppdateringsserveren trengs ikke, fjernet i 2.1.11); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
   på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå).
 - `ui/start_view.dart` – Hjem (filteret `home`, valgt når appen starter, 26.10 for 2.0.3; Pål-Erik ville ha vekt på TV,
   ikke filmer/serier): hilsen og dato/klokke, `LastWatchedCard` (siste i «sist sett», nå/etterpå, «Se videre»), eller
@@ -163,10 +163,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   (PGS/DVB) vises ikke: media_kit tegner tekstundertekster selv (`sub-visibility=no` uten libass).
 - `core/updater.dart` – oppdatering fra siste release (bare Windows, bare bygg med byggnummer), rett fra
   `api.github.com/repos/<repo>/releases/latest` (`_release`; uten byggnummer der: `releases/tags/testbygg` som
-  reserve; 404 på begge = privat repo, feil med forklaring). Med en oppdateringsserver (`serverBase` =
-  `Session.updateServer`, `normalizeServerAddress`; trengs bare om repoet blir privat igjen) spør den
-  `<server>/api/app/release` i stedet (Fyrlys-serveren har en lesenøkkel i `data/github.json` og svarer i GitHubs
-  form, med relative adresser `download/<fil>` som løses mot release-adressen). 404 = feil med forklaring (2.1.7). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
+  reserve; 404 på begge = privat repo, feil med forklaring). Blir repoet privat igjen, virker ikke oppdateringen
+  (2.1.6–2.1.10 kunne gå via Fyrlys-serveren, `/api/app/release`; fjernet i 2.1.11, finnes i historikken). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
   `-windows.zip` lastes ned til `%LOCALAPPDATA%\Fyrlys\oppdatering\bygg-N` (størrelsen sjekkes),
   så `klar.json`. Legges inn når appen lukkes (`didRequestAppExit` i `app.dart`), med «Start på nytt nå», eller
   før appen vises neste gang (`beforeStart` i `main.dart`). Et PowerShell-skript (bare ASCII) venter på prosessen,
@@ -242,4 +240,6 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 - 26.10.2026: 2.1.9: versjonen uten byggnummer og commit (menyen, releasen), CHANGELOG-avsnittet som tekst i
   releasen, byggnummeret i `<!-- bygg N -->` (bro, se Versjoner).
 - 26.10.2026: 2.1.10: første vanlige release (`v2.1.10`), `testbygg` slettet.
+- 26.10.2026: 2.1.11: «Oppdateringsserver» fjernet fra menyen (Pål-Erik: trengs ikke), oppdateringene bare fra
+  GitHub.
 - Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.

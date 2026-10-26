@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../build_info.dart';
 import '../core/models.dart';
 import '../core/session.dart';
-import '../core/source.dart';
 import '../core/updater.dart';
 import '../core/vod.dart';
 import 'channel_card.dart';
@@ -25,7 +24,7 @@ class HomePage extends StatefulWidget {
 
   final Session session;
 
-  /// oppdateringer via Fyrlys-serveren (Windows); null i testene og der appen ikke oppdaterer seg selv
+  /// oppdateringer fra GitHub (Windows); null i testene og der appen ikke oppdaterer seg selv
   final Updater? updater;
 
   @override
@@ -275,7 +274,6 @@ class _HomePageState extends State<HomePage> {
               if (v == 'reload') unawaited(s.load(force: true));
               if (v == 'languages') unawaited(showLanguageDialog(context, s));
               if (v == 'update') unawaited(_checkUpdates());
-              if (v == 'update-server') unawaited(_editUpdateServer());
               if (v == 'logout') unawaited(s.logout());
             },
             itemBuilder: (context) => [
@@ -289,17 +287,8 @@ class _HomePageState extends State<HomePage> {
                   subtitle: s.languages.isEmpty ? null : Text(s.languages.summary),
                 ),
               ),
-              if (widget.updater?.enabled ?? false) ...[
+              if (widget.updater?.enabled ?? false)
                 const PopupMenuItem<String>(value: 'update', child: Text('Se etter oppdateringer')),
-                PopupMenuItem<String>(
-                  value: 'update-server',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Oppdateringsserver …'),
-                    subtitle: Text(s.updateServer ?? 'Rett fra GitHub'),
-                  ),
-                ),
-              ],
               const PopupMenuItem<String>(value: 'logout', child: Text('Logg ut')),
               const PopupMenuDivider(),
               PopupMenuItem<String>(
@@ -386,15 +375,6 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
     );
-  }
-
-  /// Nye versjoner hentes rett fra GitHub, eller via en server (Fyrlys-serveren) om du har valgt det.
-  Future<void> _editUpdateServer() async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) => _UpdateServerDialog(session: s),
-    );
-    if (saved == true && mounted && s.updateServer != null) await _checkUpdates();
   }
 
   Future<void> _checkUpdates() async {
@@ -734,66 +714,4 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-}
-
-/// Adressen til en server (Fyrlys-serveren) som har de nye versjonene. Tomt felt: rett fra GitHub.
-class _UpdateServerDialog extends StatefulWidget {
-  const _UpdateServerDialog({required this.session});
-
-  final Session session;
-
-  @override
-  State<_UpdateServerDialog> createState() => _UpdateServerDialogState();
-}
-
-class _UpdateServerDialogState extends State<_UpdateServerDialog> {
-  late final _address = TextEditingController(text: widget.session.updateServer ?? '');
-  String? _error;
-
-  @override
-  void dispose() {
-    _address.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    try {
-      await widget.session.saveUpdateServer(_address.text);
-      if (mounted) Navigator.of(context).pop(true);
-    } on SourceException catch (e) {
-      setState(() => _error = e.message);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Oppdateringsserver'),
-        content: SizedBox(
-          width: 440,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Nye versjoner av Fyrlys hentes rett fra GitHub. Har du en Fyrlys-server (Docker-versjonen), kan de '
-                'hentes via den i stedet. La feltet stå tomt for å hente dem fra GitHub.',
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _address,
-                autofocus: true,
-                autocorrect: false,
-                keyboardType: TextInputType.url,
-                textInputAction: TextInputAction.done,
-                decoration: InputDecoration(labelText: 'Adresse', hintText: 'http://192.168.1.10:8766', errorText: _error),
-                onSubmitted: (_) => unawaited(_save()),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Avbryt')),
-          FilledButton(onPressed: () => unawaited(_save()), child: const Text('Lagre')),
-        ],
-      );
 }

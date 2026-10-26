@@ -52,13 +52,13 @@ void main() {
     expect(find.byType(NavigationDestination), findsNWidgets(2));
   });
 
-  testWidgets('oppdateringsserveren velges i menyen, og det ses etter oppdateringer der', (tester) async {
+  testWidgets('«Se etter oppdateringer» i menyen spør GitHub', (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    final dir = Directory.systemTemp.createTempSync('fyrlys-server');
+    final dir = Directory.systemTemp.createTempSync('fyrlys-meny');
     addTearDown(() => dir.deleteSync(recursive: true));
-    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
+    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}', 'update_server': 'http://192.168.1.10:8766'});
     final session = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource());
     await session.restore();
     final asked = <String>[];
@@ -68,9 +68,10 @@ void main() {
         // samme bygg som appen: ingenting nytt
         return http.Response(
           jsonEncode({
-            'name': 'Fyrlys 2.1.6 · bygg 5 (abc1234)',
+            'name': 'Fyrlys 2.1.10',
+            'body': 'Nytt\n\n<!-- bygg 5 -->',
             'assets': [
-              {'name': 'Fyrlys-windows.zip', 'browser_download_url': 'download/w.zip', 'size': 4},
+              {'name': 'Fyrlys-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': 4},
             ],
           }),
           200,
@@ -80,26 +81,20 @@ void main() {
       assetSuffix: '-windows.zip',
       workDir: dir.path,
       canInstall: false,
-    )..serverBase = () => session.updateServer;
+      repo: 'ungerdas/fyrlys',
+    );
     await tester.pumpWidget(FyrlysApp(session: session, updater: u));
     await tester.pumpAndSettle();
+    // en oppdateringsserver fra før (2.1.6–2.1.10) er ryddet bort
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('update_server'), isNull);
 
     await tester.tap(find.byTooltip('Meny'));
     await tester.pumpAndSettle();
-    expect(find.text('Rett fra GitHub'), findsOneWidget);
-    await tester.tap(find.text('Oppdateringsserver …'));
+    expect(find.textContaining('Oppdateringsserver'), findsNothing);
+    await tester.tap(find.text('Se etter oppdateringer'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, 'Adresse'), 'http://');
-    await tester.tap(find.text('Lagre'));
-    await tester.pumpAndSettle();
-    expect(find.text('Ugyldig adresse'), findsOneWidget);
-    expect(session.updateServer, isNull);
-
-    await tester.enterText(find.widgetWithText(TextField, 'Adresse'), '192.168.1.10:8766/');
-    await tester.tap(find.text('Lagre'));
-    await tester.pumpAndSettle();
-    expect(session.updateServer, 'http://192.168.1.10:8766');
-    expect(asked, ['http://192.168.1.10:8766/api/app/release']);
+    expect(asked, ['https://api.github.com/repos/ungerdas/fyrlys/releases/latest']);
     expect(find.textContaining('Du har siste versjon'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
