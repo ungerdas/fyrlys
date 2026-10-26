@@ -34,7 +34,8 @@
 - **Språk** – velg språk for lyd og undertekster én gang, så velger spilleren riktig spor selv.
 - **Filmer og serier** (Xtream Codes) – plakater, kategorier, «Fortsett å se» og neste episode av seg selv.
 - **mpv** spiller det meste: H.265, AC3, DTS, MKV, flere lydspor og undertekster, med maskinvaredekoding.
-- **Flere innlogginger** – bytt mellom leverandører eller abonnementer i menyen; hver har sine egne favoritter.
+- **Flere innlogginger** – bytt mellom leverandører eller abonnementer i innstillingene; hver har sine egne
+  favoritter.
 - **Oppdaterer seg selv** når det kommer en ny versjon.
 - Husker størrelsen og plassen til vinduet, og starter du Fyrlys en gang til, kommer vinduet som er åpent fram.
 - Mørkt og lyst tema, og fungerer med mus og tastatur.
@@ -61,7 +62,7 @@ sted du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe`. Lenkene gir al
 - **Xtream Codes** – server, brukernavn og passord fra leverandøren. Gir TV, TV-guide, filmer og serier.
 
 Innloggingen og favorittene lagres bare på PC-en, og innloggingen er kryptert så bare din Windows-bruker kan lese
-den. Har du flere abonnementer, legger du til de andre øverst i menyen (der innloggingen din står) og bytter der.
+den. Har du flere abonnementer, legger du til de andre i innstillingene (tannhjulet øverst) og bytter der.
 
 ## Taster
 
@@ -85,8 +86,8 @@ eller program, F fullskjerm og Esc tilbake.
 ## Oppdateringer
 
 Fyrlys oppdaterer seg selv. Den ser etter nye versjoner når den starter og hver 6. time, laster dem ned i
-bakgrunnen og legger dem inn når du lukker appen, eller straks med «Start på nytt nå». Menyen har også «Se etter
-oppdateringer». Installasjonsprogrammet legger Fyrlys der den kan oppdatere seg selv; bruker du zip-fila, må mappen
+bakgrunnen og legger dem inn når du lukker appen, eller straks med «Start på nytt nå». Innstillingene har også «Se
+etter oppdateringer». Installasjonsprogrammet legger Fyrlys der den kan oppdatere seg selv; bruker du zip-fila, må mappen
 være din (ikke Programfiler).
 
 ## Bygge selv

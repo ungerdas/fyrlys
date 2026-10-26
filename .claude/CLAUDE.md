@@ -104,12 +104,17 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `listCache` vises med en gang (`_startLists`), `load` skriver den nye; `_prefetchEpg` henter programinfo for 12
   favoritter og 8 sist sett når lista er klar.
 - `ui/login_page.dart` (to valg: «M3U-lenke» med valgfri EPG-lenke, og «Xtream Codes»; `adding: true` = en til, med
-  AppBar «Ny innlogging», lukkes når den er lagt til), `ui/logins_dialog.dart` (2.1.14: «Innlogginger» fra øverste
-  valg i menyen: bytt, «Gi nytt navn», «Logg ut og fjern», «Legg til innlogging»; `confirmLogout` brukes også av «Logg
-  ut» i menyen), `ui/home_page.dart`
+  AppBar «Ny innlogging», lukkes når den er lagt til), `ui/settings_page.dart` (2.1.16, Pål-Eriks forslag: tannhjulet
+  øverst erstatter menyen med tre prikker; seksjonene Innlogging (bytt, «Gi nytt navn», «Logg ut og fjern», «Legg
+  til innlogging», «Logg ut av …» med `confirmLogout`; abonnementet fra `account()` via `accountLine`), Utseende
+  (`Session.setThemeMode`: som Windows/mørkt/lyst, `theme` = system/dark/light), Avspilling (språkdialogen,
+  deinterlacing, jevn bevegelse; gjelder neste avspilling), Kanaler og TV-guide («Hent listene på nytt»),
+  Oppdateringer (status fra `Updater`, «Start på nytt nå»), versjonen nederst; lukkes av seg selv når den siste
+  innloggingen er borte. Lys/mørk-knappen i toppen står fortsatt. `logins_dialog.dart` fra 2.1.14 er borte),
+  `ui/home_page.dart`
   (TV/TV-guide/Filmer/Serier, de to siste bare med `hasVod` (`_sectionList`/`_current`): SegmentedButton i toppen
-  ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; «Se etter oppdateringer» i menyen når oppdateringen er
-  på (Pål-Erik 26.10: oppdateringsserveren trengs ikke, fjernet i 2.1.11); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
+  ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; tannhjulet åpner innstillingene (2.1.16; «Se etter
+  oppdateringer» står der, oppdateringsserveren er fjernet i 2.1.11); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
   på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå).
 - `ui/start_view.dart` – Hjem (filteret `home`, valgt når appen starter, 26.10 for 2.0.3; Pål-Erik ville ha vekt på TV,
   ikke filmer/serier): hilsen og dato/klokke, `LastWatchedCard` (siste i «sist sett», nå/etterpå, «Se videre»), eller
@@ -211,7 +216,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
 - Tester i `test/`: navn, Xtream-kilden (også arkivet: klokka, tidene, `parseArchive`, adressene), M3U-kilden og
   innloggingen (`m3u_source_test.dart`, med MockClient og `http.runWithClient`; også krypteringen av innloggingen),
-  flere innlogginger (`logins_test.dart`: flyttingen fra før, bytte, navn, logg ut, menyen), TV-arkivet
+  flere innlogginger (`logins_test.dart`: flyttingen fra før, bytte, navn, logg ut, innstillingene), innstillingene
+  (`widget_test.dart`: tema, bildet, listene, oppdateringer, `accountLine`), TV-arkivet
   (`archive_test.dart`: guiden, arkivsiden, filmspilleren med reserve/spoling/neste, «Se fra start» i spilleren;
   `FakeSource(withArchive: true, name:)`, `FakePlayback.fail`), oppdateringen (`updater_test.dart`), vinduet og én Fyrlys
   (`window_test.dart`, ekte lokal port),
@@ -294,6 +300,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   HLS eller TS, spoling i ekte mpv, om timeshift godtar en varighet forbi nå for det som går) er ikke prøvd.
   2.1.15: fire rettelser fra en uavhengig gjennomlesing (fullskjerm etter «Se fra start», kanalliste-nøkkelen,
   kanalnummer under arkivet, favoritter når den gamle innloggingen ikke kunne flyttes).
+- 26.10.2026: 2.1.16: innstillingssiden (Pål-Erik: «kanskje de tre prikkene skal byttes ut med et tannhjul og så åpner
+  det et innstillingsvindu?»). Testet med widget-tester.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

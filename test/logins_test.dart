@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/app.dart';
 import 'package:fyrlys/core/models.dart';
 import 'package:fyrlys/core/session.dart';
-import 'package:fyrlys/ui/home_page.dart';
 import 'package:fyrlys/ui/login_page.dart';
+import 'package:fyrlys/ui/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fakes.dart';
@@ -141,7 +141,7 @@ void main() {
     expect(m1, m2);
   });
 
-  testWidgets('menyen: bytt innlogging, gi nytt navn, legg til og logg ut', (tester) async {
+  testWidgets('innstillingene: bytt innlogging, gi nytt navn, legg til og logg ut', (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -150,28 +150,21 @@ void main() {
     await tester.pumpWidget(FyrlysApp(session: s));
     await tester.pumpAndSettle();
 
-    // øverst i menyen: den du bruker («Sport» er også en kategori, så det trykkes på teksten under)
-    await tester.tap(find.byTooltip('Meny'));
+    // tannhjulet øverst
+    await tester.tap(find.byTooltip('Innstillinger'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(ListTile, 'Sport'), findsOneWidget);
-    await tester.tap(find.text('Bytt innlogging'));
-    await tester.pumpAndSettle();
-    expect(find.text('Innlogginger'), findsOneWidget);
+    expect(find.byType(SettingsPage), findsOneWidget);
     expect(find.text('fake · i bruk'), findsOneWidget);
+    expect(find.text('fake · trykk for å bytte'), findsOneWidget);
 
     // bytt til den andre
     await tester.tap(find.text('Test'));
     await tester.pumpAndSettle();
     expect(s.source?.label, 'Test');
-    expect(find.text('Innlogginger'), findsNothing);
     expect(find.text('Byttet til Test'), findsOneWidget);
-    expect(find.byType(HomePage), findsOneWidget);
+    expect(find.text('Logg ut av Test'), findsOneWidget);
 
     // gi den et navn
-    await tester.tap(find.byTooltip('Meny'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Bytt innlogging'));
-    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Mer om Test'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Gi nytt navn'));
@@ -182,7 +175,7 @@ void main() {
     expect(find.text('Hjemme'), findsOneWidget);
     expect(s.currentLogin?.name, 'Hjemme');
 
-    // en til: innloggingen åpnes over appen, og lukkes med pila
+    // en til: innloggingen åpnes over innstillingene, og lukkes med pila
     await tester.tap(find.text('Legg til innlogging'));
     await tester.pumpAndSettle();
     expect(find.byType(LoginPage), findsOneWidget);
@@ -190,24 +183,25 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.byType(LoginPage), findsNothing);
+    expect(find.byType(SettingsPage), findsOneWidget);
 
     // logg ut: spør først, og bytter så til den andre
-    await tester.tap(find.byTooltip('Meny'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Logg ut'));
+    await tester.tap(find.text('Logg ut av Hjemme'));
     await tester.pumpAndSettle();
     expect(find.text('Logg ut av Hjemme?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Logg ut'));
     await tester.pumpAndSettle();
     expect(s.source?.label, 'Sport');
     expect(s.logins.map((l) => l.name), ['Sport']);
-    expect(find.byType(HomePage), findsOneWidget);
 
-    // én igjen: menyen tilbyr å legge til en
-    await tester.tap(find.byTooltip('Meny'));
+    // den siste: innstillingene lukkes, og innloggingen vises
+    await tester.tap(find.text('Logg ut av Sport'));
     await tester.pumpAndSettle();
-    expect(find.text('Legg til en innlogging'), findsOneWidget);
-    await tester.tapAt(const Offset(10, 890));
+    await tester.tap(find.widgetWithText(FilledButton, 'Logg ut'));
+    await tester.pumpAndSettle();
+    expect(s.source, isNull);
+    expect(find.byType(SettingsPage), findsNothing);
+    expect(find.byType(LoginPage), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
   });

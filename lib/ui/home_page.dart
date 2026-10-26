@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../build_info.dart';
 import '../core/models.dart';
 import '../core/session.dart';
 import '../core/updater.dart';
@@ -12,10 +11,9 @@ import 'archive_page.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
 import 'guide_view.dart';
-import 'language_dialog.dart';
-import 'logins_dialog.dart';
 import 'motion.dart';
 import 'player_page.dart';
+import 'settings_page.dart';
 import 'start_view.dart';
 import 'vod_browser.dart';
 
@@ -268,44 +266,10 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(theme.brightness == Brightness.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
             onPressed: () => s.toggleTheme(theme.brightness),
           ),
-          PopupMenuButton<String>(
-            tooltip: 'Meny',
-            onSelected: (v) {
-              if (v == 'reload') unawaited(s.load(force: true));
-              if (v == 'languages') unawaited(showLanguageDialog(context, s));
-              if (v == 'update') unawaited(_checkUpdates());
-              if (v == 'logins') unawaited(showLoginsDialog(context, s));
-              if (v == 'logout') unawaited(_logout());
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem<String>(
-                value: 'logins',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.account_circle_outlined),
-                  title: Text(s.currentLogin?.name ?? s.source?.label ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(s.logins.length > 1 ? 'Bytt innlogging' : 'Legg til en innlogging'),
-                ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(value: 'reload', child: Text('Hent listene på nytt')),
-              PopupMenuItem<String>(
-                value: 'languages',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Språk for lyd og undertekster'),
-                  subtitle: s.languages.isEmpty ? null : Text(s.languages.summary),
-                ),
-              ),
-              if (widget.updater?.enabled ?? false)
-                const PopupMenuItem<String>(value: 'update', child: Text('Se etter oppdateringer')),
-              const PopupMenuItem<String>(value: 'logout', child: Text('Logg ut')),
-              const PopupMenuDivider(),
-              PopupMenuItem<String>(
-                enabled: false,
-                child: Text(appBuildLabel, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
-              ),
-            ],
+          IconButton(
+            tooltip: 'Innstillinger',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: _openSettings,
           ),
           const SizedBox(width: 8),
         ],
@@ -392,29 +356,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Logger ut av den du bruker (etter et spørsmål): Fyrlys bytter til en annen lagret innlogging, om du har en.
-  Future<void> _logout() async {
-    final login = s.currentLogin;
-    if (login != null && !await confirmLogout(context, login)) return;
-    await s.logout();
-  }
-
-  Future<void> _checkUpdates() async {
-    final u = widget.updater;
-    if (u == null) return;
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final info = await u.check(manual: true);
-      final text = info == null
-          ? 'Du har siste versjon ($appBuildLabel).'
-          : u.state == UpdateState.ready
-              ? '${info.label} er lastet ned og klar.'
-              : 'Fant ${info.label}. Den lastes ned nå.';
-      messenger.showSnackBar(SnackBar(content: Text(text)));
-    } on UpdateException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Fikk ikke sjekket oppdateringer: ${e.message}')));
-    }
-  }
+  /// Innstillingene: innloggingene, utseende, avspilling, listene og oppdateringer.
+  void _openSettings() => unawaited(Navigator.of(context)
+      .push(fadeRoute<void>((_) => SettingsPage(session: s, updater: widget.updater))));
 
   /// Ny versjon: lastes ned i bakgrunnen og legges inn når du lukker Fyrlys (eller med «Start på nytt nå»).
   Widget _updateBanner(Updater u) {

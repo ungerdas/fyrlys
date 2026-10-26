@@ -11,7 +11,7 @@ class LoginPage extends StatefulWidget {
 
   final Session session;
 
-  /// en innlogging til (fra menyen): siden lukkes når den er lagt til
+  /// en innlogging til (fra innstillingene): siden lukkes når den er lagt til
   final bool adding;
 
   @override
@@ -100,7 +100,7 @@ class _LoginPageState extends State<LoginPage> {
                   if (widget.adding) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Den lagres ved siden av den du har, og du bytter mellom dem i menyen.',
+                      'Den lagres ved siden av den du har, og du bytter mellom dem i innstillingene.',
                       textAlign: TextAlign.center,
                       style: hint,
                     ),

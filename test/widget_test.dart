@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/app.dart';
+import 'package:fyrlys/core/models.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/core/updater.dart';
+import 'package:fyrlys/ui/settings_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -52,7 +54,7 @@ void main() {
     expect(find.byType(NavigationDestination), findsNWidgets(2));
   });
 
-  testWidgets('«Se etter oppdateringer» i menyen spør GitHub', (tester) async {
+  testWidgets('«Se etter oppdateringer» i innstillingene spør GitHub', (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -86,13 +88,59 @@ void main() {
     await tester.pumpWidget(FyrlysApp(session: session, updater: u));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Meny'));
+    await tester.tap(find.byTooltip('Innstillinger'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Oppdateringsserver'), findsNothing);
     await tester.tap(find.text('Se etter oppdateringer'));
     await tester.pumpAndSettle();
     expect(asked, ['https://api.github.com/repos/ungerdas/fyrlys/releases/latest']);
     expect(find.textContaining('Du har siste versjon'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  test('abonnementet i innstillingene', () {
+    expect(accountLine(Account(status: 'Active', expires: DateTime(2027, 3, 12), maxConnections: 1)),
+        'aktiv til 12.03.2027 · 1 tilkobling');
+    expect(accountLine(const Account(status: 'Expired', maxConnections: 2)), 'Expired · 2 tilkoblinger');
+    expect(accountLine(const Account()), '');
+  });
+
+  testWidgets('innstillingene: tema, bildet og listene', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
+    final session = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource());
+    await session.restore();
+    await tester.pumpWidget(FyrlysApp(session: session));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Innstillinger'));
+    await tester.pumpAndSettle();
+    expect(find.text('INNLOGGING'), findsOneWidget);
+    expect(find.text('AVSPILLING'), findsOneWidget);
+
+    await tester.tap(find.text('Lyst'));
+    await tester.pumpAndSettle();
+    expect(session.themeMode, ThemeMode.light);
+    await tester.tap(find.text('Som Windows'));
+    await tester.pumpAndSettle();
+    expect(session.themeMode, ThemeMode.system);
+    expect((await SharedPreferences.getInstance()).getString('theme'), 'system');
+
+    expect(session.picture.smooth, isFalse);
+    await tester.tap(find.text('Jevn bevegelse (prøve)'));
+    await tester.pumpAndSettle();
+    expect(session.picture.smooth, isTrue);
+    expect(session.picture.deinterlace, isTrue);
+
+    await tester.tap(find.text('Hent listene på nytt'));
+    await tester.pumpAndSettle();
+    expect(find.text('Listene er hentet på nytt (3 kanaler).'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsNothing);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
   });

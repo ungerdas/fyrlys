@@ -390,7 +390,7 @@ class M3uSource implements TvSource {
   Future<PlayTarget> open(Channel channel) async {
     await _ensure();
     final e = _entries[channel.id];
-    if (e == null) throw const SourceException('Fant ikke kanalen i lista. Hent listene på nytt i menyen.');
+    if (e == null) throw const SourceException('Fant ikke kanalen i lista. Hent listene på nytt i innstillingene.');
     // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
     return PlayTarget([e.url], localShift: true);
   }

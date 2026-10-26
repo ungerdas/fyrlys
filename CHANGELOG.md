@@ -1,5 +1,13 @@
 # Endringer
 
+## v2.1.16
+
+- **Innstillinger:** menyen med tre prikker er byttet ut med et tannhjul øverst, som åpner en egen side med
+  innloggingene (bytt, gi navn, legg til, logg ut), tema (som Windows, mørkt eller lyst), språk for lyd og
+  undertekster, bildet (deinterlacing og jevn bevegelse), «Hent listene på nytt» og oppdateringer.
+- Ved innloggingen du bruker, står det hva leverandøren sier om abonnementet (hvor lenge det varer og hvor mange
+  tilkoblinger det har), når den sier det.
+
 ## v2.1.15
 
 - Lukker du «Se fra start» i fullskjerm, er du fortsatt i fullskjerm i TV-spilleren (vinduet kunne gå ut av

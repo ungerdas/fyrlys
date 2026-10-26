@@ -59,7 +59,7 @@ class LanguagePrefs {
     return '${names.take(names.length - 1).join(', ')}, så ${names.last}';
   }
 
-  /// Kort til menyen: «Lyd: norsk, så engelsk · Undertekster: av»
+  /// Kort til innstillingene: «Lyd: norsk, så engelsk · Undertekster: av»
   String get summary {
     final a = describe(audio);
     final s = subtitlesOff ? 'av' : describe(subtitles);

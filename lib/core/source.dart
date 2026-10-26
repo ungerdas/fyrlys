@@ -41,7 +41,7 @@ abstract class TvSource {
   /// 'xtream' eller 'm3u'
   String get kind;
 
-  /// vises i menyen, f.eks. «bob på iptv.example»
+  /// navnet en ny innlogging får, f.eks. «bob på iptv.example»
   String get label;
 
   /// sendes med til strømmene (User-Agent hos leverandøren)

@@ -762,9 +762,16 @@ class Session extends ChangeNotifier {
 
   // ── utseende ──
 
-  void toggleTheme(Brightness current) {
-    themeMode = current == Brightness.dark ? ThemeMode.light : ThemeMode.dark;
-    unawaited(_prefs.setString('theme', themeMode == ThemeMode.light ? 'light' : 'dark'));
+  void toggleTheme(Brightness current) => setThemeMode(current == Brightness.dark ? ThemeMode.light : ThemeMode.dark);
+
+  /// Lyst, mørkt, eller som Windows (system).
+  void setThemeMode(ThemeMode mode) {
+    themeMode = mode;
+    unawaited(_prefs.setString('theme', switch (mode) {
+      ThemeMode.light => 'light',
+      ThemeMode.dark => 'dark',
+      ThemeMode.system => 'system',
+    }));
     notifyListeners();
   }
 

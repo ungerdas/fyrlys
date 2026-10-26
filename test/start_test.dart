@@ -186,11 +186,11 @@ void main() {
     expect(source.opened, isEmpty);
   });
 
-  testWidgets('språk for lyd og undertekster: fra menyen og i spilleren', (tester) async {
+  testWidgets('språk for lyd og undertekster: fra innstillingene og i spilleren', (tester) async {
     final (session, _) = await _start(tester);
     final players = _players();
 
-    await tester.tap(find.byTooltip('Meny'));
+    await tester.tap(find.byTooltip('Innstillinger'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Språk for lyd og undertekster'));
     await tester.pumpAndSettle();
@@ -209,11 +209,9 @@ void main() {
     expect(session.languages.audio, ['no', 'en']);
     expect(session.languages.subtitles, ['no']);
 
-    // menyen viser hva du har valgt
-    await tester.tap(find.byTooltip('Meny'));
-    await tester.pumpAndSettle();
+    // innstillingene viser hva du har valgt
     expect(find.text('Lyd: norsk, så engelsk · Undertekster: norsk'), findsOneWidget);
-    await tester.tapAt(const Offset(10, 600));
+    await tester.pageBack();
     await tester.pumpAndSettle();
 
     // spilleren får språkene før kanalen åpnes
