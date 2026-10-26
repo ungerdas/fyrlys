@@ -27,16 +27,16 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   `git clone --depth 1 --branch stable --filter=blob:none --sparse https://github.com/flutter/flutter.git`
   og `git sparse-checkout set packages/flutter/lib packages/flutter_test/lib` (tilsvarende for media-kit/media-kit).
   `unnecessary_import` er en advarsel og stopper bygget; sjekk hva `material.dart` eksporterer.
-- **Versjoner** (Pål-Erik 26.10): hver levering til ham får neste patch-versjon i pubspec (2.0.2, 2.0.3 …), og det
-  er versjonen vi snakker om, ikke byggnummeret (det brukes bare av oppdateringen). Rettelser på veien til samme
-  levering beholder versjonen. Skriv avsnittet i `CHANGELOG.md`. GitHub-release (workflowen) bare når han ber om
-  det. (25.10 var det motsatt: «ikke ny versjon for hver rettelse».) Hver push oppdaterer releasen
+- **Versjoner** (Pål-Erik 26.10): hver oppdatering han får (hver push som gir et nytt testbygg), får neste
+  patch-versjon i pubspec: 2.1.2 (26.10, det som først het 2.0.3), så 2.1.3, 2.1.4 … Øk før hver push som bygges.
+  Feiler bygget i CI, har han ikke fått noe, og rettelsen beholder nummeret. Det er versjonen vi snakker om, ikke
+  byggnummeret (det brukes bare av oppdateringen). Skriv avsnittet i `CHANGELOG.md`. GitHub-release (workflowen)
+  bare når han ber om det. Hver push oppdaterer releasen
   `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, navnet «Fyrlys X · bygg N (sha)»
   settes sist, siste commits som notater), og Fyrlys på Windows oppdaterer seg selv derfra via Fyrlys-serveren.
   Privat repo: 2000 gratis Actions-minutter i måneden på gratiskontoen, og hver push bruker rundt 25 (Windows
   teller dobbelt). Bruk `[skip ci]` når en endring bare gjelder notater. Versjon, byggnummer
   og commit står nederst i menyen (`--dart-define` FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`).
-  Ny versjon når det virker.
 - Release: oppdater `version` i pubspec.yaml, push, og start
   `gh workflow run build.yml --repo ungerdas/fyrlys -f release=vX.Y.Z`. Jobben `release` lager taggen og en
   GitHub-release med `Fyrlys-vX.Y.Z-windows.zip` og APK-er per ABI (v0.x som forhåndsutgivelse). Tagger kan
@@ -187,7 +187,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   alle Fyrlys-prosesser, sikkerhetskopi og tilbakelegging), og i spilleren: OK på kortene, `_sideOpen` etter
   snuing, → ved direkte, `live_start_index` tilbake til 3 etter spoling, arbeid som startet rett før appen ble
   lagt bort.
-- 26.10.2026: 2.0.3: Hjem (startsiden), kanalnummer med tall, språk for lyd og undertekster, «Spill av»/«Fortsett» på
+- 26.10.2026: 2.1.2 (først levert som 2.0.3, bygg 24): Hjem (startsiden), kanalnummer med tall, språk for lyd og undertekster, «Spill av»/«Fortsett» på
   seriesiden. Testet med widget-tester; språkvalget i ekte mpv (koder, `subs-with-matching-audio` i media_kits
   libmpv) og tallene på en ekte fjernkontroll er ikke prøvd.
 - Ideer senere: tilbakespoling rett mot leverandøren (mpv-bufferet), bilde-i-bilde på Android, serveren kunne velge

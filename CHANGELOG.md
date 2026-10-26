@@ -2,7 +2,9 @@
 
 Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
 
-## v2.0.3
+## v2.1.2
+
+Herfra får hver oppdatering neste nummer (2.1.3, 2.1.4 …). Denne kom først som 2.0.3.
 
 - Ny startside, **Hjem**: kanalen du så sist med programmet nå og etterpå («Se videre»), favorittene med det som
   går nå og det som kommer etterpå, de andre kanalene du har sett, kategoriene dine, og nederst filmen eller
