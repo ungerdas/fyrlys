@@ -167,7 +167,7 @@ class _MultiviewState extends State<_Multiview> {
     if (!mounted) return;
     setState(() {
       _loading = false;
-      if (_slots.length < 2) _message = 'Fant bare én tilkobling. Legg til et abonnement til i innstillingene.';
+      if (_slots.length < 2) _message = tr('Fant bare én tilkobling. Legg til et abonnement til i innstillingene.');
     });
     _applyVolumes();
     final first = widget.page.first;
@@ -283,7 +283,7 @@ class _MultiviewState extends State<_Multiview> {
     if (s.retries.length >= 3) {
       unawaited(s.pb.stop());
       _set(() {
-        s.error = 'Kanalen stoppet.';
+        s.error = tr('Kanalen stoppet.');
         s.buffering = false;
       });
       return;
@@ -378,7 +378,7 @@ class _MultiviewState extends State<_Multiview> {
     final ch = await showDialog<Channel>(
       context: context,
       builder: (_) => _ChannelPicker(
-        title: _session.logins.length > 1 ? 'Velg kanal · ${s.login.name}' : 'Velg kanal',
+        title: _session.logins.length > 1 ? tr('Velg kanal · {name}', {'name': s.login.name}) : tr('Velg kanal'),
         channels: active ? Future.value(_session.channels) : s.source.channels(),
         favorites: _session.favoritesOf(s.login.id),
         logoUrl: s.source.logoUrl,
@@ -467,13 +467,13 @@ class _MultiviewState extends State<_Multiview> {
                 fit: StackFit.expand,
                 children: [
                   if (_loading)
-                    const Center(
+                    Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Kobler til abonnementene …', style: TextStyle(color: Colors.white70)),
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          Text(tr('Kobler til abonnementene …'), style: const TextStyle(color: Colors.white70)),
                         ],
                       ),
                     )
@@ -566,7 +566,7 @@ class _MultiviewState extends State<_Multiview> {
                       FilledButton.icon(
                         onPressed: () => unawaited(_pick(i)),
                         icon: const Icon(Icons.add),
-                        label: const Text('Velg kanal'),
+                        label: Text(tr('Velg kanal')),
                       ),
                     ],
                   ),
@@ -592,9 +592,9 @@ class _MultiviewState extends State<_Multiview> {
                                 s.retries.clear();
                                 unawaited(_play(s, ch));
                               },
-                              child: const Text('Prøv igjen'),
+                              child: Text(tr('Prøv igjen')),
                             ),
-                            TextButton(onPressed: () => unawaited(_pick(i)), child: const Text('Annen kanal')),
+                            TextButton(onPressed: () => unawaited(_pick(i)), child: Text(tr('Annen kanal'))),
                           ],
                         ),
                       ],
@@ -669,14 +669,14 @@ class _MultiviewState extends State<_Multiview> {
               ),
             ),
             IconButton(
-              tooltip: 'Bytt kanal (C)',
+              tooltip: tr('Bytt kanal (C)'),
               color: Colors.white,
               icon: const Icon(Icons.list),
               onPressed: () => unawaited(_pick(i)),
             ),
             if (_slots.length > 1)
               IconButton(
-                tooltip: _big ? 'Alle bildene (Enter)' : 'Stort bilde (Enter)',
+                tooltip: _big ? tr('Alle bildene (Enter)') : tr('Stort bilde (Enter)'),
                 color: Colors.white,
                 icon: Icon(_big ? Icons.grid_view : Icons.open_in_full),
                 onPressed: () => _toggleBig(i),
@@ -702,30 +702,31 @@ class _MultiviewState extends State<_Multiview> {
             color: _full ? const Color(0xA6000000) : Colors.black,
             child: Row(
               children: [
-                IconButton(tooltip: 'Lukk (Esc)', color: Colors.white, icon: const Icon(Icons.close), onPressed: _close),
+                IconButton(
+                    tooltip: tr('Lukk (Esc)'), color: Colors.white, icon: const Icon(Icons.close), onPressed: _close),
                 const SizedBox(width: 8),
-                const Text('Multiview',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                Text(tr('Multiview'),
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
                 const SizedBox(width: 16),
                 if (wide && _slots.length > 1)
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Klikk et bilde for lyden · dobbeltklikk for stort bilde · C bytter kanal',
+                      tr('Klikk et bilde for lyden · dobbeltklikk for stort bilde · C bytter kanal'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.white54, fontSize: 13),
+                      style: const TextStyle(color: Colors.white54, fontSize: 13),
                     ),
                   )
                 else
                   const Spacer(),
                 IconButton(
-                  tooltip: _muted ? 'Lyd på (M)' : 'Lyd av (M)',
+                  tooltip: _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'),
                   color: Colors.white,
                   icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
                   onPressed: _toggleMute,
                 ),
                 IconButton(
-                  tooltip: _full ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)',
+                  tooltip: _full ? tr('Avslutt fullskjerm (F)') : tr('Fullskjerm (F)'),
                   color: Colors.white,
                   icon: Icon(_full ? Icons.fullscreen_exit : Icons.fullscreen),
                   onPressed: _toggleFull,
@@ -778,7 +779,8 @@ class _ChannelPickerState extends State<_ChannelPicker> {
           children: [
             TextField(
               autofocus: true,
-              decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search), hintText: 'Søk etter kanal'),
+              decoration: InputDecoration(
+                  isDense: true, prefixIcon: const Icon(Icons.search), hintText: tr('Søk etter kanal')),
               onChanged: (v) => setState(() => _query = v.trim()),
             ),
             if (widget.favorites.isNotEmpty && _query.isEmpty)
@@ -786,9 +788,9 @@ class _ChannelPickerState extends State<_ChannelPicker> {
                 padding: const EdgeInsets.only(top: 10),
                 child: SegmentedButton<bool>(
                   showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: true, label: Text('★ Favoritter')),
-                    ButtonSegment(value: false, label: Text('Alle kanaler')),
+                  segments: [
+                    ButtonSegment(value: true, label: Text(tr('★ Favoritter'))),
+                    ButtonSegment(value: false, label: Text(tr('Alle kanaler'))),
                   ],
                   selected: {_fav},
                   onSelectionChanged: (v) => setState(() => _fav = v.first),
@@ -802,7 +804,7 @@ class _ChannelPickerState extends State<_ChannelPicker> {
                   if (snap.hasError) {
                     final e = snap.error;
                     return Center(
-                      child: Text(e is SourceException ? e.message : 'Fikk ikke hentet kanalene.',
+                      child: Text(e is SourceException ? e.message : tr('Fikk ikke hentet kanalene.'),
                           textAlign: TextAlign.center, style: TextStyle(color: scheme.error)),
                     );
                   }
@@ -811,7 +813,7 @@ class _ChannelPickerState extends State<_ChannelPicker> {
                   final list = _list(all);
                   if (list.isEmpty) {
                     return Center(
-                        child: Text('Fant ingenting.', style: TextStyle(color: scheme.onSurfaceVariant)));
+                        child: Text(tr('Fant ingenting.'), style: TextStyle(color: scheme.onSurfaceVariant)));
                   }
                   return ListView.builder(
                     itemCount: list.length,
@@ -822,7 +824,7 @@ class _ChannelPickerState extends State<_ChannelPicker> {
                         contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                         leading: ChannelLogo(url: widget.logoUrl(c.icon), name: c.name, width: 46, height: 32),
                         title: Text(nameParts(c.name).main, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        subtitle: c.number == null ? null : Text('Kanal ${c.number}'),
+                        subtitle: c.number == null ? null : Text(tr('Kanal {n}', {'n': c.number})),
                         onTap: () => Navigator.of(context).pop(c),
                       );
                     },
@@ -833,7 +835,7 @@ class _ChannelPickerState extends State<_ChannelPicker> {
           ],
         ),
       ),
-      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Avbryt'))],
+      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Avbryt')))],
     );
   }
 }

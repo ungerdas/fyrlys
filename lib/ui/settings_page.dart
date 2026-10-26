@@ -35,13 +35,13 @@ Future<bool> confirmLogout(BuildContext context, SavedLogin login) async {
 
 /// «aktiv til 12.03.2027 · 1 tilkobling» (det leverandøren sier om abonnementet), eller tomt
 String accountLine(Account a) {
-  String two(int n) => n.toString().padLeft(2, '0');
   final e = a.expires;
   final n = a.maxConnections;
   return [
     if (a.status.isNotEmpty && a.status.toLowerCase() != 'active') a.status,
-    if (e != null) 'aktiv til ${two(e.day)}.${two(e.month)}.${e.year}',
-    if (n > 0) '$n ${n == 1 ? 'tilkobling' : 'tilkoblinger'}',
+    if (e != null) tr('aktiv til {date}', {'date': shortDate(e)}),
+    if (n == 1) tr('1 tilkobling'),
+    if (n > 1) tr('{n} tilkoblinger', {'n': n}),
   ].join(' · ');
 }
 
@@ -106,7 +106,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _switch(SavedLogin login) async {
     try {
       await s.switchLogin(login.id);
-      if (mounted) _snack('Byttet til ${login.name}');
+      if (mounted) _snack(tr('Byttet til {name}', {'name': login.name}));
     } on SourceException catch (e) {
       if (mounted) _snack(e.message);
     }
@@ -129,7 +129,11 @@ class _SettingsPageState extends State<SettingsPage> {
     await s.load(force: true);
     if (!mounted) return;
     final error = s.error;
-    _snack(error ?? 'Listene er hentet på nytt (${s.channels.length} kanaler).');
+    final n = s.channels.length;
+    _snack(error ??
+        (n == 1
+            ? tr('Listene er hentet på nytt (1 kanal).')
+            : tr('Listene er hentet på nytt ({n} kanaler).', {'n': n})));
   }
 
   Future<void> _checkUpdates(Updater u) async {
@@ -137,12 +141,12 @@ class _SettingsPageState extends State<SettingsPage> {
       final info = await u.check(manual: true);
       if (!mounted) return;
       _snack(info == null
-          ? 'Du har siste versjon ($appBuildLabel).'
+          ? tr('Du har siste versjon ({version}).', {'version': appBuildLabel})
           : u.state == UpdateState.ready
-              ? '${info.label} er lastet ned og legges inn når du lukker Fyrlys.'
-              : 'Fant ${info.label}. Den lastes ned nå.');
+              ? tr('{name} er lastet ned og legges inn når du lukker Fyrlys.', {'name': info.label})
+              : tr('Fant {name}. Den lastes ned nå.', {'name': info.label}));
     } on UpdateException catch (e) {
-      if (mounted) _snack('Fikk ikke sjekket oppdateringer: ${e.message}');
+      if (mounted) _snack(tr('Fikk ikke sjekket oppdateringer: {error}', {'error': e.message}));
     }
   }
 
@@ -150,7 +154,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final u = widget.updater;
     return Scaffold(
-      appBar: AppBar(title: const Text('Innstillinger')),
+      appBar: AppBar(title: Text(tr('Innstillinger'))),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
