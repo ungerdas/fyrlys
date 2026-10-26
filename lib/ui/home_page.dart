@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../build_info.dart';
 import '../core/models.dart';
@@ -8,11 +9,15 @@ import '../core/session.dart';
 import '../core/updater.dart';
 import '../core/vod.dart';
 import 'channel_card.dart';
+import 'channel_number.dart';
 import 'guide_view.dart';
+import 'language_dialog.dart';
 import 'player_page.dart';
+import 'start_view.dart';
 import 'vod_browser.dart';
 
-/// TV-siden: kategorier (sidemeny på PC og TV, nedtrekksliste på telefon), søk og kanalkort.
+/// TV-siden: startsiden («Hjem»), kategorier (sidemeny på PC og TV, nedtrekksliste på telefon), søk og kanalkort.
+/// Tall på tastaturet eller fjernkontrollen går rett til kanalen med det nummeret.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.session, this.updater});
 
@@ -30,12 +35,19 @@ enum _Section { tv, guide, movies, series }
 
 class _HomePageState extends State<HomePage> {
   final _search = TextEditingController();
+  final _searchFocus = FocusNode(debugLabel: 'søk');
   _Section _section = _Section.tv;
-  String _filter = 'all';
+
+  /// 'home' (startsiden), 'all', 'fav', 'recent' eller en kategori-id
+  String _filter = 'home';
   String _query = '';
   bool _searching = false;
   Timer? _clock;
   StreamSubscription<String>? _messages;
+
+  /// tall du taster for å gå til en kanal; samles til det har gått 1,4 sekunder uten nye
+  String _digits = '';
+  Timer? _digitTimer;
 
   Session get s => widget.session;
 
@@ -47,19 +59,26 @@ class _HomePageState extends State<HomePage> {
     _messages = s.messages.listen((m) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
     });
+    HardwareKeyboard.instance.addHandler(_onKey);
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _clock?.cancel();
+    _digitTimer?.cancel();
     unawaited(_messages?.cancel());
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
+  /// startsiden søker i alle kanalene
+  String get _listFilter => _filter == 'home' ? 'all' : _filter;
+
   List<Channel> get _visible {
     final words = _query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    final base = s.channelsIn(_filter);
+    final base = s.channelsIn(_listFilter);
     if (words.isEmpty) return base;
     return [
       for (final c in base)
@@ -68,7 +87,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String get _title => switch (_filter) {
-        'all' => 'Alle kanaler',
+        'all' || 'home' => 'Alle kanaler',
         'fav' => 'Favoritter',
         'recent' => 'Sist sett',
         _ => s.categoryName(_filter),
@@ -94,6 +113,56 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _select(String filter) => setState(() => _filter = filter);
+
+  // ── kanalnummer ──
+
+  /// Tall på TV-siden og i TV-guiden (ikke mens du skriver i søket, og ikke når noe ligger over siden).
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted) return false;
+    if (_section != _Section.tv && _section != _Section.guide) return false;
+    if (_searchFocus.hasFocus || !(ModalRoute.of(context)?.isCurrent ?? false)) return false;
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed || keyboard.isMetaPressed || keyboard.isAltPressed) return false;
+    final digit = digitOf(event.logicalKey);
+    if (digit != null) {
+      _digitTimer?.cancel();
+      final next = _digits + digit;
+      setState(() => _digits = next.length > 4 ? next.substring(next.length - 4) : next);
+      _digitTimer = Timer(const Duration(milliseconds: 1400), _goToNumber);
+      return true;
+    }
+    final ok = {LogicalKeyboardKey.enter, LogicalKeyboardKey.numpadEnter, LogicalKeyboardKey.select};
+    if (_digits.isNotEmpty && ok.contains(event.logicalKey)) {
+      _goToNumber();
+      return true;
+    }
+    return false;
+  }
+
+  /// Kanalen med nummeret: i lista du ser på først, ellers blant alle kanalene.
+  void _goToNumber() {
+    _digitTimer?.cancel();
+    final digits = _digits;
+    if (!mounted) return;
+    setState(() => _digits = '');
+    if (digits.isEmpty) return;
+    if (_section == _Section.tv) {
+      final list = s.channelsIn(_listFilter);
+      final i = channelByNumber(list, digits);
+      if (i >= 0) {
+        _openPlayer(list, i, _title, _filter == 'fav');
+        return;
+      }
+    }
+    final j = channelByNumber(s.channels, digits);
+    if (j >= 0) {
+      _openPlayer(s.channels, j, 'Alle kanaler', false);
+    } else {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Fant ikke kanal ${int.parse(digits)}')));
+    }
+  }
 
   /// Bytter mellom TV, TV-guide, Filmer og Serier. Søket gjelder siden du er på, så det tømmes.
   void _setSection(_Section section) {
@@ -138,6 +207,7 @@ class _HomePageState extends State<HomePage> {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final list = _visible;
     final content = _content(list);
+    final home = _filter == 'home' && _query.isEmpty;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
@@ -186,12 +256,21 @@ class _HomePageState extends State<HomePage> {
             tooltip: 'Meny',
             onSelected: (v) {
               if (v == 'reload') unawaited(s.load(force: true));
+              if (v == 'languages') unawaited(showLanguageDialog(context, s));
               if (v == 'update') unawaited(_checkUpdates());
               if (v == 'logout') unawaited(s.logout());
             },
             itemBuilder: (context) => [
               PopupMenuItem<String>(enabled: false, child: Text(s.source?.label ?? '')),
               const PopupMenuItem<String>(value: 'reload', child: Text('Hent listene på nytt')),
+              PopupMenuItem<String>(
+                value: 'languages',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Språk for lyd og undertekster'),
+                  subtitle: s.languages.isEmpty ? null : Text(s.languages.summary),
+                ),
+              ),
               if (widget.updater?.enabled ?? false)
                 const PopupMenuItem<String>(value: 'update', child: Text('Se etter oppdateringer')),
               const PopupMenuItem<String>(value: 'logout', child: Text('Logg ut')),
@@ -210,30 +289,41 @@ class _HomePageState extends State<HomePage> {
         children: [
           if (widget.updater case final u?) ListenableBuilder(listenable: u, builder: (context, _) => _updateBanner(u)),
           Expanded(
-            child: switch (_section) {
-              _Section.guide => GuideView(
-                  key: const ValueKey('guide'), session: s, query: _query, onPlay: _openPlayer),
-              _Section.movies => VodBrowser(key: const ValueKey('filmer'), session: s, kind: VodKind.movies, query: _query),
-              _Section.series => VodBrowser(key: const ValueKey('serier'), session: s, kind: VodKind.series, query: _query),
-              _Section.tv => wide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(width: 280, child: _sidebar()),
-                        VerticalDivider(width: 1, color: theme.colorScheme.outline),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [_header(list), Expanded(child: content)],
-                          ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                switch (_section) {
+                  _Section.guide => GuideView(
+                      key: const ValueKey('guide'), session: s, query: _query, onPlay: _openPlayer),
+                  _Section.movies =>
+                    VodBrowser(key: const ValueKey('filmer'), session: s, kind: VodKind.movies, query: _query),
+                  _Section.series =>
+                    VodBrowser(key: const ValueKey('serier'), session: s, kind: VodKind.series, query: _query),
+                  _Section.tv => wide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(width: 280, child: _sidebar()),
+                            VerticalDivider(width: 1, color: theme.colorScheme.outline),
+                            Expanded(
+                              child: home
+                                  ? _start()
+                                  : Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [_header(list), Expanded(child: content)],
+                                    ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [_picker(), Expanded(child: home ? _start() : content)],
                         ),
-                      ],
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [_picker(), Expanded(child: content)],
-                    ),
-            },
+                },
+                if (_digits.isNotEmpty)
+                  Positioned(top: 16, right: 20, child: IgnorePointer(child: NumberBadge(digits: _digits))),
+              ],
+            ),
           ),
         ],
       ),
@@ -345,10 +435,18 @@ class _HomePageState extends State<HomePage> {
 
   Widget _searchField({bool autofocus = false}) => TextField(
         controller: _search,
+        focusNode: _searchFocus,
         autofocus: autofocus,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(isDense: true, prefixIcon: const Icon(Icons.search), hintText: _searchHint),
         onChanged: (v) => setState(() => _query = v.trim()),
+      );
+
+  /// Startsiden («Hjem»).
+  Widget _start() => StartView(
+        session: s,
+        onPlay: _openPlayer,
+        onShow: _select,
       );
 
   Widget _header(List<Channel> list) {
@@ -454,9 +552,10 @@ class _HomePageState extends State<HomePage> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        _categoryTile('all', 'Alle kanaler', s.channels.length),
-        _categoryTile('fav', '★ Favoritter', s.favorites.length),
-        _categoryTile('recent', 'Sist sett', s.recent.length),
+        _categoryTile('home', 'Hjem', null, icon: Icons.home_outlined),
+        _categoryTile('all', 'Alle kanaler', s.channels.length, icon: Icons.apps),
+        _categoryTile('fav', 'Favoritter', s.favorites.length, icon: Icons.star_outline),
+        _categoryTile('recent', 'Sist sett', s.recent.length, icon: Icons.history),
         if (g.pinned.isNotEmpty) head('Dine kategorier'),
         for (var i = 0; i < g.pinned.length; i++)
           _categoryTile(
@@ -473,7 +572,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _categoryTile(String id, String name, int count, {bool pinnable = false, bool first = false, bool last = false}) {
+  Widget _categoryTile(String id, String name, int? count,
+      {IconData? icon, bool pinnable = false, bool first = false, bool last = false}) {
     final scheme = Theme.of(context).colorScheme;
     final selected = _filter == id;
     final pinned = pinnable && s.isFavoriteCategory(id);
@@ -490,6 +590,10 @@ class _HomePageState extends State<HomePage> {
             child: Row(
               children: [
                 const SizedBox(width: 12),
+                if (icon != null) ...[
+                  Icon(icon, size: 20, color: selected ? scheme.primary : scheme.onSurfaceVariant),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: Text(
                     name,
@@ -501,7 +605,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
-                Text('$count', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                if (count != null) Text('$count', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
                 if (pinned) ...[
                   _miniButton(Icons.arrow_upward, 'Flytt opp', first ? null : () => unawaited(s.moveFavoriteCategory(id, -1))),
                   _miniButton(Icons.arrow_downward, 'Flytt ned', last ? null : () => unawaited(s.moveFavoriteCategory(id, 1))),
@@ -535,8 +639,9 @@ class _HomePageState extends State<HomePage> {
   /// Telefon: kategoriene i en nedtrekksliste, med stjerne for å legge kategorien øverst.
   Widget _picker() {
     final g = _groups();
-    final seen = <String>{'all', 'fav', 'recent'};
+    final seen = <String>{'home', 'all', 'fav', 'recent'};
     final items = <DropdownMenuItem<String>>[
+      const DropdownMenuItem(value: 'home', child: Text('Hjem')),
       DropdownMenuItem(value: 'all', child: Text('Alle kanaler (${s.channels.length})')),
       DropdownMenuItem(value: 'fav', child: Text('★ Favoritter (${s.favorites.length})')),
       DropdownMenuItem(value: 'recent', child: Text('Sist sett (${s.recent.length})')),
@@ -550,8 +655,8 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
     ];
-    final value = seen.contains(_filter) ? _filter : 'all';
-    final isCategory = value != 'all' && value != 'fav' && value != 'recent';
+    final value = seen.contains(_filter) ? _filter : 'home';
+    final isCategory = !const {'home', 'all', 'fav', 'recent'}.contains(value);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
       child: Row(
@@ -561,7 +666,7 @@ class _HomePageState extends State<HomePage> {
               isExpanded: true,
               value: value,
               items: items,
-              onChanged: (v) => _select(v ?? 'all'),
+              onChanged: (v) => _select(v ?? 'home'),
             ),
           ),
           if (isCategory)

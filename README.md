@@ -42,8 +42,13 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 
 ## Bruk
 
+- **Hjem:** startsiden når appen åpnes: kanalen du så sist (med programmet nå og etterpå, «Se videre»),
+  favorittene med det som går nå og det som kommer etterpå, de andre kanalene du har sett, kategoriene dine, og
+  nederst filmen eller serien du holder på med.
 - **TV:** kategorier (☆ legger dem øverst, pilene endrer rekkefølgen), søk, favoritter og «sist sett».
   Kanalkortene viser programmet som går nå.
+- **Kanalnummer:** tast nummeret (f.eks. 1 og 2 for kanal 12) på TV-siden, i TV-guiden eller i spilleren, så går
+  den dit etter et lite øyeblikk (eller med en gang med OK/Enter).
 - **TV-guide:** kanalene nedover og de neste seks timene bortover, med en rød strek for nå. Velg favorittene,
   alle kanaler eller en kategori, og søk i toppen. Trykk på det som går nå (eller kanalnavnet) for å se kanalen;
   trykk på noe som kommer senere for å lese om det. «Til nå» går tilbake til nå. På PC kan guiden dras med musa.
@@ -58,13 +63,18 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
   fullskjerm, og i fullskjerm kanallista; → går inn i kanallista og ← ut igjen.
 - **Lyd:** glidebryter ved lydknappen og musehjulet over bildet (PC). Volumet huskes. Lydspor og undertekster
   velges i spilleren.
+- **Språk:** «Språk for lyd og undertekster» i menyen (eller «Foretrukne språk …» i spillerens sporvalg): velg
+  f.eks. norsk, så engelsk for lyden og norsk for undertekstene, så velger spilleren det selv. Undertekster slås
+  bare på når lyden er på et annet språk, og kan også slås helt av. Via Fyrlys-serveren har TV-kanalene ett
+  lydspor og ingen undertekster, så der gjelder valget filmer og serier.
 - Under bildet står oppløsning, kodek, om bildet dekodes i maskinvare, lyden og hvor strømmen kommer fra.
 - Brytes strømmen, prøver spilleren på nytt, inntil tre ganger i minuttet. Legges appen bort på telefon
   eller TV, gir den fra seg tilkoblingen og starter kanalen igjen når du kommer tilbake.
 - **Filmer og Serier:** fanene øverst (nederst på telefon). Velg kategori og rekkefølge (leverandørens, nyeste
   først eller A–Å), eller søk; flere plakater hentes etter hvert som du blar. En film har «Spill av», eller
-  «Fortsett fra …» og «Fra begynnelsen» når du har sett litt av den. En serie har sesongene og episodene, med
-  en strek under det du har sett.
+  «Fortsett fra …» og «Fra begynnelsen» når du har sett litt av den. En serie har «Spill av S01E01», eller
+  «Fortsett S01E03» der du slapp (og den neste når en er sett ferdig), og sesongene og episodene, med en strek
+  under det du har sett.
 - **Fortsett å se** øverst under Filmer og Serier: filmer du ikke har sett ferdig, og serier med episoden du er
   på (eller den neste). Trykk for å fortsette med en gang; krysset tar den bort.
 - **Filmspilleren:** tidslinje du kan dra i, ←/→ ti sekunder, ↑/↓ lyd, mellomrom pause, N/P neste og forrige

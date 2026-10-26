@@ -72,10 +72,24 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt for Xtream, på
   serveren for Fyrlys-server, i kø), «sist sett», lys/mørk, og «fortsett der du
   slapp» (`resume` i shared_preferences: «film:<id>»/«episode:<id>» → [sekunder, lengde, når], maks 300;
-  `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken).
+  `resumeAt` gir null under 30 s og over 95 %, `watched` gir streken). Språkene (`languages`/`saveLanguages`,
+  `lang_audio`/`lang_subs` i shared_preferences; `LanguagePrefs` og kodene i `core/languages.dart`).
 - `ui/login_page.dart`, `ui/home_page.dart` (TV/TV-guide/Filmer/Serier: SegmentedButton i toppen ≥ 900 px (ikoner ≥ 1200), ellers
-  NavigationBar nederst; TV har sidemeny ≥ 900 px, ellers nedtrekksliste; søket gjelder fanen du er på),
-  `ui/channel_card.dart`.
+  NavigationBar nederst; TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
+  på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå).
+- `ui/start_view.dart` – Hjem (filteret `home`, valgt når appen starter, 26.10 for 2.0.3; Pål-Erik ville ha vekt på TV,
+  ikke filmer/serier): hilsen og dato/klokke, `LastWatchedCard` (siste i «sist sett», nå/etterpå, «Se videre»), eller
+  velkomst første gang; favoritter (12, med nå og etterpå), resten av «sist sett» bortover, dine kategorier (ellers de
+  16 første) som knapper, og «Fortsett å se» lite nederst.
+- Kanalnummer (`ui/channel_number.dart`: `digitOf`, `NumberBadge`; `channelByNumber` i `models.dart`): tallene samles
+  i 1,4 s (OK/Enter går straks), lista du ser fra først og så alle kanalene, som `numGo` på nettsiden. I spilleren via
+  `_onKey` (også fra kanallista, ikke i søket), på TV-siden og i guiden via `HardwareKeyboard`-handler i
+  `home_page.dart` (bare når siden er øverst og søket ikke har fokus).
+- `ui/language_dialog.dart` – «Språk for lyd og undertekster» (FilterChips i den rekkefølgen du velger, «Av» for
+  undertekster) og `TracksButton`, sporvalget i begge spillerne (henter sporene asynkront så det som faktisk spilles
+  er huket av; «Foretrukne språk …» nederst gjelder straks). Via Fyrlys-serveren har direktesendingene bare første
+  lydspor og ingen undertekster (`-map 0:a:0 -sn` i `live.py`), så språkene gjelder filmer/serier og TV rett fra
+  leverandøren.
 - `ui/guide_view.dart` – TV-guiden, som på nettsiden: 6 timer fra halvtimen før denne halvtimen (`guideStart`),
   5 px/min (4 på smale skjermer), «nå»-strek, «Til nå», kategori (★ Favorittkanaler / Alle / dine kategorier
   først; huskes i `guide_cat`) og søket i toppen. Kanalnavnene er en egen liste til venstre som rulles sammen med
@@ -115,7 +129,11 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   −10/+10 (samles i 450 ms), «DIREKTE» (trykk = direkte), ←, → (på PC og i fullskjerm; ellers inn i lista), L/End.
 - `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene (`playbackFactory`
   byttes ut i testene for sider som lager avspilleren selv). Fullskjerm for begge spillerne:
-  `WindowFullscreen` i `ui/window_effects.dart`.
+  `WindowFullscreen` i `ui/window_effects.dart`. Språk: `setLanguages` setter `alang`/`slang` og
+  `subs-with-matching-audio=no` når undertekstspråk er valgt; ved ny adresse settes `aid=auto` og `sid=auto`/`no`
+  (et spor valgt for hånd står ellers i mpv til neste fil; samme adresse, f.eks. etter spoling, beholder det).
+  `tracks()` leser `aid`/`sid` fra mpv (media_kit vet bare om spor valgt via `setAudioTrack`). Bildeundertekster
+  (PGS/DVB) vises ikke: media_kit tegner tekstundertekster selv (`sub-visibility=no` uten libass).
 - `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer). Repoet er
   privat, så når appen er logget inn på en Fyrlys-server spør den `<server>/api/app/release` (serveren har en
   lesenøkkel i `data/github.json` og svarer i GitHubs form, med relative adresser `download/<fil>` som løses
@@ -169,5 +187,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   alle Fyrlys-prosesser, sikkerhetskopi og tilbakelegging), og i spilleren: OK på kortene, `_sideOpen` etter
   snuing, → ved direkte, `live_start_index` tilbake til 3 etter spoling, arbeid som startet rett før appen ble
   lagt bort.
-- Ideer senere: tilbakespoling rett mot leverandøren (mpv-bufferet), bilde-i-bilde på Android,
-  kanalnummer med tall, signering av exe/APK, Play Store, iOS/macOS.
+- 26.10.2026: 2.0.3: Hjem (startsiden), kanalnummer med tall, språk for lyd og undertekster, «Spill av»/«Fortsett» på
+  seriesiden. Testet med widget-tester; språkvalget i ekte mpv (koder, `subs-with-matching-audio` i media_kits
+  libmpv) og tallene på en ekte fjernkontroll er ikke prøvd.
+- Ideer senere: tilbakespoling rett mot leverandøren (mpv-bufferet), bilde-i-bilde på Android, serveren kunne velge
+  lydspor etter språk, signering av exe/APK, Play Store, iOS/macOS.

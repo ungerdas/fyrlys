@@ -32,6 +32,10 @@ void main() {
     await tester.pumpWidget(FyrlysApp(session: session));
     await tester.pumpAndSettle();
 
+    // startsiden første gang, så alle kanalene fra sidemenyen
+    expect(find.text('Velkommen til Fyrlys'), findsOneWidget);
+    await tester.tap(find.text('Alle kanaler').first);
+    await tester.pumpAndSettle();
     expect(find.text('NRK 1 HD'), findsOneWidget);
     expect(find.text('TV 2 HD'), findsOneWidget);
     // eventkanalen: klokkeslett og kamp på første linje, liga under
@@ -42,7 +46,7 @@ void main() {
     await tester.pump();
     expect(session.favorites.map((c) => c.id), ['101']);
 
-    await tester.tap(find.text('★ Favoritter'));
+    await tester.tap(find.text('Favoritter'));
     await tester.pump();
     expect(find.text('NRK 1 HD'), findsOneWidget);
     expect(find.text('TV 2 HD'), findsNothing);

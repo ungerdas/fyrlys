@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../core/languages.dart';
 import '../core/names.dart';
 
 /// Et lydspor eller en undertekst man kan velge i spilleren.
@@ -14,6 +15,9 @@ class TrackChoice {
   /// sporet slik avspilleren kjenner det
   final Object value;
 }
+
+/// Lydsporene og undertekstene i det som spilles nå.
+typedef TrackList = ({List<TrackChoice> audio, List<TrackChoice> subtitles});
 
 /// Avspilleren bak spilleren: mpv via media_kit i appen, en falsk i testene (mpv finnes ikke der).
 abstract class Playback {
@@ -49,11 +53,13 @@ abstract class Playback {
   /// 0–100
   Future<void> setVolume(double volume);
 
-  List<TrackChoice> audioTracks();
-
-  List<TrackChoice> subtitleTracks();
+  /// Sporene, med det som spilles nå huket av.
+  Future<TrackList> tracks();
 
   Future<void> selectTrack(TrackChoice choice);
+
+  /// Språkene du foretrekker. Gjelder neste fil eller kanal som åpnes, og med [now] også det som spilles nå.
+  Future<void> setLanguages(LanguagePrefs prefs, {bool now = false});
 
   /// for feilsøking: kodek, dekoding og lyd, f.eks. «H.264 · maskinvaredekoding (d3d11va) · AC3 5.1»
   Future<String> describe();
@@ -124,6 +130,18 @@ class MpvPlayback implements Playback {
   /// segmentene fra slutten sist en direktesending ble åpnet tilbake i tid (null: som vanlig)
   int? _liveFromEnd;
 
+  /// adressen som ble åpnet sist (samme adresse igjen, f.eks. etter spoling, beholder sporene du valgte)
+  String? _lastUrl;
+  LanguagePrefs _langs = const LanguagePrefs();
+
+  static Future<void> _try(Future<void> Function() f) async {
+    try {
+      await f();
+    } on Object {
+      // eldre mpv uten innstillingen: spiller likevel
+    }
+  }
+
   @override
   Future<void> open(String url, Map<String, String> headers, {Duration? start, int? liveFromEnd}) async {
     final p = _player.platform;
@@ -131,15 +149,32 @@ class MpvPlayback implements Playback {
     final want = liveFromEnd ?? (_liveFromEnd != null ? 3 : null);
     _liveFromEnd = liveFromEnd;
     if (want != null && p is NativePlayer) {
-      try {
-        // ffmpeg begynner en direktesending (HLS) så mange segmenter fra slutten. Legges til det media_kit har
-        // satt i demuxer-lavf-o (protocol_whitelist osv.), og siste verdi gjelder.
-        await p.command(['change-list', 'demuxer-lavf-o', 'append', 'live_start_index=-$want']);
-      } on Object {
-        // eldre mpv: begynner ved direkte
-      }
+      // ffmpeg begynner en direktesending (HLS) så mange segmenter fra slutten. Legges til det media_kit har
+      // satt i demuxer-lavf-o (protocol_whitelist osv.), og siste verdi gjelder.
+      await _try(() => p.command(['change-list', 'demuxer-lavf-o', 'append', 'live_start_index=-$want']));
     }
+    // Ny fil eller kanal: sporene velges etter språkene dine (et spor du valgte i forrige fil, står ellers i mpv).
+    if (url != _lastUrl && p is NativePlayer) await _autoTracks(p);
+    _lastUrl = url;
     await _player.open(Media(url, httpHeaders: headers, start: start));
+  }
+
+  Future<void> _autoTracks(NativePlayer p) async {
+    await _try(() => p.setProperty('aid', 'auto'));
+    await _try(() => p.setProperty('sid', _langs.subtitlesOff ? 'no' : 'auto'));
+  }
+
+  @override
+  Future<void> setLanguages(LanguagePrefs prefs, {bool now = false}) async {
+    _langs = prefs;
+    final p = _player.platform;
+    if (p is! NativePlayer) return;
+    await _try(() => p.setProperty('alang', prefs.audioCodes));
+    await _try(() => p.setProperty('slang', prefs.subtitleCodes));
+    // Undertekster på språket du har valgt, men ikke når lyden alt er på det språket (mpv 0.36 og nyere).
+    final matching = prefs.subtitleCodes.isEmpty ? 'yes' : 'no';
+    await _try(() => p.setProperty('subs-with-matching-audio', matching));
+    if (now) await _autoTracks(p);
   }
 
   @override
@@ -157,24 +192,32 @@ class MpvPlayback implements Playback {
   }
 
   @override
-  List<TrackChoice> audioTracks() {
-    final current = _player.state.track.audio.id;
-    return [
-      for (final t in _player.state.tracks.audio)
-        if (t.id != 'auto' && t.id != 'no')
-          TrackChoice(_name(t.title, t.language, t.id), selected: t.id == current, value: t),
-    ];
-  }
-
-  @override
-  List<TrackChoice> subtitleTracks() {
-    final current = _player.state.track.subtitle.id;
-    return [
-      TrackChoice('Av', selected: current == 'no', value: SubtitleTrack.no()),
-      for (final t in _player.state.tracks.subtitle)
-        if (t.id != 'auto' && t.id != 'no')
-          TrackChoice(_name(t.title, t.language, t.id), selected: t.id == current, value: t),
-    ];
+  Future<TrackList> tracks() async {
+    // media_kit vet bare om sporet du har valgt selv; mpv vet hva den valgte etter språkene
+    var aid = _player.state.track.audio.id;
+    var sid = _player.state.track.subtitle.id;
+    final p = _player.platform;
+    if (p is NativePlayer) {
+      try {
+        aid = (await p.getProperty('aid')).trim();
+        sid = (await p.getProperty('sid')).trim();
+      } on Object {
+        // som media_kit har det
+      }
+    }
+    final tracks = _player.state.tracks;
+    return (
+      audio: [
+        for (final t in tracks.audio)
+          if (t.id != 'auto' && t.id != 'no') TrackChoice(_name(t.title, t.language, t.id), selected: t.id == aid, value: t),
+      ],
+      subtitles: [
+        TrackChoice('Av', selected: sid == 'no' || sid.isEmpty, value: SubtitleTrack.no()),
+        for (final t in tracks.subtitle)
+          if (t.id != 'auto' && t.id != 'no')
+            TrackChoice(_name(t.title, t.language, t.id), selected: t.id == sid, value: t),
+      ],
+    );
   }
 
   @override

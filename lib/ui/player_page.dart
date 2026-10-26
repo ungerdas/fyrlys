@@ -12,6 +12,8 @@ import '../core/session.dart';
 import '../core/source.dart';
 import '../platform.dart';
 import '../theme.dart';
+import 'channel_number.dart';
+import 'language_dialog.dart';
 import 'playback.dart';
 import 'side_list.dart';
 import 'window_effects.dart';
@@ -146,6 +148,10 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// tidslinja mens den dras: sekunder bak direkte
   double? _shiftDrag;
 
+  /// tall du taster for å gå til en kanal; samles til det har gått 1,4 sekunder uten nye
+  String _digits = '';
+  Timer? _digitTimer;
+
   Channel get _channel => _list[_index];
   Session get _session => widget.page.session;
   TvSource? get _source => _session.source;
@@ -190,6 +196,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _probeTimer?.cancel();
     _watchdog?.cancel();
     _shiftTimer?.cancel();
+    _digitTimer?.cancel();
     final ch = _opened;
     final src = _source;
     if (ch != null && src != null) unawaited(src.close(ch));
@@ -237,6 +244,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   Future<void> _start() async {
     await _pb.setup();
+    await _pb.setLanguages(_session.languages);
     await _pb.setVolume(_muted ? 0 : _volume);
     await _open();
   }
@@ -689,6 +697,34 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     if (last != null) _switchTo(last.list, last.index);
   }
 
+  /// Et tall fra tastaturet eller fjernkontrollen: «1» og «2» rett etter hverandre er kanal 12.
+  void _typeDigit(String digit) {
+    _digitTimer?.cancel();
+    final next = _digits + digit;
+    setState(() => _digits = next.length > 4 ? next.substring(next.length - 4) : next);
+    _digitTimer = Timer(const Duration(milliseconds: 1400), _goToNumber);
+  }
+
+  /// Kanalen med nummeret: i lista du ser fra først, ellers blant alle kanalene.
+  void _goToNumber() {
+    _digitTimer?.cancel();
+    final digits = _digits;
+    _set(() => _digits = '');
+    if (digits.isEmpty || !mounted) return;
+    final i = channelByNumber(_list, digits);
+    if (i >= 0) {
+      _switchTo(_list, i);
+      return;
+    }
+    final all = _session.channels;
+    final j = channelByNumber(all, digits);
+    if (j >= 0) {
+      _switchTo(all, j);
+    } else {
+      _showFlash('Fant ikke kanal ${int.parse(digits)}');
+    }
+  }
+
   void _retry({bool takeOver = false}) {
     _retries.clear();
     unawaited(_open(takeOver: takeOver));
@@ -745,6 +781,16 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     final keyboard = HardwareKeyboard.instance;
     if (keyboard.isControlPressed || keyboard.isMetaPressed || keyboard.isAltPressed) return KeyEventResult.ignored;
     _wake();
+    // tall går til kanalen med det nummeret, også fra kanallista; OK går dit med en gang
+    final digit = digitOf(key);
+    if (digit != null) {
+      _typeDigit(digit);
+      return KeyEventResult.handled;
+    }
+    if (_digits.isNotEmpty && _okKeys.contains(key)) {
+      _goToNumber();
+      return KeyEventResult.handled;
+    }
     // i kanallista flytter piltastene mellom kanalene; ← og Esc går tilbake til bildet
     if (_sideFocus.hasFocus) {
       if (key != LogicalKeyboardKey.escape && key != LogicalKeyboardKey.arrowLeft) return KeyEventResult.ignored;
@@ -957,8 +1003,10 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
             ),
             if (_buffering && busy == null && status == null)
               const IgnorePointer(child: Center(child: CircularProgressIndicator())),
-            if (flash != null)
+            if (flash != null && _digits.isEmpty)
               Positioned(top: full ? 96 : 16, right: 20, child: IgnorePointer(child: _flashBadge(flash))),
+            if (_digits.isNotEmpty)
+              Positioned(top: full ? 96 : 16, right: 20, child: IgnorePointer(child: NumberBadge(digits: _digits))),
             ExcludeFocus(
               excluding: !showBars,
               child: IgnorePointer(
@@ -1282,32 +1330,15 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     );
   }
 
-  Widget _tracksButton() {
-    return PopupMenuButton<TrackChoice>(
-      tooltip: 'Lydspor og undertekster',
-      icon: const Icon(Icons.subtitles_outlined, color: Colors.white),
-      onOpened: () => _hideTimer?.cancel(),
-      onCanceled: _wake,
-      onSelected: (t) {
-        unawaited(_pb.selectTrack(t));
-        _wake();
-        _probe();
-      },
-      itemBuilder: (context) {
-        final audio = _pb.audioTracks();
-        final subtitles = _pb.subtitleTracks();
-        return <PopupMenuEntry<TrackChoice>>[
-          const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Lydspor')),
-          if (audio.isEmpty) const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Bare ett')),
-          for (final t in audio) CheckedPopupMenuItem<TrackChoice>(value: t, checked: t.selected, child: Text(t.label)),
-          const PopupMenuDivider(),
-          const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Undertekster')),
-          for (final t in subtitles)
-            CheckedPopupMenuItem<TrackChoice>(value: t, checked: t.selected, child: Text(t.label)),
-        ];
-      },
-    );
-  }
+  Widget _tracksButton() => TracksButton(
+        playback: _pb,
+        session: _session,
+        onOpen: () => _hideTimer?.cancel(),
+        onClose: () {
+          _wake();
+          _probe();
+        },
+      );
 
   Widget _flashBadge(String text) {
     return Container(

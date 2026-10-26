@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:fyrlys/core/languages.dart';
 import 'package:fyrlys/core/models.dart';
 import 'package:fyrlys/core/source.dart';
 import 'package:fyrlys/core/vod.dart';
@@ -255,14 +256,22 @@ class FakePlayback implements Playback {
   @override
   Future<void> setVolume(double v) async => volume = v;
 
-  @override
-  List<TrackChoice> audioTracks() => const [];
+  /// sporene filen eller kanalen har
+  List<TrackChoice> audio = const [];
+  List<TrackChoice> subtitles = const [TrackChoice('Av', selected: true, value: 'no')];
+  final selected = <TrackChoice>[];
+
+  /// språkene spilleren har fått, og om de skulle gjelde med en gang
+  final languages = <(LanguagePrefs, bool)>[];
 
   @override
-  List<TrackChoice> subtitleTracks() => const [TrackChoice('Av', selected: true, value: 'no')];
+  Future<TrackList> tracks() async => (audio: audio, subtitles: subtitles);
 
   @override
-  Future<void> selectTrack(TrackChoice choice) async {}
+  Future<void> selectTrack(TrackChoice choice) async => selected.add(choice);
+
+  @override
+  Future<void> setLanguages(LanguagePrefs prefs, {bool now = false}) async => languages.add((prefs, now));
 
   @override
   Future<String> describe() async => 'H.264 · AAC stereo';

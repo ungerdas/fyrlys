@@ -1,7 +1,7 @@
 name: fyrlys
 description: "Fyrlys – TV fra IPTV-abonnementet ditt, med mpv som avspiller."
 publish_to: "none"
-version: 2.0.2+1
+version: 2.0.3+1
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

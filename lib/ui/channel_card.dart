@@ -9,11 +9,20 @@ import '../theme.dart';
 
 /// Kanalkort: logo, navn (eventkanaler med klokkeslett), programmet som går nå med fremdrift, og stjerne.
 class ChannelCard extends StatefulWidget {
-  const ChannelCard({super.key, required this.session, required this.channel, required this.onTap});
+  const ChannelCard({
+    super.key,
+    required this.session,
+    required this.channel,
+    required this.onTap,
+    this.showNext = false,
+  });
 
   final Session session;
   final Channel channel;
   final VoidCallback onTap;
+
+  /// også programmet som kommer etterpå (startsiden; kortet trenger da litt mer høyde)
+  final bool showNext;
 
   @override
   State<ChannelCard> createState() => _ChannelCardState();
@@ -112,7 +121,9 @@ class _ChannelCardState extends State<ChannelCard> {
                         future: _epg,
                         builder: (context, snap) {
                           final now = DateTime.now();
-                          final cur = nowAndNext(snap.data ?? const [], now).now;
+                          final nn = nowAndNext(snap.data ?? const [], now);
+                          final cur = nn.now;
+                          final next = widget.showNext ? nn.next : null;
                           if (cur == null) return const SizedBox.shrink();
                           return Column(
                             mainAxisSize: MainAxisSize.min,
@@ -128,6 +139,16 @@ class _ChannelCardState extends State<ChannelCard> {
                                   backgroundColor: scheme.outline,
                                 ),
                               ),
+                              if (next != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 5),
+                                  child: Text(
+                                    '${hhmm(next.start)}  ${next.title}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: dim.copyWith(fontSize: 12),
+                                  ),
+                                ),
                             ],
                           );
                         },

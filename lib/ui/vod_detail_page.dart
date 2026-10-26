@@ -160,7 +160,9 @@ class _VodDetailPageState extends State<VodDetailPage> {
 
   /// «Mer fra samme kategori» (filmer), og navnet på kategorien
   Future<({String name, List<VodItem> items})>? _similar;
-  int _season = 0;
+
+  /// sesongen du har valgt (null: den med episoden du er på, ellers den første)
+  int? _season;
 
   Session get s => widget.session;
   VodItem get item => widget.item;
@@ -218,6 +220,26 @@ class _VodDetailPageState extends State<VodDetailPage> {
   }
 
   List<VodPlayItem> _episodes(SeriesInfo info, Season season) => seasonItems(s, info, season, item);
+
+  /// Episoden «Spill av» på seriesiden starter: den du holder på med (fra «Fortsett å se»), ellers den første
+  /// (ekstramateriale i «sesong 0» bare hvis det ikke finnes noe annet).
+  ({int season, int episode, Duration? at, bool current})? _startEpisode(SeriesInfo info) {
+    final seasons = info.seasons;
+    for (final c in s.continueItems) {
+      if (c.key != 'serie:${item.id}') continue;
+      for (var si = 0; si < seasons.length; si++) {
+        final ei = seasons[si].episodes.indexWhere((e) => e.id == c.episodeId);
+        if (ei >= 0) return (season: si, episode: ei, at: s.resumeAt('episode:${c.episodeId}'), current: true);
+      }
+    }
+    int? first;
+    for (var si = 0; si < seasons.length; si++) {
+      if (seasons[si].episodes.isEmpty) continue;
+      first ??= si;
+      if (int.tryParse(seasons[si].number) != 0) return (season: si, episode: 0, at: null, current: false);
+    }
+    return first == null ? null : (season: first, episode: 0, at: null, current: false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -417,9 +439,55 @@ class _VodDetailPageState extends State<VodDetailPage> {
       if (ratingText(info.rating ?? item.rating).isNotEmpty) ratingText(info.rating ?? item.rating),
     ];
     final plot = hasText(info.plot) ? info.plot : (hasText(item.plot) ? item.plot : '');
-    final index = _season < seasons.length ? _season : 0;
+    final start = _startEpisode(info);
+    final picked = _season ?? start?.season ?? 0;
+    final index = picked < seasons.length ? picked : 0;
     final pad = _pad;
-    final thumbFallback = s.source?.logoUrl(info.backdrop ?? info.cover ?? item.icon);
+    Widget? play;
+    if (start != null) {
+      final season = seasons[start.season];
+      final e = season.episodes[start.episode];
+      final code = episodeCode(season.number, e.number);
+      final at = start.at;
+      // «Fortsett S01E03» der du slapp, «Spill av S01E04» når den forrige er sett ferdig, ellers «Spill av S01E01»
+      final label = at != null ? 'Fortsett $code' : 'Spill av $code';
+      play = FilledButton.icon(
+        autofocus: true,
+        style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
+        onPressed: () => unawaited(_play(_episodes(info, season), start.episode)),
+        icon: const Icon(Icons.play_arrow),
+        label: Text(label.trim()),
+      );
+      if (start.current && at != null) {
+        // hvor du er i episoden, ved siden av knappen
+        final seen = s.watched('episode:${e.id}');
+        final runtime = runtimeText(e.seconds, e.duration);
+        final title = episodeTitle(e.title, series: info.name.isNotEmpty ? info.name : item.name);
+        play = Wrap(
+          spacing: 14,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            play,
+            Text(
+              [
+                if (title.isNotEmpty) title,
+                runtime.isNotEmpty ? '${formatDuration(at)} av $runtime' : 'Stoppet ved ${formatDuration(at)}',
+              ].join(' · '),
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+            if (seen > 0)
+              SizedBox(
+                width: 120,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(value: seen, minHeight: 4, backgroundColor: scheme.outline),
+                ),
+              ),
+          ],
+        );
+      }
+    }
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -429,6 +497,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
             title: clean.title,
             tags: clean.tags,
             chips: chips,
+            actions: play,
             below: [
               if (plot.isNotEmpty) _paragraph(plot),
               _credits(info.cast, info.director),

@@ -9,6 +9,7 @@ import '../core/session.dart';
 import '../core/vod.dart';
 import '../platform.dart';
 import '../theme.dart';
+import 'language_dialog.dart';
 import 'playback.dart';
 import 'window_effects.dart';
 
@@ -158,6 +159,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
 
   Future<void> _start() async {
     await _pb.setup();
+    await _pb.setLanguages(_session.languages);
     await _pb.setVolume(_muted ? 0 : _volume);
     await _open(resume: widget.page.resume);
   }
@@ -667,31 +669,12 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     );
   }
 
-  Widget _tracksButton() {
-    return PopupMenuButton<TrackChoice>(
-      tooltip: 'Lydspor og undertekster',
-      icon: const Icon(Icons.subtitles_outlined, color: Colors.white),
-      onOpened: () => _hideTimer?.cancel(),
-      onCanceled: _wake,
-      onSelected: (t) {
-        unawaited(_pb.selectTrack(t));
-        _wake();
-      },
-      itemBuilder: (context) {
-        final audio = _pb.audioTracks();
-        final subtitles = _pb.subtitleTracks();
-        return <PopupMenuEntry<TrackChoice>>[
-          const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Lydspor')),
-          if (audio.isEmpty) const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Bare ett')),
-          for (final t in audio) CheckedPopupMenuItem<TrackChoice>(value: t, checked: t.selected, child: Text(t.label)),
-          const PopupMenuDivider(),
-          const PopupMenuItem<TrackChoice>(enabled: false, child: Text('Undertekster')),
-          for (final t in subtitles)
-            CheckedPopupMenuItem<TrackChoice>(value: t, checked: t.selected, child: Text(t.label)),
-        ];
-      },
-    );
-  }
+  Widget _tracksButton() => TracksButton(
+        playback: _pb,
+        session: _session,
+        onOpen: () => _hideTimer?.cancel(),
+        onClose: _wake,
+      );
 
   Widget _card(String text) {
     return Center(

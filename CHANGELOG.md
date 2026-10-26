@@ -2,6 +2,18 @@
 
 Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
 
+## v2.0.3
+
+- Ny startside, **Hjem**: kanalen du så sist med programmet nå og etterpå («Se videre»), favorittene med det som
+  går nå og det som kommer etterpå, de andre kanalene du har sett, kategoriene dine, og nederst filmen eller
+  serien du holder på med. Sidemenyen har fått ikoner.
+- **Kanalnummer:** tast nummeret på TV-siden, i TV-guiden eller i spilleren (1 og 2 er kanal 12), som på
+  fjernkontrollen. OK/Enter går dit med en gang.
+- **Språk for lyd og undertekster** i menyen og i spilleren: f.eks. norsk, så engelsk. Spilleren velger sporene selv,
+  undertekster bare når lyden er på et annet språk (eller aldri). Sporvalget i spilleren viser hvilket spor som
+  faktisk spilles.
+- Seriesiden har «Spill av S01E01», eller «Fortsett S01E03» der du slapp, og viser sesongen du er på.
+
 ## v2.0.2
 
 - Film- og seriesider med stort bakgrunnsbilde, plakat, merker for år, sjanger, spilletid, vurdering,

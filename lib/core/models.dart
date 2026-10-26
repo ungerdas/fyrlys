@@ -41,6 +41,13 @@ class Channel {
   Map<String, Object?> toJson() => {'id': id, 'name': name, 'cat': categoryId, 'icon': icon, 'num': number, 'epg': hasEpg};
 }
 
+/// Plassen i [list] til kanalen med nummeret du tastet («012» er kanal 12), eller -1.
+int channelByNumber(List<Channel> list, String digits) {
+  final n = int.tryParse(digits);
+  if (n == null) return -1;
+  return list.indexWhere((c) => int.tryParse(c.number?.trim() ?? '') == n);
+}
+
 class EpgEntry {
   const EpgEntry({required this.title, required this.start, required this.stop, this.description = ''});
 

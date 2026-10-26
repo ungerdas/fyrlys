@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fyrlys_source.dart';
+import 'languages.dart';
 import 'models.dart';
 import 'source.dart';
 import 'vod.dart';
@@ -371,14 +372,26 @@ class Session extends ChangeNotifier {
     }
   }
 
-  // ── lyd ──
-
-  /// Volumet i spilleren (0–100), som sist.
   /// kanalene TV-guiden viste sist: 'fav', 'all' eller en kategori-id (null: aldri valgt)
   String? get guideCategory => _prefs.getString('guide_cat');
 
   void saveGuideCategory(String filter) => unawaited(_prefs.setString('guide_cat', filter));
 
+  // ── lyd og språk ──
+
+  /// Språkene du foretrekker for lydspor og undertekster (gjelder alle spillerne).
+  LanguagePrefs get languages => LanguagePrefs(
+        audio: _prefs.getStringList('lang_audio') ?? const [],
+        subtitles: _prefs.getStringList('lang_subs') ?? const [],
+      );
+
+  void saveLanguages(LanguagePrefs prefs) {
+    unawaited(_prefs.setStringList('lang_audio', prefs.audio));
+    unawaited(_prefs.setStringList('lang_subs', prefs.subtitles));
+    notifyListeners();
+  }
+
+  /// Volumet i spilleren (0–100), som sist.
   double get volume => (_prefs.getDouble('volume') ?? 100).clamp(0, 100).toDouble();
 
   bool get muted => _prefs.getBool('muted') ?? false;

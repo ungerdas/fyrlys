@@ -217,6 +217,56 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('seriesiden: «Spill av» første episode, «Fortsett» der du slapp, og neste når den er sett', (tester) async {
+    await _start(tester);
+    final players = <FakePlayback>[];
+    playbackFactory = () {
+      final p = FakePlayback()..length = const Duration(minutes: 45);
+      players.add(p);
+      return p;
+    };
+    addTearDown(() => playbackFactory = MpvPlayback.new);
+
+    await tester.tap(find.text('Serier'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kystvakten'));
+    await tester.pumpAndSettle();
+    expect(find.text('Spill av S01E01'), findsOneWidget);
+
+    // to minutter inn, og ut igjen
+    await tester.tap(find.text('Spill av S01E01'));
+    await _settle(tester);
+    expect(players.last.urls, ['http://example/series/401.mkv']);
+    players.last.moveTo(const Duration(minutes: 2));
+    await tester.pump();
+    Navigator.of(tester.element(find.byType(VodPlayerPage))).pop();
+    await _settle(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('Fortsett S01E01'), findsOneWidget);
+    expect(find.text('Første · 2:00 av 45 min'), findsOneWidget);
+
+    // fortsetter der du slapp, og ser den ferdig
+    await tester.tap(find.text('Fortsett S01E01'));
+    await _settle(tester);
+    expect(players.last.urls, ['http://example/series/401.mkv']);
+    expect(players.last.starts, [const Duration(minutes: 2)]);
+    players.last.moveTo(const Duration(minutes: 3));
+    await tester.pump();
+    players.last.finish();
+    await tester.pump();
+    Navigator.of(tester.element(find.byType(VodPlayerPage))).pop();
+    await _settle(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('Spill av S01E02'), findsOneWidget);
+    await tester.tap(find.text('Spill av S01E02'));
+    await _settle(tester);
+    expect(players.last.urls, ['http://example/series/402.mp4']);
+    expect(players.last.starts, [null]);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
   test('tidsformat', () {
     expect(formatDuration(const Duration(minutes: 12, seconds: 5)), '12:05');
     expect(formatDuration(const Duration(hours: 1, minutes: 2, seconds: 3)), '1:02:03');
