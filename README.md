@@ -4,10 +4,7 @@
 
 <h1 align="center">Fyrlys</h1>
 
-<p align="center">
-  IPTV-spiller for Windows.<br>
-  TV med TV-guide, filmer og serier fra en M3U-lenke eller Xtream Codes, spilt av med mpv.
-</p>
+<p align="center">IPTV-spiller for Windows: TV, TV-guide, TV-arkiv, filmer og serier.</p>
 
 <p align="center">
   <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-oppsett.exe"><b>Last ned for Windows</b></a>
@@ -16,91 +13,52 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ungerdas/fyrlys/actions/workflows/build.yml"><img alt="Bygg" src="https://github.com/ungerdas/fyrlys/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://github.com/ungerdas/fyrlys/releases/latest"><img alt="Siste versjon" src="https://img.shields.io/github/v/release/ungerdas/fyrlys?label=versjon"></a>
 </p>
 
-> Fyrlys har ingen kanaler eller innhold selv. Du trenger ditt eget abonnement hos en IPTV-leverandør.
+Fyrlys spiller abonnementet ditt hos en IPTV-leverandør, med M3U-lenke eller Xtream Codes. Den har ingen kanaler selv.
 
 ## Funksjoner
 
-- **Hjem** – kanalen du så sist, favorittene dine med det som går nå og etterpå, og kategoriene dine.
-- **TV** – kategorier, favoritter, «sist sett» og søk. Kanalkortene viser programmet som går nå.
-- **TV-guide** – kanalene nedover og de neste seks timene bortover, med en strek for nå.
-- **Spiller** – kanallista ved siden av bildet, programinfo under, fullskjerm og rask kanalbytting.
-- **Pause og spol tilbake** i direktesendinger. Appen tar selv vare på det siste mens du ser.
-- **TV-arkiv** (Xtream Codes, når leverandøren har det) – se det som har gått de siste dagene, eller programmet som går
-  nå fra start.
-- **Kanalnummer** – tast nummeret, så går den dit.
-- **Språk** – velg språk for lyd og undertekster én gang, så velger spilleren riktig spor selv.
-- **Filmer og serier** (Xtream Codes) – plakater, kategorier, «Fortsett å se» og neste episode av seg selv.
-- **mpv** spiller det meste: H.265, AC3, DTS, MKV, flere lydspor og undertekster, med maskinvaredekoding.
-- **Flere innlogginger** – bytt mellom leverandører eller abonnementer i innstillingene; hver har sine egne
-  favoritter.
-- **Oppdaterer seg selv** når det kommer en ny versjon.
-- Husker størrelsen og plassen til vinduet, og starter du Fyrlys en gang til, kommer vinduet som er åpent fram.
-- Mørkt og lyst tema, og fungerer med mus og tastatur.
+- TV med favoritter, kategorier, søk og kanalnummer
+- TV-guide, og TV-arkiv når leverandøren har det
+- Pause og spol tilbake i direktesendinger
+- Filmer og serier med «Fortsett å se» (Xtream Codes)
+- Flere innlogginger, hver med sine egne favoritter
+- mpv som avspiller: de fleste formater, lydspor og undertekster
+- Oppdaterer seg selv
 
 ## Kom i gang
 
-### 1. Last ned
+1. Last ned og kjør [`Fyrlys-oppsett.exe`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-oppsett.exe)
+   (Windows 10 og 11). Advarer Windows, velg *Mer informasjon → Kjør likevel*.
+2. Logg inn med M3U-lenken eller Xtream-innloggingen fra leverandøren. Den lagres kryptert, bare på PC-en.
+3. Innstillingene ligger under tannhjulet øverst.
 
-Last ned [`Fyrlys-oppsett.exe`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-oppsett.exe)
-(Windows 10 og 11) og kjør den. Den installerer Fyrlys for deg, uten administrator, med snarvei i startmenyen og på
-skrivebordet, og Fyrlys kan avinstalleres under *Innstillinger → Apper*. Windows kan advare fordi programmet ikke er
-signert: velg *Mer informasjon → Kjør likevel*.
+Vil du ikke installere, kan du bruke [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip) i stedet.
 
-Vil du heller ha appen i en mappe selv, finnes
-[`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip): pakk den ut et
-sted du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe`. Lenkene gir alltid siste versjon
-([alle filene](https://github.com/ungerdas/fyrlys/releases/latest)).
+<details>
+<summary>Taster</summary>
 
-### 2. Logg inn
-
-- **M3U-lenke** – lenken til kanallista fra leverandøren. TV-guiden hentes fra EPG-lenken (XMLTV, også `.xml.gz`)
-  som står i lista, eller en du limer inn selv. Er det en Xtream-lenke (`get.php?username=…&password=…`), logger
-  Fyrlys deg inn med Xtream Codes i stedet, så du også får filmer og serier.
-- **Xtream Codes** – server, brukernavn og passord fra leverandøren. Gir TV, TV-guide, filmer og serier.
-
-Innloggingen og favorittene lagres bare på PC-en, og innloggingen er kryptert så bare din Windows-bruker kan lese
-den. Har du flere abonnementer, legger du til de andre i innstillingene (tannhjulet øverst) og bytter der.
-
-## Taster
-
-| I TV-spilleren | |
+| | |
 | --- | --- |
-| ↑ / ↓ | blar i kanalene (starter etter et øyeblikk, OK med en gang) |
-| 0–9 | går til kanalnummeret |
+| ↑ / ↓ | forrige og neste kanal |
+| 0–9 | kanalnummer |
 | ← / → | 10 sekunder tilbake og fram |
-| L eller End | tilbake til direkte |
 | Mellomrom | pause |
-| Backspace | kanalen du så sist |
 | F | fullskjerm |
-| C | kanallista over bildet |
-| A | TV-arkivet for kanalen (når den har det) |
-| M | lyd av og på |
+| C | kanallista |
+| A | TV-arkivet |
 | Esc | tilbake |
 
-I filmspilleren (også for TV-arkivet): ←/→ ti sekunder, ↑/↓ lyd, mellomrom pause, N/P neste og forrige episode
-eller program, F fullskjerm og Esc tilbake.
-
-## Oppdateringer
-
-Fyrlys oppdaterer seg selv. Den ser etter nye versjoner når den starter og hver 6. time, laster dem ned i
-bakgrunnen og legger dem inn når du lukker appen, eller straks med «Start på nytt nå». Innstillingene har også «Se
-etter oppdateringer». Installasjonsprogrammet legger Fyrlys der den kan oppdatere seg selv; bruker du zip-fila, må mappen
-være din (ikke Programfiler).
+</details>
 
 ## Bygge selv
 
-Fyrlys er laget i [Flutter](https://flutter.dev), med [media_kit](https://github.com/media-kit/media-kit) og
-[mpv](https://mpv.io) som avspiller. Byggene lages på GitHub Actions
-([`.github/workflows/build.yml`](.github/workflows/build.yml)). Lokalt:
+Laget i Flutter, med [media_kit](https://github.com/media-kit/media-kit) og [mpv](https://mpv.io). Byggene lages av
+[GitHub Actions](.github/workflows/build.yml).
 
 ```bash
 flutter create --org no.peag --project-name fyrlys --platforms=windows .
 flutter run
 ```
-
-`flutter create` lager det som mangler av Windows-mappen, og skriver ikke over det som ligger i repoet. Testene
-kjøres med `flutter test`, og installasjonsprogrammet lages med [Inno Setup](https://jrsoftware.org/isinfo.php) fra
-[`windows/installer/fyrlys.iss`](windows/installer/fyrlys.iss).
