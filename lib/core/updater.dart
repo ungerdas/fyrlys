@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../build_info.dart';
+import '../l10n/tr.dart';
 
 class UpdateException implements Exception {
   const UpdateException(this.message);
@@ -106,8 +107,17 @@ class Updater extends ChangeNotifier {
   double progress = 0;
   String? error;
 
-  /// en kort beskjed i banneret, f.eks. at appen nettopp ble oppdatert
-  String? notice;
+  /// en kort beskjed i banneret, f.eks. at appen nettopp ble oppdatert (lages når den vises, så den står på språket
+  /// appen er på da: beskjeden leses før innstillingene)
+  String? get notice {
+    final build = _updatedTo;
+    if (build == null) return null;
+    return tr('Fyrlys er oppdatert til {version}.',
+        {'version': appVersion.isEmpty ? tr('bygg {n}', {'n': build}) : appVersion});
+  }
+
+  /// bygget appen nettopp ble oppdatert til (beskjeden over)
+  int? _updatedTo;
 
   Timer? _first;
   Timer? _timer;
@@ -130,8 +140,8 @@ class Updater extends ChangeNotifier {
 
   String _describe(Object e) => switch (e) {
         UpdateException(:final message) => message,
-        TimeoutException() => 'GitHub svarte ikke',
-        SocketException() => 'fikk ikke kontakt med GitHub',
+        TimeoutException() => tr('GitHub svarte ikke'),
+        SocketException() => tr('fikk ikke kontakt med GitHub'),
         FileSystemException(:final message, :final path) => path == null ? message : '$message ($path)',
         _ => '$e',
       };
@@ -181,7 +191,7 @@ class Updater extends ChangeNotifier {
       return await _release(Uri.parse('https://api.github.com/repos/$repo/releases/latest'));
     } on _Missing {
       // Et privat repo (eller et uten releaser) svarer 404: ikke «du har siste versjon».
-      throw const UpdateException('GitHub viser ikke de nye versjonene (er repoet privat?)');
+      throw UpdateException(tr('GitHub viser ikke de nye versjonene (er repoet privat?)'));
     }
   }
 
@@ -192,7 +202,7 @@ class Updater extends ChangeNotifier {
       headers: const {'Accept': 'application/vnd.github+json', 'User-Agent': 'Fyrlys'},
     ).timeout(const Duration(seconds: 20));
     if (r.statusCode == 404) throw const _Missing();
-    if (r.statusCode != 200) throw UpdateException('GitHub svarte ${r.statusCode}');
+    if (r.statusCode != 200) throw UpdateException(tr('GitHub svarte {code}', {'code': r.statusCode}));
     return parseRelease(jsonDecode(r.body), assetSuffix!, base: url);
   }
 
@@ -222,7 +232,9 @@ class Updater extends ChangeNotifier {
       final part = File('${dir.path}${sep}Fyrlys.zip.part');
       final request = http.Request('GET', Uri.parse(info.url))..headers['User-Agent'] = 'Fyrlys';
       final response = await _client.send(request).timeout(const Duration(seconds: 30));
-      if (response.statusCode != 200) throw UpdateException('nedlastingen svarte ${response.statusCode}');
+      if (response.statusCode != 200) {
+        throw UpdateException(tr('nedlastingen svarte {code}', {'code': response.statusCode}));
+      }
       final total = info.size > 0 ? info.size : (response.contentLength ?? 0);
       final sink = part.openWrite();
       var got = 0;
@@ -240,7 +252,7 @@ class Updater extends ChangeNotifier {
       } finally {
         await sink.close();
       }
-      if (info.size > 0 && got != info.size) throw const UpdateException('nedlastingen ble ikke fullført');
+      if (info.size > 0 && got != info.size) throw UpdateException(tr('nedlastingen ble ikke fullført'));
       final zip = await part.rename('${dir.path}${sep}Fyrlys.zip');
       await File(_path('klar.json')).writeAsString(
         jsonEncode({'build': info.build, 'title': info.title, 'zip': zip.path, 'size': got}),
@@ -248,7 +260,7 @@ class Updater extends ChangeNotifier {
       progress = 1;
       _set(UpdateState.ready);
     } on Object catch (e) {
-      error = 'Oppdateringen ble ikke lastet ned: ${_describe(e)}';
+      error = tr('Oppdateringen ble ikke lastet ned: {error}', {'error': _describe(e)});
       _set(UpdateState.failed);
     }
   }
@@ -263,7 +275,8 @@ class Updater extends ChangeNotifier {
       await probe.delete();
     } on FileSystemException {
       throw UpdateException(
-        'Fyrlys kan ikke oppdatere seg selv i ${dir.path}. Flytt mappen til et sted du eier, f.eks. Dokumenter.',
+        tr('Fyrlys kan ikke oppdatere seg selv i {folder}. Flytt mappen til et sted du eier, f.eks. Dokumenter.',
+            {'folder': dir.path}),
       );
     }
   }
@@ -321,7 +334,7 @@ class Updater extends ChangeNotifier {
       return true;
     } on Object catch (e) {
       await _log('Fikk ikke startet oppdateringen: $e');
-      error = 'Oppdateringen ble ikke lagt inn: ${_describe(e)}';
+      error = tr('Oppdateringen ble ikke lagt inn: {error}', {'error': _describe(e)});
       _set(UpdateState.failed);
       return false;
     }
@@ -370,10 +383,10 @@ class Updater extends ChangeNotifier {
     final text = utf8.decode(await f.readAsBytes(), allowMalformed: true).trim();
     await f.delete();
     if (text.startsWith('feil')) {
-      error = 'Oppdateringen ble ikke lagt inn: ${text.substring(text.indexOf(':') + 1).trim()}';
+      error = tr('Oppdateringen ble ikke lagt inn: {error}', {'error': text.substring(text.indexOf(':') + 1).trim()});
       state = UpdateState.failed;
     } else if (text == 'ok') {
-      notice = 'Fyrlys er oppdatert til ${appVersion.isEmpty ? 'bygg $current' : appVersion}.';
+      _updatedTo = current;
     }
   }
 
@@ -390,7 +403,7 @@ class Updater extends ChangeNotifier {
 
   /// Lukker banneret (beskjed eller feil).
   void dismiss() {
-    notice = null;
+    _updatedTo = null;
     if (state == UpdateState.failed) {
       error = null;
       state = UpdateState.idle;
