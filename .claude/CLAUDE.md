@@ -248,6 +248,7 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 - 26.10.2026: 2.1.13 (Pål-Eriks valg 1–6): installasjonsprogram, innloggingen kryptert (DPAPI), vinduet husker seg,
   bare én Fyrlys, død kode fjernet («Ta over»/`BusyException`, delte favoritter og meldingsstrømmen, `prepare`/`close`
   i `TvSource`, testbygg-reserver, flyttingen fra Fyrlys-serveren), nye versjoner av actions. Testet med tester;
-  DPAPI, installasjonsprogrammet, vinduet og én-om-gangen er ikke prøvd på ekte Windows.
+  Installasjonsprogrammet virker på PC-en hans (Pål-Erik 26.10: «Funka veldig fint»); DPAPI, vinduet og
+  én-om-gangen er ikke bekreftet hver for seg.
 - Ideer senere: minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeundertekster
   (DVB/PGS) med libass, signering av exe-en.
