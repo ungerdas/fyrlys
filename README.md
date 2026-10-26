@@ -71,3 +71,5 @@ Laget i Flutter, med [media_kit](https://github.com/media-kit/media-kit) og [mpv
 flutter create --org no.fyrlys --project-name fyrlys --platforms=windows .
 flutter run
 ```
+
+Avspilleren er [mpv](https://mpv.io) (libmpv, LGPL), fra [mpv-winbuild](https://github.com/zhongfly/mpv-winbuild).

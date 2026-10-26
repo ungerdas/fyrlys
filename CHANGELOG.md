@@ -1,5 +1,12 @@
 # Endringer
 
+## v2.1.23
+
+- **«Fjern striper» virker nå.** Fyrlys har fått en fullstendig utgave av avspilleren mpv. Den som fulgte med før,
+  manglet deinterlacing helt, så valget gjorde ingenting. Nå fjernes stripene i sendinger som er interlacet (1080i,
+  vanlig i sport og nyheter), og bare der.
+- Den nye avspilleren kan også flere formater. Nedlastingen og installasjonen blir noe større.
+
 ## v2.1.22
 
 - Rettet: TV-arkivet og «Se fra start» ga «Kunne ikke spille av» for mange programmer. Et opptak fra arkivet begynner

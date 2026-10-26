@@ -374,6 +374,13 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   GitHub-saker. Testet med tester; mpv-egenskapene, minivinduet og Utforsker/nettleser fra appen er ikke prøvd på Windows.
 - 26.10.2026: 2.1.21: engelsk (eierens valg 3), oversatt av fem agenter i hver sin del av lib/ og sett over etterpå.
   Testet med tester (bl.a. at alt er oversatt og at språket byttes i innstillingene).
+- 27.10.2026: 2.1.23 (eierens valg: «Bytt til full mpv»): workflowen bytter `libmpv-2.dll` fra media_kit (bygget
+  20241021 fra media-kit/libmpv-win32-video-cmake: FFmpeg med bare filtrene overlay og equalizer, så ingen
+  deinterlacer, og mpv uten `deinterlace=auto`) med `mpv-dev-lgpl-x86_64-*.7z` fra zhongfly/mpv-winbuild (tag i
+  `MPV_TAG`, sha256 fra releasens sha256.txt). Releasene der ryddes bort etter en tid, så første bygg på main legger
+  arkivet i Fyrlys sin egen forhåndsrelease `libmpv-<tag>` (ikke «Latest»), og senere bygg henter det derfra. Steget
+  «Sjekk avspilleren» laster dll-en med ctypes og sjekker `deinterlace=auto` og `vf add bwdif`. Ny tag: bytt
+  `MPV_TAG` (ny kopi lages av seg selv). LGPL: dll-en er dynamisk lenket og kan byttes; nevnt nederst i README.
 - 27.10.2026: 2.1.22: TV-arkivet ga opp på grunn av dekoderfeil i starten (se `ui/playback.dart`). Eieren 27.10:
   «Tror det fungerte» (feilrapport: et program fra arkivet kom i gang etter ca. 10 s). Samme feilrapport viste at
   mpv-en i media_kit ikke kan `deinterlace=auto` («Invalid parameter for deinterlace flag: auto») og ikke har lavfi-

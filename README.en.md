@@ -65,3 +65,5 @@ Made with Flutter, [media_kit](https://github.com/media-kit/media-kit) and [mpv]
 flutter create --org no.fyrlys --project-name fyrlys --platforms=windows .
 flutter run
 ```
+
+The player is [mpv](https://mpv.io) (libmpv, LGPL), from [mpv-winbuild](https://github.com/zhongfly/mpv-winbuild).

@@ -325,8 +325,8 @@ class MpvPlayback implements Playback {
     final p = _player.platform;
     if (p is! NativePlayer) return;
     if (prefs.deinterlace) {
-      // auto (mpv 0.38 og nyere): bare bilder som er merket interlacet. Eldre mpv kjenner ikke auto (og setProperty
-      // sier ikke fra om feil), men der gjør yes det samme.
+      // auto: bare bilder som er merket interlacet (bwdif i programvare, d3d11vpp med maskinvaredekoding). Fyrlys
+      // bygges med en full libmpv som kan det (se workflowen); en eldre mpv kjenner ikke auto, og får yes.
       await _try(() => p.setProperty('deinterlace', 'auto'));
       var now = '';
       try {

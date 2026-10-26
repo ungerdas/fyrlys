@@ -79,6 +79,84 @@ jobs:
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
           echo "DEFINES=--build-number=${{ github.run_number }} --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
       - run: flutter build windows --release $DEFINES 2>&1 | tee build.log
+      # Avspilleren: libmpv-2.dll fra media_kit har bare et lite utvalg av FFmpeg (ingen deinterlacing, ikke
+      # deinterlace=auto). Den byttes med et fullt LGPL-bygg fra mpv-winbuild. Byggene der ryddes bort etter en tid, så
+      # Fyrlys tar vare på arkivet i sin egen forhåndsrelease «libmpv-<tag>» og henter det derfra når det finnes.
+      - name: Full libmpv (LGPL)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MPV_TAG: 2026-08-21-49418246f3
+          MPV_PATTERN: mpv-dev-lgpl-x86_64-2*.7z
+        run: |
+          # alt også i libmpv.log, så det kommer med i merknaden om noe feiler
+          exec > >(tee libmpv.log) 2>&1
+          mkdir -p libmpv && cd libmpv
+          if gh release download "libmpv-$MPV_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$MPV_PATTERN" 2>/dev/null; then
+            echo "Fra Fyrlys sin kopi (libmpv-$MPV_TAG)"
+          else
+            gh release download "$MPV_TAG" --repo zhongfly/mpv-winbuild --pattern "$MPV_PATTERN" --pattern sha256.txt
+            name=$(ls $MPV_PATTERN)
+            expected=$(grep " $name" sha256.txt | cut -d' ' -f1)
+            actual=$(sha256sum "$name" | cut -d' ' -f1)
+            echo "$name: $actual (ventet $expected)"
+            test -n "$expected" && test "$expected" = "$actual"
+            if [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then
+              gh release create "libmpv-$MPV_TAG" "$name" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false \
+                --title "libmpv $MPV_TAG" \
+                --notes "Avspilleren Fyrlys bygges med (libmpv-2.dll, LGPL), fra https://github.com/zhongfly/mpv-winbuild/releases/tag/$MPV_TAG. Ikke en versjon av Fyrlys." \
+                || echo "Kopien ble ikke lagt ut (finnes den alt?)"
+            fi
+          fi
+          7z e -y $MPV_PATTERN libmpv-2.dll > /dev/null
+          release=../build/windows/x64/runner/Release
+          test -f "$release/libmpv-2.dll"
+          ls -l "$release/libmpv-2.dll" libmpv-2.dll
+          cp -f libmpv-2.dll "$release/libmpv-2.dll"
+      - name: Sjekk avspilleren (versjon, deinterlacing)
+        shell: python
+        run: |
+          import ctypes, os, sys
+          out = open("mpvsjekk.log", "w", encoding="utf-8")
+          def say(*a):
+              line = " ".join(str(x) for x in a)
+              print(line); out.write(line + "\n"); out.flush()
+          os.add_dll_directory(os.path.abspath("build/windows/x64/runner/Release"))
+          mpv = ctypes.CDLL(os.path.abspath("build/windows/x64/runner/Release/libmpv-2.dll"))
+          mpv.mpv_create.restype = ctypes.c_void_p
+          mpv.mpv_get_property_string.restype = ctypes.c_void_p
+          mpv.mpv_get_property_string.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+          mpv.mpv_set_option_string.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+          mpv.mpv_initialize.argtypes = [ctypes.c_void_p]
+          mpv.mpv_command.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_char_p)]
+          mpv.mpv_free.argtypes = [ctypes.c_void_p]
+          ctx = mpv.mpv_create()
+          mpv.mpv_set_option_string(ctx, b"vo", b"null")
+          assert mpv.mpv_initialize(ctx) == 0
+          def prop(name):
+              p = mpv.mpv_get_property_string(ctx, name.encode())
+              if not p:
+                  return None
+              v = ctypes.string_at(p).decode()
+              mpv.mpv_free(p)
+              return v
+          say("mpv:", prop("mpv-version"), "| ffmpeg:", prop("ffmpeg-version"))
+          ok = True
+          # deinterlace=auto (bare det som er interlacet) og deinterlacerne som brukes uten maskinvare
+          r = mpv.mpv_set_option_string(ctx, b"deinterlace", b"auto")
+          say("deinterlace=auto:", r)
+          if r != 0:
+              ok = False
+          def vf_add(name):
+              r = mpv.mpv_command(ctx, (ctypes.c_char_p * 4)(b"vf", b"add", name.encode(), None))
+              mpv.mpv_command(ctx, (ctypes.c_char_p * 4)(b"vf", b"clr", b"", None))
+              return r
+          control = vf_add("finnes-ikke")
+          for f in ("bwdif", "yadif"):
+              r = vf_add(f)
+              say(f"vf add {f}: {r} (et filter som ikke finnes: {control})")
+              if f == "bwdif" and control != 0 and r != 0:
+                  ok = False
+          sys.exit(0 if ok else 1)
       - uses: actions/upload-artifact@v7
         with:
           name: Fyrlys-windows
