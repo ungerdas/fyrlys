@@ -19,8 +19,8 @@ Map<String, Object?> _release(int build, {int size = 4}) => {
       // byggnummeret står skjult (vises ikke på GitHub)
       'body': 'Siste endringer:\n- volum\n\n<!-- bygg $build -->',
       'assets': [
-        {'name': 'Fyrlys-testbygg-android-arm64-v8a.apk', 'browser_download_url': 'https://example/a.apk', 'size': 10},
-        {'name': 'Fyrlys-testbygg-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': size},
+        {'name': 'Fyrlys-android-arm64-v8a.apk', 'browser_download_url': 'https://example/a.apk', 'size': 10},
+        {'name': 'Fyrlys-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': size},
       ],
     };
 
@@ -101,7 +101,7 @@ void main() {
       expect(u.state, UpdateState.idle);
       await expectLater(
         u.check(manual: true),
-        throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('ikke testbyggene'))),
+        throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('ikke de nye versjonene'))),
       );
       // fra oppdateringsserveren: forklaringen derfra
       final server = MockClient((r) async => http.Response('{"error": "Fant ikke testbyggene på GitHub"}', 404));
@@ -143,9 +143,9 @@ void main() {
               'body': '',
               'assets': [
                 {
-                  'name': 'Fyrlys-testbygg-windows.zip',
+                  'name': 'Fyrlys-windows.zip',
                   'size': 4,
-                  'browser_download_url': 'download/Fyrlys-testbygg-windows.zip',
+                  'browser_download_url': 'download/Fyrlys-windows.zip',
                 },
               ],
             }),
@@ -157,12 +157,12 @@ void main() {
       });
       final u = updater(5, client)..serverBase = () => 'http://192.168.1.10:8766';
       final info = await u.check();
-      expect(info?.url, 'http://192.168.1.10:8766/api/app/download/Fyrlys-testbygg-windows.zip');
+      expect(info?.url, 'http://192.168.1.10:8766/api/app/download/Fyrlys-windows.zip');
       await u.download();
       expect(u.state, UpdateState.ready);
       expect(urls, [
         'http://192.168.1.10:8766/api/app/release',
-        'http://192.168.1.10:8766/api/app/download/Fyrlys-testbygg-windows.zip',
+        'http://192.168.1.10:8766/api/app/download/Fyrlys-windows.zip',
       ]);
     });
 

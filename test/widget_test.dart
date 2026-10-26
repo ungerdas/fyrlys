@@ -70,7 +70,7 @@ void main() {
           jsonEncode({
             'name': 'Fyrlys 2.1.6 · bygg 5 (abc1234)',
             'assets': [
-              {'name': 'Fyrlys-testbygg-windows.zip', 'browser_download_url': 'download/w.zip', 'size': 4},
+              {'name': 'Fyrlys-windows.zip', 'browser_download_url': 'download/w.zip', 'size': 4},
             ],
           }),
           200,

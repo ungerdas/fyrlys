@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-testbygg-windows.zip"><b>Last ned for Windows</b></a>
+  <a href="https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-windows.zip"><b>Last ned for Windows</b></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-testbygg-android-arm64-v8a.apk"><b>Last ned for Android</b></a>
+  <a href="https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-android-arm64-v8a.apk"><b>Last ned for Android</b></a>
   &nbsp;·&nbsp;
   <a href="CHANGELOG.md">Hva er nytt</a>
 </p>
@@ -42,12 +42,12 @@
 
 | Plattform | Fil |
 | --- | --- |
-| Windows 10 og 11 | [`Fyrlys-testbygg-windows.zip`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-testbygg-windows.zip) – pakk ut i en mappe du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe` |
-| Android og Android TV | [`…-arm64-v8a.apk`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-testbygg-android-arm64-v8a.apk) for de fleste telefoner og TV-bokser, [`…-armeabi-v7a.apk`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-testbygg-android-armeabi-v7a.apk) for eldre og billigere bokser |
+| Windows 10 og 11 | [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-windows.zip) – pakk ut i en mappe du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe` |
+| Android og Android TV | [`…-arm64-v8a.apk`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-android-arm64-v8a.apk) for de fleste telefoner og TV-bokser, [`…-armeabi-v7a.apk`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-android-armeabi-v7a.apk) for eldre og billigere bokser |
 
-Filene ligger under [Testbygg](https://github.com/ungerdas/fyrlys/releases/tag/testbygg), som alltid har
-siste versjon. Windows kan advare fordi programmet ikke er signert: velg *Mer informasjon → Kjør likevel*. På
-Android må installasjon fra ukjente kilder være tillatt.
+Lenkene gir alltid siste versjon ([alle filene](https://github.com/ungerdas/fyrlys/releases/tag/testbygg)).
+Windows kan advare fordi programmet ikke er signert: velg *Mer informasjon → Kjør likevel*. På Android må
+installasjon fra ukjente kilder være tillatt.
 
 ### 2. Logg inn
 
@@ -121,7 +121,7 @@ gamle. Første bygg med nøkkelen må installeres etter at den gamle appen er av
 <details>
 <summary>Oppdateringer fra en egen server</summary>
 
-Er repoet ditt privat, kan ikke appen lese testbyggene på GitHub selv. Da kan den hente dem via en server som har
+Er repoet ditt privat, kan ikke appen lese releasene på GitHub selv. Da kan den hente dem via en server som har
 en lesenøkkel til repoet og svarer på `/api/app/release` i samme form som GitHub (med `download/<fil>` for filene).
 Adressen settes i menyen under «Oppdateringsserver …». Uten den spør appen GitHub direkte.
 

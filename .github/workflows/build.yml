@@ -170,10 +170,11 @@ jobs:
             echo "TITLE=Fyrlys $version" | tee -a "$GITHUB_ENV"
           fi
           mkdir -p out
-          (cd dist/Fyrlys-windows && zip -qr ../../out/Fyrlys-testbygg-windows.zip .)
+          # faste navn, så lenkene i README alltid gir siste versjon (appen ser bare på slutten: «-windows.zip»)
+          (cd dist/Fyrlys-windows && zip -qr ../../out/Fyrlys-windows.zip .)
           for f in dist/Fyrlys-android/*.apk; do
             abi=$(basename "$f" | sed 's/^app-//; s/-release\.apk$//')
-            cp "$f" "out/Fyrlys-testbygg-android-${abi}.apk"
+            cp "$f" "out/Fyrlys-android-${abi}.apk"
           done
           ls -la out
           # det som er nytt i versjonen (avsnittet «## vX.Y.Z» i CHANGELOG.md), og byggnummeret skjult
@@ -192,6 +193,11 @@ jobs:
           git tag -f testbygg "$GITHUB_SHA"
           git push -f origin refs/tags/testbygg
           if gh release view testbygg > /dev/null 2>&1; then
+            # Filer med andre navn (f.eks. de gamle «Fyrlys-testbygg-…») fjernes først: appen tar den første fila som
+            # slutter på «-windows.zip», og den skal ikke være et gammelt bygg.
+            gh release view testbygg --json assets --jq '.assets[].name' | while read -r a; do
+              [ -f "out/$a" ] || gh release delete-asset testbygg "$a" -y
+            done
             # filene først, så navnet: appen tror ikke at et nytt bygg er klart før filene er der
             gh release upload testbygg out/* --clobber
             gh release edit testbygg --title "$TITLE" --notes-file notes.md --prerelease

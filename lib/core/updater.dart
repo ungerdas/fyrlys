@@ -192,7 +192,7 @@ class Updater extends ChangeNotifier {
       if (r.statusCode == 404) {
         throw UpdateException(_serverError(r) ??
             (server == null
-                ? 'GitHub viser ikke testbyggene (er repoet privat?). Velg oppdateringsserver i menyen.'
+                ? 'GitHub viser ikke de nye versjonene (er repoet privat?). Velg oppdateringsserver i menyen.'
                 : 'Fant ikke oppdateringene på $server (HTTP 404). Er adressen riktig?'));
       }
       if (r.statusCode != 200) throw UpdateException(_serverError(r) ?? '$_via svarte ${r.statusCode}');

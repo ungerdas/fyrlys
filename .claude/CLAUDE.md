@@ -37,7 +37,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   Feiler bygget i CI, har han ikke fått noe, og rettelsen beholder nummeret. Det er versjonen vi snakker om, ikke
   byggnummeret (det brukes bare av oppdateringen). Skriv avsnittet i `CHANGELOG.md`. GitHub-release (workflowen)
   bare når han ber om det. Hver push oppdaterer releasen
-  `testbygg` (jobben `testbygg`: taggen flyttes, filene byttes med `--clobber`, så navnet «Fyrlys X» og teksten:
+  `testbygg` (jobben `testbygg`: taggen flyttes, filer med andre navn slettes, filene `Fyrlys-windows.zip` og
+  `Fyrlys-android-<abi>.apk` (ikke «testbygg» i filnavnet, Pål-Erik 26.10) byttes med `--clobber`, så navnet «Fyrlys X» og teksten:
   avsnittet `## vX.Y.Z` fra CHANGELOG.md og byggnummeret skjult som `<!-- bygg N -->`, som appen leser (2.1.9+);
   Pål-Erik 26.10: «bygg 30 sånt kan du droppe», så aldri byggnummer eller commit i det han ser), og Fyrlys på Windows oppdaterer seg selv derfra (rett fra GitHub).
   Offentlig repo: Actions-minuttene er gratis; et bygg tar rundt 10 minutter. Bruk `[skip ci]` når en endring
