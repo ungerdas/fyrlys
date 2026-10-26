@@ -50,7 +50,8 @@ abstract class TvSource {
   /// kilden har filmer og serier (fanene skjules ellers)
   bool get hasVod;
 
-  Future<Account> account();
+  /// abonnementet; [fresh]: spør leverandøren på nytt (hvor mange tilkoblinger som er i bruk nå)
+  Future<Account> account({bool fresh = false});
 
   Future<List<Category>> categories({bool force = false});
 

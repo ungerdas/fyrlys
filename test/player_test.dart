@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fyrlys/core/models.dart';
 import 'package:fyrlys/core/picture.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/theme.dart';
@@ -56,6 +57,37 @@ void main() {
   test('bitrate i infoen', () {
     expect(bitrateText(8123456), '8,1 Mbit/s');
     expect(bitrateText(850000), '850 kbit/s');
+  });
+
+  test('forklaringen når abonnementet er fullt', () {
+    expect(busyText(const Account(maxConnections: 1, activeConnections: 1)), startsWith('Tilkoblingen i abonnementet er i bruk'));
+    expect(busyText(const Account(maxConnections: 2, activeConnections: 2)), startsWith('Alle de 2 tilkoblingene'));
+    expect(busyText(const Account(maxConnections: 2, activeConnections: 1)), isNull);
+    expect(busyText(const Account()), isNull);
+  });
+
+  testWidgets('kanalen avvises: to nye forsøk, så en forklaring når abonnementet er fullt', (tester) async {
+    final (session, source) = await _session();
+    final playback = await _openPlayer(tester, session);
+    expect(playback.urls, ['http://example/101.ts']);
+    // noen andre ser på abonnementet (én tilkobling)
+    source
+      ..connections = 1
+      ..activeConnections = 1;
+    for (var i = 2; i <= 3; i++) {
+      playback.fail('HTTP 509');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      expect(playback.urls, hasLength(i));
+      expect(find.text('Prøv igjen'), findsNothing);
+    }
+    playback.fail('HTTP 509');
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Tilkoblingen i abonnementet er i bruk'), findsOneWidget);
+    expect(find.text('Prøv igjen'), findsOneWidget);
+    await _close(tester);
   });
 
   testWidgets('bilde: deinterlacing på fra start, jevn bevegelse slås på i menyen og huskes', (tester) async {

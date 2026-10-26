@@ -325,8 +325,8 @@ class XtreamSource implements TvSource {
   }
 
   @override
-  Future<Account> account() async {
-    _info ??= await _userInfo();
+  Future<Account> account({bool fresh = false}) async {
+    if (fresh || _info == null) _info = await _userInfo() ?? _info;
     final u = _info ?? const <Object?, Object?>{};
     final exp = _number(u['exp_date']);
     return Account(

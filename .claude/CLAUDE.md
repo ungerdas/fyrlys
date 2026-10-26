@@ -314,6 +314,13 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   det et innstillingsvindu?»). Testet med widget-tester. Den virker hos ham (skjermbilde 26.10: abonnementet viser
   «aktiv til … · 1 tilkobling»).
 - 26.10.2026: 2.1.17: multiview over flere abonnementer. Testet med widget-tester.
+- 26.10.2026: 2.1.18: Pål-Erik fikk «Kanalen kunne ikke spilles (Failed to open …/live/***/***/<id>.ts)» i
+  TV-spilleren. Sannsynlig årsak (feil fra 2.1.14): `_away` åpnet kanalen igjen så snart `nav.push` var ferdig, mens
+  filmspilleren/multiview strømmet til `dispose` etter tilbakeovergangen (to strømmer på én tilkobling). Nå stopper
+  alle spillerne strømmen i `PopScope.onPopInvokedWithResult(didPop: true)` (kalles i `Navigator.pop`, før
+  `push`-framtiden er ferdig), og åpning som feiler prøves to ganger til etter 3 s (`_openTries`/`openTries`) før
+  feilen vises; da spør spilleren `account(fresh: true)` og viser `busyText` når `active_cons` ≥ `max_connections`.
+  Ikke bekreftet hos ham ennå (spurt hva han gjorde da det skjedde).
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

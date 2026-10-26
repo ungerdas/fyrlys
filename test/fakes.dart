@@ -19,7 +19,7 @@ class FakeSource implements TvSource {
   });
 
   /// tilkoblinger i abonnementet (0: oppgir det ikke)
-  final int connections;
+  int connections;
 
   /// lukket med dispose
   bool disposed = false;
@@ -50,7 +50,11 @@ class FakeSource implements TvSource {
   Map<String, String> get httpHeaders => const {};
 
   @override
-  Future<Account> account() async => Account(maxConnections: connections);
+  Future<Account> account({bool fresh = false}) async =>
+      Account(maxConnections: connections, activeConnections: activeConnections);
+
+  /// tilkoblinger i bruk hos «leverandøren» (andre som ser)
+  int activeConnections = 0;
 
   @override
   Future<List<Category>> categories({bool force = false}) async =>

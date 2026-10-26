@@ -92,6 +92,9 @@ class _PlayerState extends State<_Player> {
   int _seq = 0;
   PlayTarget? _target;
   int _url = 0;
+
+  /// nye forsøk på å åpne kanalen før feilen vises (leverandøren kan ennå telle en strøm som nettopp ble stoppet)
+  int _openTries = 0;
   bool _started = false;
   bool _buffering = true;
   bool _playing = false;
@@ -179,6 +182,7 @@ class _PlayerState extends State<_Player> {
       ..add(_pb.bufferingStream.listen((v) => _set(() => _buffering = v)))
       ..add(_pb.positionStream.listen((p) {
         if (!_started && p > Duration.zero) {
+          _openTries = 0;
           _set(() {
             _started = true;
             _switching = false;
@@ -291,16 +295,37 @@ class _PlayerState extends State<_Player> {
     debugPrint('mpv: $message');
     if (!mounted || _started || _status != null || _target == null) return;
     if (_nextUrl()) return;
-    // Siste adresse: mpv kan fortsatt komme seg, så vent litt før feilen vises.
     final my = _seq;
-    Timer(const Duration(seconds: 8), () {
+    // Siste adresse. Rett etter en annen strøm (arkivet, multiview, en annen enhet) kan leverandøren ennå telle den
+    // gamle tilkoblingen: prøv kanalen igjen to ganger før feilen vises.
+    if (_openTries < 2) {
+      _openTries++;
+      Timer(const Duration(seconds: 3), () {
+        if (mounted && my == _seq && !_started && _status == null) unawaited(_open());
+      });
+      return;
+    }
+    Timer(const Duration(seconds: 4), () async {
       if (!mounted || my != _seq || _started || _status != null) return;
       unawaited(_pb.stop());
+      final busy = await _busy();
+      if (!mounted || my != _seq || _started || _status != null) return;
       _set(() {
-        _status = 'Kanalen kunne ikke spilles ($message).';
+        _status = busy ?? 'Kanalen kunne ikke spilles ($message).';
         _buffering = false;
       });
     });
+  }
+
+  /// En forklaring når leverandøren sier at alle tilkoblingene er i bruk (ellers null).
+  Future<String?> _busy() async {
+    final src = _source;
+    if (src == null) return null;
+    try {
+      return busyText(await src.account(fresh: true).timeout(const Duration(seconds: 8)));
+    } on Object {
+      return null;
+    }
   }
 
   /// Strømmen stoppet etter at den hadde startet. Åpne kanalen på nytt via kilden (så «alle tilkoblinger
@@ -612,6 +637,7 @@ class _PlayerState extends State<_Player> {
     }
     _last = (list: _list, index: _index);
     _retries.clear();
+    _openTries = 0;
     setState(() {
       _list = list;
       _index = index;
@@ -699,6 +725,7 @@ class _PlayerState extends State<_Player> {
 
   void _retry() {
     _retries.clear();
+    _openTries = 0;
     unawaited(_open());
   }
 
@@ -736,6 +763,7 @@ class _PlayerState extends State<_Player> {
     await visit();
     if (!mounted) return;
     _retries.clear();
+    _openTries = 0;
     unawaited(_open());
   }
 
@@ -1033,7 +1061,11 @@ class _PlayerState extends State<_Player> {
     return PopScope(
       canPop: !_full && !_sideOpen,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        // ut av spilleren: strømmen stopper med en gang (ikke først når siden er borte), så tilkoblingen er ledig
+        if (didPop) {
+          unawaited(_pb.stop());
+          return;
+        }
         if (_sideOpen) {
           _toggleSide();
         } else if (_full) {

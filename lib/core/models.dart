@@ -147,6 +147,13 @@ List<EpgEntry> cleanEpg(List<EpgEntry> list) {
   return (now: now, next: next);
 }
 
+/// Når abonnementet er fullt: en forklaring (ellers null).
+String? busyText(Account a) {
+  if (a.maxConnections <= 0 || a.activeConnections < a.maxConnections) return null;
+  final all = a.maxConnections == 1 ? 'Tilkoblingen' : 'Alle de ${a.maxConnections} tilkoblingene';
+  return '$all i abonnementet er i bruk akkurat nå. Ser noen på en annen enhet? Prøv igjen om litt.';
+}
+
 class Account {
   const Account({
     this.user = '',

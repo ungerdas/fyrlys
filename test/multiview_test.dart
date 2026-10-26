@@ -152,7 +152,9 @@ void main() {
     expect(live.playing, isFalse);
     expect(players.first.urls, ['http://example/102.ts']);
 
+    // ut: multiview stopper med en gang (ikke først når siden er borte), så tilkoblingen er ledig
     Navigator.of(tester.element(find.byType(MultiviewPage))).pop();
+    expect(players.first.playing, isFalse);
     await _settle(tester);
     expect(live.urls, ['http://example/102.ts', 'http://example/102.ts']);
     expect(live.playing, isTrue);

@@ -323,7 +323,7 @@ class M3uSource implements TvSource {
   }
 
   @override
-  Future<Account> account() async => Account(host: Uri.tryParse(url)?.host ?? '');
+  Future<Account> account({bool fresh = false}) async => Account(host: Uri.tryParse(url)?.host ?? '');
 
   @override
   Future<List<Category>> categories({bool force = false}) async {

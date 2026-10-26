@@ -58,6 +58,9 @@ class _Slot {
   String? error;
   List<EpgEntry> epg = const [];
   final retries = <DateTime>[];
+
+  /// nye forsøk på å åpne kanalen før feilen vises
+  int openTries = 0;
   final subs = <StreamSubscription<Object?>>[];
 }
 
@@ -179,6 +182,7 @@ class _MultiviewState extends State<_Multiview> {
         if (!slot.started && p > Duration.zero) {
           _set(() {
             slot.started = true;
+            slot.openTries = 0;
             slot.buffering = false;
             slot.error = null;
           });
@@ -205,7 +209,9 @@ class _MultiviewState extends State<_Multiview> {
     unawaited(s.pb.dispose());
   }
 
-  Future<void> _play(_Slot s, Channel ch) async {
+  /// [retry]: et nytt forsøk av seg selv (ellers begynner tellingen av forsøk på nytt)
+  Future<void> _play(_Slot s, Channel ch, {bool retry = false}) async {
+    if (!retry) s.openTries = 0;
     final my = ++s.seq;
     _set(() {
       s.channel = ch;
@@ -243,10 +249,29 @@ class _MultiviewState extends State<_Multiview> {
       unawaited(s.pb.open(t.urls[s.url], s.source.httpHeaders));
       return;
     }
-    _set(() {
-      s.error = 'Kanalen kunne ikke spilles ($message).';
-      s.buffering = false;
-    });
+    final my = s.seq;
+    // rett etter en annen strøm (TV-spilleren) kan leverandøren ennå telle den: to nye forsøk før feilen vises
+    final ch = s.channel;
+    if (ch != null && s.openTries < 2) {
+      s.openTries++;
+      Timer(const Duration(seconds: 3), () {
+        if (mounted && my == s.seq && !s.started) unawaited(_play(s, ch, retry: true));
+      });
+      return;
+    }
+    unawaited(() async {
+      String? busy;
+      try {
+        busy = busyText(await s.source.account(fresh: true).timeout(const Duration(seconds: 8)));
+      } on Object {
+        busy = null;
+      }
+      if (my != s.seq) return;
+      _set(() {
+        s.error = busy ?? 'Kanalen kunne ikke spilles ($message).';
+        s.buffering = false;
+      });
+    }());
   }
 
   /// Strømmen stoppet: åpnes igjen, inntil tre ganger i minuttet.
@@ -266,7 +291,7 @@ class _MultiviewState extends State<_Multiview> {
     s.retries.add(now);
     final my = s.seq;
     Timer(const Duration(milliseconds: 1500), () {
-      if (mounted && my == s.seq) unawaited(_play(s, ch));
+      if (mounted && my == s.seq) unawaited(_play(s, ch, retry: true));
     });
   }
 
@@ -414,7 +439,13 @@ class _MultiviewState extends State<_Multiview> {
     return PopScope(
       canPop: !_full && !_big,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        // ut: strømmene stopper med en gang, så tilkoblingene er ledige for TV-spilleren under
+        if (didPop) {
+          for (final s in _slots) {
+            unawaited(s.pb.stop());
+          }
+          return;
+        }
         if (_big) {
           setState(() => _big = false);
         } else if (_full) {

@@ -1,5 +1,13 @@
 # Endringer
 
+## v2.1.18
+
+- Rettet: «Kanalen kunne ikke spilles» når du gikk tilbake fra TV-arkivet, «Se fra start» eller multiview. Spilleren
+  du gikk ut av, strømmet fortsatt et øyeblikk, så et abonnement med én tilkobling avviste kanalen. Nå stopper den
+  med en gang.
+- Avvises en kanal, prøver Fyrlys to ganger til før den gir opp. Er alle tilkoblingene i abonnementet i bruk (noen ser
+  på en annen enhet), står det i feilmeldingen.
+
 ## v2.1.17
 
 - **Multiview:** har du flere abonnementer (eller ett med flere tilkoblinger), kan du se flere kanaler samtidig: ett

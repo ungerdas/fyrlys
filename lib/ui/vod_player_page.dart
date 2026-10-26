@@ -137,6 +137,9 @@ class _VodPlayerState extends State<_VodPlayer> {
   /// nye åpninger når strømmen slutter før programmet (det som går nå, vokser mens du ser)
   final List<DateTime> _reopens = [];
 
+  /// nye forsøk før feilen vises (rett etter TV-spilleren kan leverandøren ennå telle den tilkoblingen)
+  int _openTries = 0;
+
   Session get _session => widget.page.session;
   List<VodPlayItem> get _items => widget.page.items;
   VodPlayItem get _item => _items[_index];
@@ -241,6 +244,7 @@ class _VodPlayerState extends State<_VodPlayer> {
     // arkivet: strømmen begynner [_base] inn i programmet
     final p = _clip != null ? _base + raw : raw;
     if (!_started && raw > Duration.zero) {
+      _openTries = 0;
       _variant = _urlIndex;
       _set(() => _started = true);
       if (_skip != null) _waitForSkip();
@@ -266,6 +270,15 @@ class _VodPlayerState extends State<_VodPlayer> {
     if (_clip != null && _urlIndex + 1 < _urls.length) {
       _urlIndex++;
       unawaited(_pb.open(_urls[_urlIndex], _session.source?.httpHeaders ?? const {}));
+      return;
+    }
+    if (_openTries < 2) {
+      _openTries++;
+      final index = _index;
+      Timer(const Duration(seconds: 3), () {
+        if (!mounted || index != _index || _started || _status != null) return;
+        unawaited(_clip != null ? _openArchive(_position) : _open());
+      });
       return;
     }
     _set(() {
@@ -313,6 +326,7 @@ class _VodPlayerState extends State<_VodPlayer> {
     if (index < 0 || index >= _items.length) return;
     _save();
     _reopens.clear();
+    _openTries = 0;
     _seekTimer?.cancel();
     _seekTarget = null;
     setState(() => _index = index);
@@ -328,6 +342,7 @@ class _VodPlayerState extends State<_VodPlayer> {
   /// «Prøv igjen»: arkivet der du var, ellers som da den ble åpnet
   void _retry() {
     _reopens.clear();
+    _openTries = 0;
     if (_clip != null) {
       unawaited(_openArchive(_position));
     } else {
@@ -630,8 +645,12 @@ class _VodPlayerState extends State<_VodPlayer> {
     return PopScope(
       canPop: !_full,
       onPopInvokedWithResult: (didPop, _) {
-        // lagres med en gang du går ut, så siden du kommer tilbake til («Fortsett fra …») er oppdatert
-        if (didPop) _save();
+        // lagres med en gang du går ut, så siden du kommer tilbake til («Fortsett fra …») er oppdatert, og strømmen
+        // stopper med en gang (TV-spilleren under åpner kanalen igjen, og abonnementet har kanskje bare én tilkobling)
+        if (didPop) {
+          _save();
+          unawaited(_pb.stop());
+        }
         if (!didPop && _full) _toggleFull();
       },
       child: Scaffold(
