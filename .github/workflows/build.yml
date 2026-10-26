@@ -85,7 +85,7 @@ jobs:
       - name: Full libmpv (LGPL)
         env:
           GH_TOKEN: ${{ github.token }}
-          MPV_TAG: 2026-08-21-49418246f3
+          MPV_TAG: 2026-10-26-baa3e11d42
           MPV_PATTERN: mpv-dev-lgpl-x86_64-2*.7z
         run: |
           # alt også i libmpv.log, så det kommer med i merknaden om noe feiler
@@ -94,7 +94,11 @@ jobs:
           if gh release download "libmpv-$MPV_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$MPV_PATTERN" 2>/dev/null; then
             echo "Fra Fyrlys sin kopi (libmpv-$MPV_TAG)"
           else
-            gh release download "$MPV_TAG" --repo zhongfly/mpv-winbuild --pattern "$MPV_PATTERN" --pattern sha256.txt
+            if ! gh release download "$MPV_TAG" --repo zhongfly/mpv-winbuild --pattern "$MPV_PATTERN" --pattern sha256.txt; then
+              echo "Filene i $MPV_TAG:"; gh release view "$MPV_TAG" --repo zhongfly/mpv-winbuild --json assets --jq '.assets[].name' || true
+              echo "Siste releaser:"; gh release list --repo zhongfly/mpv-winbuild --limit 5 || true
+              exit 1
+            fi
             name=$(ls $MPV_PATTERN)
             expected=$(grep " $name" sha256.txt | cut -d' ' -f1)
             actual=$(sha256sum "$name" | cut -d' ' -f1)
