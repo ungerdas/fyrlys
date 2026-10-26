@@ -443,6 +443,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
     final picked = _season ?? start?.season ?? 0;
     final index = picked < seasons.length ? picked : 0;
     final pad = _pad;
+    final thumbFallback = s.source?.logoUrl(info.backdrop ?? info.cover ?? item.icon);
     Widget? play;
     if (start != null) {
       final season = seasons[start.season];

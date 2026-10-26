@@ -140,10 +140,11 @@ class TracksButton extends StatelessWidget {
 
   Future<void> _show(BuildContext context) async {
     onOpen?.call();
-    final tracks = await playback.tracks();
-    if (!context.mounted) return;
+    // hvor knappen er, som PopupMenuButton gjør det
     final button = context.findRenderObject()! as RenderBox;
     final overlay = Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
+    final tracks = await playback.tracks();
+    if (!context.mounted) return;
     final position = RelativeRect.fromRect(
       Rect.fromPoints(
         button.localToGlobal(Offset.zero, ancestor: overlay),
