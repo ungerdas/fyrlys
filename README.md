@@ -36,7 +36,8 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 
 - **Fyrlys-server:** adressen til Docker-versjonen av Fyrlys på serveren din, f.eks.
   `http://192.168.1.10:8766`. Da deler appen innloggingen hos leverandøren, favorittene og
-  «Ta over» med nettsiden, og serveren holder styr på hvem som bruker tilkoblingene.
+  «Ta over» med nettsiden, og serveren holder styr på hvem som bruker tilkoblingene. TV-kanalene kommer uendret
+  fra leverandøren (serveren sender dem bare videre), med originallyd, alle lydspor og undertekster.
 - **IPTV-leverandør:** server, brukernavn og passord fra leverandøren, eller hele M3U-lenken
   (`get.php?username=…&password=…`) i serverfeltet. Favorittene lagres da i appen.
 
@@ -57,9 +58,9 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
 - **Spilleren** er som på nettsiden: bildet med kontroller, programinfo under og kanallista ved siden av
   (under på smale skjermer), med lista du kom fra, favorittene og søk. Fullskjerm (F, dobbeltklikk eller
   knappen) viser bare bildet, og kanallista kan da legges over det (C). En telefon på tvers viser bare bildet.
-- **Pause og spol tilbake** i direktesendingen når appen er logget inn på en Fyrlys-server: serveren tar vare på
-  de siste 30 minuttene. Tidslinja over knappene, −10/+10 sekunder (← og →), og «DIREKTE» (eller L) tar deg til
-  direkte igjen. Hvor langt bak du er, står ved siden av.
+- **Pause og spol tilbake** i direktesendingen: appen tar selv vare på det siste mens du ser (omtrent en halvtime
+  på PC, noen minutter på telefon og TV), uansett innlogging. Tidslinja over knappene, −10/+10 sekunder (← og →),
+  og «DIREKTE» (eller L) tar deg til direkte igjen. Hvor langt bak du er, står ved siden av.
 - **Kanalbytte:** ↑/↓ (eller kanal +/− på fjernkontrollen) blar i kanalinfoen nederst i bildet (logo, nummer, nå og
   etterpå), og kanalen du stopper på, startes etter et øyeblikk (OK starter med en gang, Esc blir der du var).
 - **Taster:** Backspace går til kanalen du så sist,
@@ -69,8 +70,7 @@ byggnummer) oppdaterer seg ikke, og Android oppdaterer seg ikke selv ennå.
   velges i spilleren.
 - **Språk:** «Språk for lyd og undertekster» i menyen (eller «Foretrukne språk …» i spillerens sporvalg): velg
   f.eks. norsk, så engelsk for lyden og norsk for undertekstene, så velger spilleren det selv. Undertekster slås
-  bare på når lyden er på et annet språk, og kan også slås helt av. Via Fyrlys-serveren har TV-kanalene ett
-  lydspor og ingen undertekster, så der gjelder valget filmer og serier.
+  bare på når lyden er på et annet språk, og kan også slås helt av.
 - Under bildet står oppløsning, kodek, om bildet dekodes i maskinvare, lyden og hvor strømmen kommer fra.
 - Brytes strømmen, prøver spilleren på nytt, inntil tre ganger i minuttet. Legges appen bort på telefon
   eller TV, gir den fra seg tilkoblingen og starter kanalen igjen når du kommer tilbake.

@@ -55,9 +55,13 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
     User-Agent som VLC, strøm `/live/<bruker>/<passord>/<id>.m3u8` og `.ts` som reserve, EPG i base64.
   - `core/fyrlys_source.dart` – mot Fyrlys-serveren: `/api/streams/info` (ffmpeg?), `/api/xtream/status`,
     `/api/xtream/categories`, `/api/xtream/streams` (sider à 120), `/api/xtream/epg`, logoer via
-    `/api/xtream/img?u=`. Strøm via ffmpeg på serveren: `GET /api/live/<id>/index.m3u8?c=<klient>` spørres
-    først (409 `busy` → «Ta over»; `&force=1` **bare** i den spørringen), så spiller mpv samme adresse uten
-    force. `POST /api/live/<id>/stop?c=` ved kanalbytte/lukking. Favoritter som endringer
+    `/api/xtream/img?u=`. TV **direkte** (2.1.4, Pål-Erik: «det skal ikke gjennom serveren»), når `/api/streams/info`
+    har `direct: true`: `GET /api/live/<id>/direct?c=<klient>` spørres først (409 `busy` → «Ta over»; `&force=1` bare
+    da), så spiller mpv `/api/xtream/hls/<id>.m3u8?c=` (reserve `/api/xtream/file/live/<id>.ts?c=`): leverandørens
+    strøm uendret via serverens mellomstasjon (passordet blir på serveren), og `stillWatching` gjentar `direct?c=`
+    hvert 10. s (`PlayTarget.keepAlive`; 409 = tatt over). Eldre servere: ffmpeg som før (`GET
+    /api/live/<id>/index.m3u8?c=`, så samme adresse uten force, tilbakespoling på serveren).
+    `POST /api/live/<id>/stop?c=` ved kanalbytte/lukking. Favoritter som endringer
     (`PUT /api/streams/favs` med `op`), delt med nettsiden.
   - Filmer og serier (`core/vod.dart`: modellene, `pageOf`/`catalogOf` for filtrering, sortering og sider à 120,
     `episodeCode`, `ratingText`): Fyrlys-serveren gjør det selv (`/api/xtream/categories?kind=vod|series`,
@@ -99,9 +103,8 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   «Fortsett å se», sist sett). Tester må `pumpAndSettle` etter fane-/listebytter (to barn under overgangen).
 - `ui/language_dialog.dart` – «Språk for lyd og undertekster» (FilterChips i den rekkefølgen du velger, «Av» for
   undertekster) og `TracksButton`, sporvalget i begge spillerne (henter sporene asynkront så det som faktisk spilles
-  er huket av; «Foretrukne språk …» nederst gjelder straks). Via Fyrlys-serveren har direktesendingene bare første
-  lydspor og ingen undertekster (`-map 0:a:0 -sn` i `live.py`), så språkene gjelder filmer/serier og TV rett fra
-  leverandøren.
+  er huket av; «Foretrukne språk …» nederst gjelder straks). TV via ffmpeg på serveren (eldre servere) har bare første
+  lydspor og ingen undertekster (`-map 0:a:0 -sn`); direkte (2.1.4) har alt.
 - `ui/guide_view.dart` – TV-guiden, som på nettsiden: 6 timer fra halvtimen før denne halvtimen (`guideStart`),
   5 px/min (4 på smale skjermer), «nå»-strek, «Til nå», kategori (★ Favorittkanaler / Alle / dine kategorier
   først; huskes i `guide_cat`) og søket i toppen. Kanalnavnene er en egen liste til venstre som rulles sammen med
@@ -137,7 +140,14 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   toppstripa i fullskjerm skjules imens. Den lille spinneren i banneret går til bildet starter: ingen
   `pumpAndSettle` i tester etter et kanalbytte (den falske avspilleren starter aldri). Telefon/TV: kanalen stoppes når
   appen legges bort (`paused`) og startes igjen ved `resumed`.
-  Pause og tilbakespoling (bare via Fyrlys-serveren med ffmpeg: `PlayTarget.timeshift` fra `timeshift_min` i
+  Pause og tilbakespoling i appen selv (2.1.4, `PlayTarget.localShift`: direkte via serveren og rett mot leverandøren):
+  `setup(live: true)` gir mpv `cache=yes`, `demuxer-seekable-cache=yes` og `cache-on-disk` i
+  `<cache>/mpv` (`MpvPlayback.cacheDir`, ryddes ved start; 2000/1000 MiB bak/foran på PC, 600/300 på Android, mindre i
+  minnet uten mappe). Vakta spør `liveCache()` (fra `demuxer-cache-state`: `reader-pts`, `cache-end`,
+  `seekable-ranges`) hvert 2. s; «direkte» er det minste avspilleren har foran mens du ser direkte (`_liveAhead`,
+  strømmen kommer i biter, derfor 15 s slakk i `_atLive`), bak direkte = foran − det. Spoling = `seekBy` (mpv
+  `seek <s> relative`) i bufferet, uten å åpne på nytt. Ikke prøvd i ekte mpv.
+  Tilbakespoling via Fyrlys-serveren med ffmpeg (eldre servere: `PlayTarget.timeshift` fra `timeshift_min` i
   `/api/streams/info`): ffmpegs HLS-demuxer kan ikke spole i en direktesending, så spillelista åpnes på nytt med
   `live_start_index=-N` (`change-list demuxer-lavf-o append`, så media_kits egne valg står). N regnes ut fra
   `#EXTINF` i spillelista (`TvSource.liveWindow`, `LiveWindow.at`; 3 fra slutten er «direkte»). Hvor langt bak du
@@ -209,5 +219,7 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   libmpv) og tallene på en ekte fjernkontroll er ikke prøvd.
 - 26.10.2026: 2.1.3, «mer smooth» (Pål-Eriks ønske, alle sju forslagene): lista og bildene på disk, programinfo
   ved start, kanalinfo ved bytte, rask blaing, overganger og fokus. Testet med tester; ikke prøvd på ekte enheter.
-- Ideer senere: tilbakespoling rett mot leverandøren (mpv-bufferet), bilde-i-bilde på Android, serveren kunne velge
-  lydspor etter språk, signering av exe/APK, Play Store, iOS/macOS.
+- 26.10.2026: 2.1.4: TV direkte (uendret strøm via serverens mellomstasjon, direkte-økter på serveren for «Ta over»
+  og seere, se peagstreams) og pause/spoling i appens eget buffer (Pål-Eriks valg: «Appen husker selv»). Testet med
+  tester; mpv-bufferet, `demuxer-cache-state` og spolingen i ekte mpv er ikke prøvd.
+- Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.

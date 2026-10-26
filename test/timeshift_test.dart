@@ -137,6 +137,51 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('direkte fra leverandøren: avspilleren spoler i det den har tatt vare på', (tester) async {
+    final (source, fake) = await _open(tester, FakeSource(direct: true));
+    expect(fake.live, isTrue);
+    // ingen tidslinje før avspilleren har sagt hva den har
+    expect(find.byKey(const ValueKey('live-timeline')), findsNothing);
+
+    // bildet har startet: ti minutter bak, tolv sekunder foran (det er direkte, for strømmen kommer i biter)
+    fake.cache = (back: const Duration(minutes: 10), ahead: const Duration(seconds: 12));
+    fake.moveTo(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('live-timeline')), findsOneWidget);
+    expect(find.text('−10:00'), findsOneWidget);
+    expect(find.text('DIREKTE'), findsOneWidget);
+
+    // ← to ganger: tjue sekunder tilbake i det avspilleren har, uten at strømmen åpnes på nytt
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    expect(fake.relativeSeeks, [const Duration(seconds: -20)]);
+    expect(fake.urls, hasLength(1));
+    await tester.pump(const Duration(milliseconds: 1300));
+    await tester.pump();
+    expect(find.text('−0:20'), findsOneWidget);
+
+    // L: tilbake til direkte
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pump();
+    expect(fake.relativeSeeks.last, const Duration(seconds: 20));
+
+    // serveren hører fra appen hvert 10. sekund; tar noen over, vises «Ta over»
+    final before = source.beats;
+    await tester.pump(const Duration(seconds: 11));
+    expect(source.beats, greaterThan(before));
+    source.takenOver = true;
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pump();
+    expect(find.text('Stopp Stua og se her'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
   testWidgets('uten tilbakespoling: ingen tidslinje, og ← gjør ingenting', (tester) async {
     final (source, fake) = await _open(tester, FakeSource());
     fake.moveTo(const Duration(seconds: 1));

@@ -149,6 +149,23 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// tidslinja mens den dras: sekunder bak direkte
   double? _shiftDrag;
 
+  // ── pause og tilbakespoling i avspillerens eget lager (TV rett fra leverandøren) ──
+
+  /// det avspilleren har tatt vare på rundt der du er, og når det sist ble spurt om
+  LiveCache? _cache;
+  DateTime _cacheAt = DateTime(2000);
+  bool _cachePolling = false;
+
+  /// hvor mye avspilleren har hentet foran når du ser direkte (strømmen kommer i biter, så det er aldri 0)
+  Duration? _liveAhead;
+
+  /// du ser direkte (ikke pauset eller spolt tilbake siden): da følges [_liveAhead] med
+  bool _localLive = true;
+
+  /// sist appen sa fra til serveren at den fortsatt ser på
+  DateTime _beatAt = DateTime(2000);
+  bool _beatBusy = false;
+
   /// tall du taster for å gå til en kanal; samles til det har gått 1,4 sekunder uten nye
   String _digits = '';
   Timer? _digitTimer;
@@ -259,7 +276,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   // ── avspilling ──
 
   Future<void> _start() async {
-    await _pb.setup();
+    await _pb.setup(live: true);
     await _pb.setLanguages(_session.languages);
     await _pb.setVolume(_muted ? 0 : _volume);
     await _open();
@@ -294,6 +311,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       if (my != _seq || !mounted || _suspended) return;
       _target = t;
       _url = 0;
+      _beatAt = clock.now();
       await _pb.open(t.urls.first, src.httpHeaders);
     } on BusyException catch (e) {
       if (my != _seq || !mounted) return;
@@ -365,15 +383,19 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   }
 
   /// Vakt: står bildet fast uten at mpv sier fra, prøves det på nytt. Henter også spillelista for tilbakespolingen
-  /// (og mens du har pauset, så serveren ser at du fortsatt er der).
+  /// (og mens du har pauset, så serveren ser at du fortsatt er der), eller spør avspilleren hva den har tatt vare
+  /// på, og sier fra til Fyrlys-serveren at du fortsatt ser på.
   void _check() {
-    if (!mounted || _suspended || _status != null || _busy != null || _target == null) return;
-    if (_canShift && (_started || _userPaused)) {
+    final t = _target;
+    if (!mounted || _suspended || _status != null || _busy != null || t == null) return;
+    if (_serverShift && (_started || _userPaused)) {
       final age = clock.now().difference(_windowAt);
       if (age > (_userPaused ? const Duration(seconds: 10) : const Duration(seconds: 15))) unawaited(_refreshWindow());
       // på pause: hvor langt bak du er, telles opp
       if (_userPaused) _set(() {});
     }
+    if (t.localShift && (_started || _userPaused)) unawaited(_pollCache());
+    if (t.keepAlive != null && clock.now().difference(_beatAt) >= const Duration(seconds: 10)) unawaited(_beat());
     final now = DateTime.now();
     final pos = _pb.position;
     if (pos != _lastPos || _userPaused) {
@@ -433,6 +455,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     if (_playing) {
       _userPaused = true;
       _pausedAt = clock.now();
+      _localLive = false;
       unawaited(_pb.playOrPause());
     } else {
       final pausedAt = _pausedAt;
@@ -441,7 +464,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       _pausedAt = null;
       if (pausedAt != null) _pausedTotal += clock.now().difference(pausedAt);
       // Lang pause: åpne spillelista på nytt der du var, så avspilleren ikke må stole på det den hadde i minnet.
-      if (_canShift && pausedAt != null && clock.now().difference(pausedAt) >= const Duration(seconds: 45)) {
+      if (_serverShift && pausedAt != null && clock.now().difference(pausedAt) >= const Duration(seconds: 45)) {
         unawaited(_shiftTo(behind));
       } else {
         unawaited(_pb.playOrPause());
@@ -452,24 +475,40 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   // ── pause og tilbakespoling ──
 
-  /// Strømmen går via Fyrlys-serveren, som tar vare på det siste: da går det an å spole.
-  bool get _canShift {
+  /// Strømmen går via Fyrlys-serveren (ffmpeg), som tar vare på det siste: spolingen åpner spillelista på nytt.
+  bool get _serverShift {
     final t = _target;
     return t != null && t.timeshift > Duration.zero && _url == 0 && _busy == null && _status == null;
   }
 
-  /// Hvor langt bak direkte du er: der du begynte, pluss pausene.
+  /// Rett fra leverandøren: avspilleren har tatt vare på det siste selv, og det hoppes i det.
+  bool get _localShift {
+    final t = _target;
+    return t != null && t.localShift && _cache != null && _liveAhead != null && _busy == null && _status == null;
+  }
+
+  bool get _canShift => _serverShift || _localShift;
+
+  /// Hvor langt bak direkte du er: der du begynte, pluss pausene (eller, rett fra leverandøren, hvor mye mer
+  /// avspilleren har hentet foran enn når du ser direkte).
   Duration get _behind {
     final t = _target;
     if (t == null || !_canShift) return Duration.zero;
+    if (_localShift) {
+      var b = _cache!.ahead - _liveAhead!;
+      if (_userPaused) b += clock.now().difference(_cacheAt);
+      return b < Duration.zero ? Duration.zero : b;
+    }
     final paused = _pausedAt;
     var b = _behind0 + _pausedTotal + (paused == null ? Duration.zero : clock.now().difference(paused));
     if (b > t.timeshift) b = t.timeshift;
     return b;
   }
 
-  /// Direkte: under åtte sekunder bak og ikke pauset.
-  bool get _atLive => !_canShift || (_behind < const Duration(seconds: 8) && !_userPaused);
+  /// Direkte: litt bak og ikke pauset (rett fra leverandøren kommer strømmen i biter på opptil ti sekunder).
+  bool get _atLive =>
+      !_canShift ||
+      (_behind < (_localShift ? const Duration(seconds: 15) : const Duration(seconds: 8)) && !_userPaused);
 
   void _resetShift() {
     _behind0 = Duration.zero;
@@ -482,6 +521,79 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _shiftDrag = null;
     // tidslinja kan ha forsvunnet midt i et drag (da kommer aldri onChangeEnd)
     _dragging = false;
+    _cache = null;
+    _cacheAt = DateTime(2000);
+    _liveAhead = null;
+    _localLive = true;
+  }
+
+  /// Spør avspilleren hva den har tatt vare på. Mens du ser direkte, følges det den har foran med (det minste).
+  Future<void> _pollCache() async {
+    if (_cachePolling) return;
+    _cachePolling = true;
+    final my = _seq;
+    try {
+      final c = await _pb.liveCache();
+      if (!mounted || my != _seq || c == null) return;
+      final base = _liveAhead;
+      if (_localLive && !_userPaused && (base == null || c.ahead < base)) _liveAhead = c.ahead;
+      final live = _liveAhead ?? c.ahead;
+      final behind = c.ahead > live ? c.ahead - live : Duration.zero;
+      _set(() {
+        _cache = c;
+        _cacheAt = clock.now();
+        _window = c.back + behind;
+      });
+    } finally {
+      _cachePolling = false;
+    }
+  }
+
+  /// Til Fyrlys-serveren: du ser fortsatt på. Har noen tatt over tilkoblingen, vises «Ta over».
+  Future<void> _beat() async {
+    final src = _source;
+    final t = _target;
+    if (src == null || t == null || _beatBusy) return;
+    _beatBusy = true;
+    _beatAt = clock.now();
+    final my = _seq;
+    try {
+      await src.stillWatching(t);
+    } on BusyException catch (e) {
+      if (!mounted || my != _seq) return;
+      await _pb.stop();
+      if (!mounted || my != _seq) return;
+      _set(() {
+        _busy = e;
+        _buffering = false;
+      });
+    } on SourceException {
+      // prøver igjen om ti sekunder
+    } finally {
+      _beatBusy = false;
+    }
+  }
+
+  /// Rett fra leverandøren: hopp i det avspilleren har tatt vare på, [back] bak direkte (0 = direkte).
+  Future<void> _localShiftTo(Duration back) async {
+    final c = _cache;
+    final live = _liveAhead;
+    if (c == null || live == null) return;
+    final now = _behind;
+    var target = back < Duration.zero ? Duration.zero : back;
+    if (target > c.back + now) target = c.back + now;
+    final delta = now - target;
+    _shiftTarget = null;
+    _localLive = target < const Duration(seconds: 3);
+    if (delta.abs() >= const Duration(milliseconds: 500)) await _pb.seekBy(delta);
+    if (!mounted) return;
+    // det avspilleren har bak og foran, flytter seg like mye (og spørres på nytt om litt)
+    final backNow = c.back + delta;
+    _set(() {
+      _cache = (back: backNow < Duration.zero ? Duration.zero : backNow, ahead: live + target);
+      _cacheAt = clock.now();
+    });
+    _lastMove = DateTime.now();
   }
 
   Future<void> _refreshWindow() async {
@@ -546,11 +658,16 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _wake();
   }
 
-  /// Åpner direktesendingen [back] bak direkte (0 = direkte). Spillelista hentes for å finne segmentet.
+  /// Åpner direktesendingen [back] bak direkte (0 = direkte). Spillelista hentes for å finne segmentet. Rett fra
+  /// leverandøren hoppes det i det avspilleren har tatt vare på.
   Future<void> _shiftTo(Duration back) async {
     final src = _source;
     final t = _target;
     if (src == null || t == null || !_canShift || _suspended) return;
+    if (_localShift) {
+      await _localShiftTo(back);
+      return;
+    }
     final my = ++_seq;
     final url = t.urls[_url];
     _shiftTarget = back;
@@ -934,7 +1051,9 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     final url = t.urls[math.min(_url, t.urls.length - 1)];
     if (url.contains('/api/live/')) return 'via Fyrlys-serveren';
     final kind = url.contains('.m3u8') ? 'HLS' : 'MPEG-TS';
-    return _source?.kind == 'fyrlys' ? '$kind fra leverandøren via serveren' : '$kind rett fra leverandøren';
+    // via serverens mellomstasjon (så passordet blir der), men uendret
+    if (url.contains('/api/xtream/')) return '$kind direkte fra leverandøren';
+    return '$kind rett fra leverandøren';
   }
 
   @override

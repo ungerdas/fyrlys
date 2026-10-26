@@ -346,11 +346,15 @@ class XtreamSource implements TvSource {
   Future<PlayTarget> open(Channel channel, {bool takeOver = false}) async {
     // HLS fra leverandøren starter ved direktepunktet; MPEG-TS er reserven
     final base = '$server/live/$_creds/${channel.id}';
-    return PlayTarget(['$base.m3u8', '$base.ts']);
+    // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
+    return PlayTarget(['$base.m3u8', '$base.ts'], localShift: true);
   }
 
   @override
   Future<void> close(Channel channel) async {}
+
+  @override
+  Future<void> stillWatching(PlayTarget target) async {}
 
   /// leverandøren har ingen tilbakespoling her
   @override

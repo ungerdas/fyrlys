@@ -13,6 +13,7 @@ import 'core/fyrlys_source.dart';
 import 'core/session.dart';
 import 'core/updater.dart';
 import 'platform.dart';
+import 'ui/playback.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,9 +27,15 @@ Future<void> main() async {
   ListCache? lists;
   try {
     lists = FileListCache(Directory('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}lister'));
-    final images = ImageStore(Directory('${(await getApplicationCacheDirectory()).path}${Platform.pathSeparator}bilder'));
+    final cache = (await getApplicationCacheDirectory()).path;
+    final images = ImageStore(Directory('$cache${Platform.pathSeparator}bilder'));
     ImageStore.instance = images;
     unawaited(images.prune());
+    // TV-bufferet til avspilleren (pause og spoling): det som ble liggende sist (krasj), ryddes først
+    final mpv = Directory('$cache${Platform.pathSeparator}mpv');
+    if (mpv.existsSync()) mpv.deleteSync(recursive: true);
+    mpv.createSync(recursive: true);
+    MpvPlayback.cacheDir = mpv.path;
   } on Object {
     // uten disk
   }

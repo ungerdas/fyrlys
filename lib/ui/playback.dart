@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../core/languages.dart';
 import '../core/names.dart';
+import '../platform.dart';
 
 /// Et lydspor eller en undertekst man kan velge i spilleren.
 class TrackChoice {
@@ -18,6 +21,10 @@ class TrackChoice {
 
 /// Lydsporene og undertekstene i det som spilles nå.
 typedef TrackList = ({List<TrackChoice> audio, List<TrackChoice> subtitles});
+
+/// Det avspilleren har tatt vare på av en direktesending: så langt tilbake fra der du er, og så mye foran (som er
+/// hentet, men ikke vist ennå).
+typedef LiveCache = ({Duration back, Duration ahead});
 
 /// Avspilleren bak spilleren: mpv via media_kit i appen, en falsk i testene (mpv finnes ikke der).
 abstract class Playback {
@@ -39,8 +46,15 @@ abstract class Playback {
 
   Future<void> seek(Duration position);
 
-  /// innstillinger for direktesending over nett, før første kanal åpnes
-  Future<void> setup();
+  /// Innstillinger før første fil eller kanal åpnes. [live]: TV, der avspilleren tar vare på det siste (på
+  /// disken når det går), så du kan pause og spole tilbake i direktesendingen.
+  Future<void> setup({bool live = false});
+
+  /// hvor mye av direktesendingen avspilleren har tatt vare på, rundt der du er (null: vet ikke)
+  Future<LiveCache?> liveCache();
+
+  /// hopp så langt fram (eller tilbake, negativt) i det avspilleren har tatt vare på
+  Future<void> seekBy(Duration delta);
 
   /// [start]: hvor filmen skal begynne (fortsett der du slapp). [liveFromEnd]: direktesending, så mange
   /// segmenter fra slutten av spillelista (3 er direkte; flere er tilbake i tid).
@@ -111,20 +125,67 @@ class MpvPlayback implements Playback {
   @override
   Future<void> seek(Duration position) => _player.seek(position);
 
+  /// mappen avspilleren kan legge bufferet for direktesendinger i (settes i main.dart; null: i minnet)
+  static String? cacheDir;
+
   @override
-  Future<void> setup() async {
+  Future<void> setup({bool live = false}) async {
     final p = _player.platform;
     if (p is! NativePlayer) return;
-    try {
-      // Direktesending over nett: koble til igjen ved korte brudd, og ikke vent evig på en strøm som er død.
-      await p.setProperty('network-timeout', '20');
-      await p.setProperty(
-        'stream-lavf-o',
-        'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5',
-      );
-    } on Object {
-      // en spiller uten disse innstillingene spiller likevel
+    // Direktesending over nett: koble til igjen ved korte brudd, og ikke vent evig på en strøm som er død.
+    await _try(() => p.setProperty('network-timeout', '20'));
+    await _try(() => p.setProperty(
+          'stream-lavf-o',
+          'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5',
+        ));
+    if (!live) return;
+    // TV: det som er hentet, tas vare på (og det går an å hoppe i det, selv om strømmen selv ikke kan spoles).
+    // På disken holder det til omtrent en halvtime på PC; ellers i minnet, og mindre.
+    final dir = cacheDir;
+    await _try(() => p.setProperty('cache', 'yes'));
+    await _try(() => p.setProperty('demuxer-seekable-cache', 'yes'));
+    if (dir != null) {
+      await _try(() => p.setProperty('demuxer-cache-dir', dir));
+      await _try(() => p.setProperty('cache-on-disk', 'yes'));
     }
+    final disk = dir != null;
+    await _try(() => p.setProperty('demuxer-max-back-bytes', disk ? (isDesktop ? '2000MiB' : '600MiB') : (isDesktop ? '400MiB' : '120MiB')));
+    await _try(() => p.setProperty('demuxer-max-bytes', disk ? (isDesktop ? '1000MiB' : '300MiB') : (isDesktop ? '200MiB' : '60MiB')));
+  }
+
+  @override
+  Future<LiveCache?> liveCache() async {
+    final p = _player.platform;
+    if (p is! NativePlayer) return null;
+    try {
+      // demuxer-cache-state er et JSON-kart: hvor langt det er hentet (cache-end), hvor avspilleren leser
+      // (reader-pts) og hvilke deler det går an å hoppe i (seekable-ranges), alt i strømmens egen tid
+      final j = jsonDecode(await p.getProperty('demuxer-cache-state'));
+      if (j is! Map) return null;
+      final end = j['cache-end'];
+      final reader = j['reader-pts'];
+      final ranges = j['seekable-ranges'];
+      if (end is! num || reader is! num || ranges is! List) return null;
+      for (final r in ranges) {
+        if (r is! Map) continue;
+        final start = r['start'];
+        final stop = r['end'];
+        if (start is! num || stop is! num || reader < start - 1 || reader > stop + 1) continue;
+        return (back: _seconds(reader - start), ahead: _seconds(end - reader));
+      }
+    } on Object {
+      // eldre mpv eller ingen strøm ennå
+    }
+    return null;
+  }
+
+  static Duration _seconds(num s) => Duration(milliseconds: (s.clamp(0, 1e7) * 1000).round());
+
+  @override
+  Future<void> seekBy(Duration delta) async {
+    final p = _player.platform;
+    if (p is! NativePlayer) return;
+    await _try(() => p.command(['seek', (delta.inMilliseconds / 1000).toStringAsFixed(2), 'relative']));
   }
 
   /// segmentene fra slutten sist en direktesending ble åpnet tilbake i tid (null: som vanlig)

@@ -90,6 +90,44 @@ void main() {
     expect(target.urls, ['http://fyrlys:8766/api/xtream/hls/7.m3u8', 'http://fyrlys:8766/api/xtream/file/live/7.ts']);
   });
 
+  test('direkte: spør serveren først («ta over» bare da), strømmen uendret, og hjerteslag som sier fra', () async {
+    final calls = <String>[];
+    var taken = false;
+    final client = MockClient((req) async {
+      calls.add('${req.method} ${req.url.path}?${req.url.query}');
+      final p = req.url.path;
+      if (p == '/api/streams/info') return json({'name': 'Fyrlys', 'ffmpeg': true, 'direct': true, 'timeshift_min': 30});
+      if (p == '/api/live/7/direct') {
+        if (taken && req.url.queryParameters['force'] != '1') return json(busyBody, 409);
+        return json({'ok': true});
+      }
+      if (p == '/api/live/7/stop') return http.Response('', 204);
+      return http.Response('', 404);
+    });
+    final src = FyrlysSource(base: 'http://fyrlys:8766', client: client, clientId: 'app1');
+    await src.prepare();
+    expect(src.direct, isTrue);
+
+    final target = await src.open(const Channel(id: '7', name: 'Sju'));
+    expect(target.urls, [
+      'http://fyrlys:8766/api/xtream/hls/7.m3u8?c=app1',
+      'http://fyrlys:8766/api/xtream/file/live/7.ts?c=app1',
+    ]);
+    expect(target.localShift, isTrue);
+    expect(target.timeshift, Duration.zero);
+    expect(target.keepAlive, 'http://fyrlys:8766/api/live/7/direct?c=app1');
+    await src.stillWatching(target);
+
+    // noen tok over: hjerteslaget sier fra, og «Ta over» spør med force=1
+    taken = true;
+    await expectLater(src.stillWatching(target), throwsA(isA<BusyException>()));
+    await expectLater(src.open(const Channel(id: '7', name: 'Sju')), throwsA(isA<BusyException>()));
+    await src.open(const Channel(id: '7', name: 'Sju'), takeOver: true);
+    expect(calls.where((c) => c.contains('force=1')), hasLength(1));
+    await src.close(const Channel(id: '7', name: 'Sju'));
+    expect(calls.last, 'POST /api/live/7/stop?c=app1');
+  });
+
   test('ikke Fyrlys på adressen', () async {
     final client = MockClient((req) async => http.Response('<html>', 200));
     await expectLater(

@@ -2,6 +2,16 @@
 
 Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
 
+## v2.1.4
+
+- **TV direkte:** via Fyrlys-serveren spiller appen nå leverandørens strøm uendret, i stedet for at serveren gjør den
+  om med ffmpeg. Du får originallyden (også 5.1), alle lydspor og undertekster, og språkvalget gjelder TV også.
+  Serveren sender bare strømmen videre (så passordet blir der), og holder fortsatt styr på tilkoblingen: «Ta over»
+  virker som før, og serveren oppdaterer seg ikke mens du ser.
+- **Pause og spoling i appen:** appen tar selv vare på det siste mens du ser (på disken, omtrent en halvtime på PC og
+  noen minutter på telefon og TV). Tidslinja, ←/→, «DIREKTE» og L virker som før, også når appen er logget inn rett
+  mot leverandøren. Bufferet begynner når du åpner kanalen.
+
 ## v2.1.3
 
 Mer smooth:

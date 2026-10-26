@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../core/fyrlys_source.dart';
 import '../core/languages.dart';
 import '../core/session.dart';
 import 'playback.dart';
@@ -10,7 +11,11 @@ import 'playback.dart';
 Future<bool> showLanguageDialog(BuildContext context, Session session) async {
   final result = await showDialog<LanguagePrefs>(
     context: context,
-    builder: (_) => _LanguageDialog(initial: session.languages, viaServer: session.source?.kind == 'fyrlys'),
+    builder: (_) {
+      final src = session.source;
+      // eldre Fyrlys-servere (uten direkte avspilling) gjør om TV-kanalene med ffmpeg
+      return _LanguageDialog(initial: session.languages, viaServer: src is FyrlysSource && !src.direct);
+    },
   );
   if (result == null) return false;
   session.saveLanguages(result);

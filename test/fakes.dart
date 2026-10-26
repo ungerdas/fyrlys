@@ -9,7 +9,7 @@ import 'package:fyrlys/ui/playback.dart';
 
 /// En kilde uten nett, med tre kanaler i to kategorier. NRK 1 har program nå og etterpå.
 class FakeSource implements TvSource {
-  FakeSource({this.busy = const {}, this.timeshift = Duration.zero, this.window});
+  FakeSource({this.busy = const {}, this.timeshift = Duration.zero, this.window, this.direct = false});
 
   /// kanaler der alle tilkoblingene er i bruk, til man tar over
   final Set<String> busy;
@@ -21,6 +21,10 @@ class FakeSource implements TvSource {
 
   /// som når noen andre tar over tilkoblingen mens du har pauset
   bool takenOver = false;
+
+  /// som Fyrlys-serveren med direkte avspilling: strømmen uendret, appen spoler selv og sier fra hvert 10. sekund
+  final bool direct;
+  int beats = 0;
   final opened = <String>[];
   final closed = <String>[];
 
@@ -81,7 +85,18 @@ class FakeSource implements TvSource {
       throw const BusyException('Alle tilkoblingene er i bruk.', ['NRK 1 HD']);
     }
     opened.add(channel.id);
-    return PlayTarget(['http://example/${channel.id}.ts'], timeshift: timeshift);
+    return PlayTarget(
+      ['http://example/${channel.id}.ts'],
+      timeshift: timeshift,
+      keepAlive: direct ? 'http://example/beat/${channel.id}' : null,
+      localShift: direct,
+    );
+  }
+
+  @override
+  Future<void> stillWatching(PlayTarget target) async {
+    beats++;
+    if (takenOver) throw const BusyException('Alle tilkoblingene er i bruk.', ['Stua']);
   }
 
   @override
@@ -225,8 +240,26 @@ class FakePlayback implements Playback {
   @override
   Future<void> seek(Duration position) async => seeks.add(position);
 
+  /// [setup] for TV (bufferet for pause og spoling)
+  bool live = false;
+
+  /// det avspilleren «har tatt vare på» i en direktesending, og hoppene i det
+  LiveCache? cache;
+  final relativeSeeks = <Duration>[];
+
   @override
-  Future<void> setup() async {}
+  Future<void> setup({bool live = false}) async => this.live = live;
+
+  @override
+  Future<LiveCache?> liveCache() async => cache;
+
+  @override
+  Future<void> seekBy(Duration delta) async {
+    relativeSeeks.add(delta);
+    // som mpv: det som er bak og foran, flytter seg like mye
+    final c = cache;
+    if (c != null) cache = (back: c.back + delta, ahead: c.ahead - delta);
+  }
 
   @override
   Future<void> open(String url, Map<String, String> headers, {Duration? start, int? liveFromEnd}) async {

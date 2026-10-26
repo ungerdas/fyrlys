@@ -38,6 +38,10 @@ class FyrlysSource implements TvSource {
   /// serveren har ffmpeg: kanalene går via den (tilbakespoling, seere og «Ta over»)
   bool ffmpeg;
 
+  /// serveren lar appen se TV direkte: leverandørens strøm uendret (videresendt, så passordet blir på serveren),
+  /// mens serveren holder styr på tilkoblingen («Ta over» og seere). Brukes når serveren kan det (2.1.4).
+  bool direct = false;
+
   /// hvor mange minutter serveren tar vare på (PEAG_TIMESHIFT_MIN), så du kan pause og spole tilbake
   int timeshiftMinutes = 0;
 
@@ -124,6 +128,7 @@ class FyrlysSource implements TvSource {
       throw const SourceException('Fant ikke Fyrlys på den adressen');
     }
     ffmpeg = info['ffmpeg'] == true;
+    direct = info['direct'] == true;
     final shift = info['timeshift_min'];
     timeshiftMinutes = shift is num ? shift.toInt() : 0;
   }
@@ -216,7 +221,26 @@ class FyrlysSource implements TvSource {
   @override
   Future<PlayTarget> open(Channel channel, {bool takeOver = false}) async {
     final id = channel.id;
-    if (!ffmpeg) return PlayTarget(['$base/api/xtream/hls/$id.m3u8', '$base/api/xtream/file/live/$id.ts']);
+    if (direct) {
+      // Spør først (og «Ta over» bare her); så henter avspilleren strømmen uendret via serverens mellomstasjon,
+      // og appen sier fra hvert 10. sekund at den fortsatt ser på.
+      final beat = '$base/api/live/$id/direct?c=$clientId';
+      final http.Response r;
+      try {
+        r = await _http.get(Uri.parse(takeOver ? '$beat&force=1' : beat)).timeout(const Duration(seconds: 15));
+      } on Exception {
+        throw const SourceException('Får ikke kontakt med Fyrlys-serveren');
+      }
+      if (r.statusCode != 200) _throwFor(r);
+      return PlayTarget(
+        ['$base/api/xtream/hls/$id.m3u8?c=$clientId', '$base/api/xtream/file/live/$id.ts?c=$clientId'],
+        keepAlive: beat,
+        localShift: true,
+      );
+    }
+    if (!ffmpeg) {
+      return PlayTarget(['$base/api/xtream/hls/$id.m3u8', '$base/api/xtream/file/live/$id.ts'], localShift: true);
+    }
     final url = '$base/api/live/$id/index.m3u8?c=$clientId';
     // Spør først. «Alle tilkoblinger i bruk» og «Ta over» håndteres her, én gang. Adressen avspilleren henter
     // spillelista fra, har aldri «ta over» – ellers ville den tatt tilkoblingen tilbake hvert 2. sekund.
@@ -257,8 +281,21 @@ class FyrlysSource implements TvSource {
   }
 
   @override
+  Future<void> stillWatching(PlayTarget target) async {
+    final url = target.keepAlive;
+    if (url == null) return;
+    final http.Response r;
+    try {
+      r = await _http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+    } on Exception {
+      return; // et nettverksblaff stopper ikke bildet; neste gang prøves det igjen
+    }
+    if (r.statusCode == 409) _throwFor(r);
+  }
+
+  @override
   Future<void> close(Channel channel) async {
-    if (!ffmpeg) return;
+    if (!ffmpeg && !direct) return;
     try {
       await _http.post(Uri.parse('$base/api/live/${channel.id}/stop?c=$clientId')).timeout(const Duration(seconds: 5));
     } on Exception {

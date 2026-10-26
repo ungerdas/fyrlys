@@ -19,12 +19,19 @@ class BusyException extends SourceException {
 
 /// Hvor strømmen hentes fra. Adressene prøves i rekkefølge (f.eks. HLS først, så MPEG-TS).
 class PlayTarget {
-  const PlayTarget(this.urls, {this.timeshift = Duration.zero});
+  const PlayTarget(this.urls, {this.timeshift = Duration.zero, this.keepAlive, this.localShift = false});
 
   final List<String> urls;
 
   /// hvor langt tilbake det går an å spole i direktesendingen (Fyrlys-serveren med ffmpeg); 0 = ikke mulig
   final Duration timeshift;
+
+  /// spørres hvert 10. sekund mens du ser (Fyrlys-serveren holder tilkoblingen til deg); 409 = noen har tatt over
+  final String? keepAlive;
+
+  /// strømmen kommer uendret fra leverandøren: avspilleren tar vare på det siste selv, så du kan pause og spole
+  /// tilbake i det
+  final bool localShift;
 }
 
 /// En kilde til TV: rett mot IPTV-leverandøren (Xtream Codes) eller via Fyrlys-serveren (Docker-versjonen).
@@ -61,6 +68,10 @@ abstract class TvSource {
 
   /// frigjør tilkoblingen når du går til en annen kanal eller lukker spilleren
   Future<void> close(Channel channel);
+
+  /// Du ser fortsatt på (hvert 10. sekund når [PlayTarget.keepAlive] er satt). Kaster BusyException når noen andre
+  /// har tatt over tilkoblingen.
+  Future<void> stillWatching(PlayTarget target);
 
   Future<Favorites?> loadFavorites();
 
