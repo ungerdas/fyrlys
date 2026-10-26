@@ -158,7 +158,7 @@ class _SettingsPageState extends State<SettingsPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               _Section(title: 'Innlogging', children: _logins()),
-              _Section(title: 'Utseende', children: [_theme()]),
+              _Section(title: 'Utseende', children: [_theme(), _language()]),
               _Section(title: 'Avspilling', children: _playback()),
               _Section(title: 'Kanaler og TV-guide', children: [_lists()]),
               if (u != null && u.enabled)
@@ -253,6 +253,28 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
               selected: {s.themeMode},
               onSelectionChanged: (v) => s.setThemeMode(v.first),
+            ),
+          ),
+        ),
+      );
+
+  // Norsk og English står på sitt eget språk, så du finner dem uansett hva appen er på nå.
+  Widget _language() => ListTile(
+        leading: const Icon(Icons.language),
+        title: Text(tr('Språk')),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(value: 'auto', label: Text(tr('Som Windows'))),
+                const ButtonSegment(value: 'no', label: Text('Norsk')),
+                const ButtonSegment(value: 'en', label: Text('English')),
+              ],
+              selected: {s.language},
+              onSelectionChanged: (v) => s.setLanguage(v.first),
             ),
           ),
         ),

@@ -37,8 +37,11 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 RestartApplications=no
+ShowLanguageDialog=no
 
 [Languages]
+; språket i Windows (norsk eller engelsk); andre språk får engelsk, det første
+Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "norsk"; MessagesFile: "compiler:Languages\Norwegian.isl"
 
 [Tasks]

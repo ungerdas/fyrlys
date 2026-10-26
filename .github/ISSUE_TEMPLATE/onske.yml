@@ -1,10 +1,10 @@
-name: Ønske
-description: Noe Fyrlys burde kunne
+name: Ønske / Feature request
+description: Noe Fyrlys burde kunne / Something Fyrlys should do
 body:
   - type: textarea
     id: hva
     attributes:
-      label: Hva vil du kunne gjøre?
-      description: Og hvorfor, eller når du savner det.
+      label: Hva vil du kunne gjøre? / What would you like to do?
+      description: Og hvorfor, eller når du savner det. / And why, or when you miss it.
     validations:
       required: true

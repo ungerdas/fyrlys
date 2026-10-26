@@ -10,6 +10,8 @@
   <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-oppsett.exe"><b>Last ned for Windows</b></a>
   &nbsp;·&nbsp;
   <a href="CHANGELOG.md">Hva er nytt</a>
+  &nbsp;·&nbsp;
+  <a href="README.en.md">English</a>
 </p>
 
 <p align="center">
@@ -17,6 +19,7 @@
 </p>
 
 Fyrlys spiller abonnementet ditt hos en IPTV-leverandør, med M3U-lenke eller Xtream Codes. Den har ingen kanaler selv.
+Appen er på norsk eller engelsk (som Windows; byttes under tannhjulet → Utseende).
 
 ## Funksjoner
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'core/session.dart';
 import 'core/updater.dart';
+import 'l10n/tr.dart';
 import 'theme.dart';
 import 'ui/home_page.dart';
 import 'ui/login_page.dart';
@@ -39,12 +40,35 @@ class _FyrlysAppState extends State<FyrlysApp> with WidgetsBindingObserver {
     return AppExitResponse.exit;
   }
 
+  /// språket sidene sist ble bygget på
+  String _language = appLanguage;
+
+  /// Nytt språk: alt bygges på nytt (tekstene hentes med tr() når de bygges), uten at noe lukkes.
+  void _rebuildAll() {
+    void mark(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(mark);
+    }
+
+    if (mounted) (context as Element).visitChildren(mark);
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
     return ListenableBuilder(
       listenable: session,
-      builder: (context, _) => MaterialApp(
+      builder: (context, _) {
+        if (_language != appLanguage) {
+          _language = appLanguage;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildAll());
+        }
+        return _app(session);
+      },
+    );
+  }
+
+  Widget _app(Session session) => MaterialApp(
         title: 'Fyrlys',
         debugShowCheckedModeBanner: false,
         theme: fyrlysTheme(Brightness.light),
@@ -56,7 +80,5 @@ class _FyrlysAppState extends State<FyrlysApp> with WidgetsBindingObserver {
                 ? LoginPage(session: session)
                 // en ny side for hver innlogging (kategorier og filmer er ulike hos ulike leverandører)
                 : HomePage(key: ValueKey('innlogging:${session.activeLogin}'), session: session, updater: widget.updater),
-      ),
-    );
-  }
+      );
 }

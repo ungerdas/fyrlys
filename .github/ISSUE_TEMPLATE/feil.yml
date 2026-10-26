@@ -1,34 +1,37 @@
-name: Feil
-description: Noe virker ikke som det skal
+name: Feil / Bug
+description: Noe virker ikke som det skal / Something doesn't work
 body:
   - type: markdown
     attributes:
       value: |
         Takk for at du sier fra! Siden er offentlig: ikke skriv inn passord, M3U-lenker eller adressen til leverandøren.
+
+        Thanks for reporting! This page is public: don't include passwords, M3U links or your provider's address.
   - type: textarea
     id: hva
     attributes:
-      label: Hva skjedde?
-      description: Og hva du ventet skulle skje. Skjermbilder hjelper.
+      label: Hva skjedde? / What happened?
+      description: Og hva du ventet skulle skje. Skjermbilder hjelper. / And what you expected. Screenshots help.
     validations:
       required: true
   - type: textarea
     id: steg
     attributes:
-      label: Hvordan får man det til?
+      label: Hvordan får man det til? / Steps to reproduce
       placeholder: |
-        1. Åpne …
-        2. Trykk på …
+        1. …
+        2. …
   - type: input
     id: versjon
     attributes:
-      label: Versjon
-      description: Står nederst i innstillingene (tannhjulet øverst).
-      placeholder: Fyrlys 2.1.20
+      label: Versjon / Version
+      description: Nederst i innstillingene (tannhjulet). / At the bottom of the settings (the gear).
+      placeholder: Fyrlys 2.1.21
   - type: textarea
     id: rapport
     attributes:
-      label: Feilrapport
+      label: Feilrapport / Error report
       description: >-
-        I Fyrlys: tannhjulet → Hjelp → «Lagre feilrapport». Fila havner i Nedlastinger; dra den hit. Den har ikke
-        med passord, brukernavn eller leverandøren, men se gjerne over den først.
+        Tannhjulet → Hjelp → «Lagre feilrapport», og dra fila (i Nedlastinger) hit. / Gear → Help → “Save error
+        report”, then drag the file (in Downloads) here. Den har ikke med passord, brukernavn eller leverandøren. /
+        It contains no passwords, usernames or provider.
