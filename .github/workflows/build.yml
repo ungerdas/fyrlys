@@ -92,9 +92,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
+      # med navn og mappe: er det bare én artefakt og ingen navn, pakkes den rett i «dist» uten egen mappe
       - uses: actions/download-artifact@v5
         with:
-          path: dist
+          name: Fyrlys-windows
+          path: dist/Fyrlys-windows
       - name: Pakk filene og skriv teksten
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
