@@ -41,7 +41,13 @@ jobs:
         run: |
           for f in *.log; do
             [ -f "$f" ] || continue
-            msg=$(tail -n 60 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            if [ "$f" = test.log ] && grep -q '❌' "$f"; then
+              # bare testene som feilet (lange linjer, som advarsler om trykk, tas ikke med)
+              body=$(awk '/::group::❌/{on=1} on && length($0) < 400 {print} /::endgroup::/{on=0}' "$f" | head -n 80)
+            else
+              body=$(tail -n 60 "$f")
+            fi
+            msg=$(printf '%s\n' "$body" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "::error title=$f::$msg"
           done
 
