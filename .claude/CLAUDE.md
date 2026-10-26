@@ -91,8 +91,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `resume`, `continue` og `guide_cat` ligger per innlogging (`<navn>@<id>`, `_k`); lyd, språk, bilde, tema og vindu
   er felles. `_migrate` flytter innloggingen fra før (`source_protected`/`source`) og disse nøklene uten id over én
   gang. `switchLogin`, `renameLogin`, `removeLogin` (data blir liggende; var den i bruk, tas den neste som kan åpnes),
-  `logout` = fjern den i bruk, `useSource` for testene. `app.dart` gir HomePage nøkkelen `innlogging:<id>`, så den
-  begynner på nytt ved bytte. Lister, EPG-mellomlager (5 min, 4 om gangen),
+  `logout` = fjern den i bruk, `useSource` for testene. Kan den gamle innloggingen ikke åpnes, blir dataene uten id
+  liggende og går til den første innloggingen (`_moveLegacy` i `_use` når lista er tom). Kanallista på disk har
+  nøkkelen `loginId` (2.1.15; før `kind|label`, som to M3U-lister fra samme vert delte). `app.dart` gir HomePage
+  nøkkelen `innlogging:<id>`, så den begynner på nytt ved bytte. Lister, EPG-mellomlager (5 min, 4 om gangen),
   `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene; `cleanEpg` i `models.dart` slår sammen
   doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt, `favorites` og
   `favoriteCategories`), «sist sett», lys/mørk, og «fortsett der du
@@ -178,8 +180,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   Ikke prøvd i ekte mpv. Tidslinje, −10/+10 (samles i 450 ms), «DIREKTE» (trykk = direkte), ←, → (på PC og i
   fullskjerm; ellers inn i lista), L/End. Kanaler med arkiv (2.1.14): «Se fra start» (programmet som går nå, når det
   har gått et minutt) og «TV-arkiv» (A) i kontrollene (ikke i smalt vindu) og som knapper under bildet. `_away` stopper
-  direktesendingen mens arkivet er oppe (én tilkobling) og åpner kanalen igjen etterpå; `_shownFull = false` etter
-  filmspilleren, så vinduet settes slik spilleren var.
+  direktesendingen mens arkivet er oppe (én tilkobling; også et kanalnummer under tasting avbrytes) og åpner kanalen
+  igjen etterpå; `_shownFull = null` etter filmspilleren, så vinduet settes slik spilleren er. Filmspilleren med
+  `startFull` tar ikke vinduet ut av fullskjerm når den lukkes, og `WindowFullscreen.set` gjør ingenting når vinduet
+  alt er slik (`_on`), så `_wasMaximized` ikke overskrives (2.1.15, funnet i gjennomlesing).
 - `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene (`playbackFactory`
   byttes ut i testene for sider som lager avspilleren selv). Fullskjerm for begge spillerne:
   `WindowFullscreen` i `ui/window_effects.dart`. Språk: `setLanguages` setter `alang`/`slang` og
@@ -287,7 +291,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   én-om-gangen er ikke bekreftet hver for seg.
 - 26.10.2026: 2.1.14 (Pål-Eriks valg 1 og 12 fra lista over det som mangler): TV-arkiv med «Se fra start» (Xtream),
   og flere innlogginger med egne favoritter. Testet med tester; arkivet mot leverandøren hans (tidssonen i adressen,
-  HLS eller TS, spoling i ekte mpv) er ikke prøvd.
+  HLS eller TS, spoling i ekte mpv, om timeshift godtar en varighet forbi nå for det som går) er ikke prøvd.
+  2.1.15: fire rettelser fra en uavhengig gjennomlesing (fullskjerm etter «Se fra start», kanalliste-nøkkelen,
+  kanalnummer under arkivet, favoritter når den gamle innloggingen ikke kunne flyttes).
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

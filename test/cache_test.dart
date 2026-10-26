@@ -107,7 +107,7 @@ void main() {
     final first = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource(), listCache: cache);
     await first.restore();
     await first.load();
-    expect(cache.lists['fake|Test']!.channels, hasLength(3));
+    expect(cache.lists[Session.loginId(const {'kind': 'fake'})]!.channels, hasLength(3));
 
     // neste gang: lista fra sist er der før den nye er hentet
     final slow = _SlowSource();

@@ -88,7 +88,13 @@ class WindowFullscreen {
   bool _wasMaximized = false;
   Future<void> _queue = Future.value();
 
+  /// det vinduet sist ble bedt om (to spillere kan be om det samme; da gjøres ingenting, og det husker fortsatt om
+  /// vinduet var maksimert)
+  bool _on = false;
+
   Future<void> set(bool on) {
+    if (on == _on) return _queue;
+    _on = on;
     Future<void> step() async {
       try {
         if (on) {

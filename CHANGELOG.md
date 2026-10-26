@@ -1,5 +1,14 @@
 # Endringer
 
+## v2.1.15
+
+- Lukker du «Se fra start» i fullskjerm, er du fortsatt i fullskjerm i TV-spilleren (vinduet kunne gå ut av
+  fullskjerm), og et maksimert vindu blir maksimert igjen etterpå.
+- To innlogginger med samme navn (f.eks. to M3U-lister fra samme leverandør) viser ikke lenger hverandres kanalliste
+  når Fyrlys starter.
+- Taster du et kanalnummer rett før du åpner TV-arkivet, starter ikke kanalen mens arkivet spiller.
+- Var du logget ut da du oppdaterte, får den første innloggingen favorittene du hadde fra før.
+
 ## v2.1.14
 
 - **TV-arkiv** (Xtream Codes): har leverandøren arkiv for en kanal, kan du se det som har gått de siste dagene.

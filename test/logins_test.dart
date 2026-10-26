@@ -58,6 +58,22 @@ void main() {
     expect(again.favorites.map((c) => c.id), ['101']);
   });
 
+  test('logget ut før 2.1.14: favorittene fra før går til den første du logger inn med', () async {
+    final s = await _session({'favorites': _channels([_nrk]), 'guide_cat': 'fav'});
+    expect(s.source, isNull);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.containsKey('favorites'), isTrue);
+
+    await s.useSource(FakeSource(name: 'Ny'));
+    expect(s.favorites.map((c) => c.id), ['101']);
+    expect(s.guideCategory, 'fav');
+    expect(prefs.containsKey('favorites'), isFalse);
+
+    // den neste får ikke de samme
+    await s.useSource(FakeSource(name: 'Sport'));
+    expect(s.favorites, isEmpty);
+  });
+
   test('to innlogginger: hver med sine favoritter, og du bytter mellom dem', () async {
     final s = await _session({'source': '{"kind":"fake"}'});
     final first = s.activeLogin!;

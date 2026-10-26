@@ -172,13 +172,18 @@ class Session extends ChangeNotifier {
     raw ??= _prefs.getString(_legacyPlain);
     final saved = raw == null ? null : _decode(raw);
     final src = saved == null ? null : await _build(saved);
-    if (src == null) {
-      await _prefs.setString(_listKey, '[]');
-      return null;
-    }
+    // kan den ikke åpnes (eller var du logget ut), blir favorittene og resten liggende til du logger inn (_use)
+    if (src == null) return null;
     final prefs = src.toPrefs();
     final id = loginId(prefs);
     await _saveSecret(id, jsonEncode(prefs));
+    await _moveLegacy(id);
+    await _prefs.setString(_listKey, jsonEncode([SavedLogin(id: id, name: src.label, kind: src.kind).toJson()]));
+    return (id: id, source: src);
+  }
+
+  /// Favorittene og resten fra før 2.1.14 (uten id) går til innloggingen [id], og den gamle innloggingen slettes.
+  Future<void> _moveLegacy(String id) async {
     for (final name in _perLogin) {
       final value = _prefs.get(name);
       if (value is String) {
@@ -188,10 +193,8 @@ class Session extends ChangeNotifier {
       }
       await _prefs.remove(name);
     }
-    await _prefs.setString(_listKey, jsonEncode([SavedLogin(id: id, name: src.label, kind: src.kind).toJson()]));
     await _prefs.remove(_legacyProtected);
     await _prefs.remove(_legacyPlain);
-    return (id: id, source: src);
   }
 
   List<SavedLogin> _readLogins() {
@@ -292,6 +295,8 @@ class Session extends ChangeNotifier {
     final prefs = src.toPrefs();
     final id = loginId(prefs);
     await _saveSecret(id, jsonEncode(prefs));
+    // den første innloggingen når ingen kunne flyttes (du var logget ut da du oppdaterte): den får favorittene fra før
+    if (logins.isEmpty) await _moveLegacy(id);
     if (!logins.any((l) => l.id == id)) {
       logins = [...logins, SavedLogin(id: id, name: src.label, kind: src.kind)];
       await _saveLogins();
@@ -414,7 +419,8 @@ class Session extends ChangeNotifier {
     if (source == src) await load();
   }
 
-  static String _cacheKey(TvSource src) => '${src.kind}|${src.label}';
+  /// samme som innloggingen (to lister fra samme vert har samme navn, men er ikke samme liste)
+  static String _cacheKey(TvSource src) => loginId(src.toPrefs());
 
   // ── lister ──
 

@@ -720,6 +720,9 @@ class _PlayerState extends State<_Player> {
     _seq++;
     _zapTimer?.cancel();
     _pendingZap = null;
+    // et kanalnummer du holdt på å taste, skal ikke starte en kanal mens arkivet spiller
+    _digitTimer?.cancel();
+    _digits = '';
     _probeTimer?.cancel();
     _target = null;
     _resetShift();
@@ -744,7 +747,7 @@ class _PlayerState extends State<_Player> {
     try {
       clip = await _session.archiveClip(ch, cur);
     } on SourceException catch (e) {
-      _showFlash(e.message);
+      if (mounted) _showFlash(e.message);
       return;
     }
     if (!mounted) return;
@@ -757,8 +760,8 @@ class _PlayerState extends State<_Player> {
             resume: false,
             startFull: full,
           )));
-      // spilleren for arkivet tar vinduet ut av fullskjerm når den lukkes; her settes det slik det var
-      _shownFull = false;
+      // spilleren for arkivet kan ha tatt vinduet ut av fullskjerm; her settes det slik denne spilleren er
+      _shownFull = null;
     });
   }
 

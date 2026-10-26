@@ -190,7 +190,8 @@ class _VodPlayerState extends State<_VodPlayer> {
     _seekTimer?.cancel();
     unawaited(_pb.dispose());
     _focus.dispose();
-    if (_full) unawaited(WindowFullscreen.instance.set(false));
+    // åpnet fra TV-spilleren i fullskjerm: den fortsetter i fullskjerm, så vinduet blir der
+    if (_full && !widget.page.startFull) unawaited(WindowFullscreen.instance.set(false));
     super.dispose();
   }
 
