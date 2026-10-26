@@ -32,7 +32,7 @@ String? normalizeServerAddress(String raw) {
   return '${u.scheme.toLowerCase()}://$host$port$path';
 }
 
-/// En nyere utgave av appen: testbygget fra main på GitHub.
+/// En nyere utgave av appen: siste release på GitHub.
 class UpdateInfo {
   const UpdateInfo({required this.build, required this.title, required this.url, required this.size, this.notes = ''});
 
@@ -86,9 +86,9 @@ UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
 
 enum UpdateState { idle, checking, available, downloading, ready, failed }
 
-/// Oppdaterer appen fra testbyggene (releasen «testbygg», som CI lager ved hver endring på main), rett fra GitHub.
-/// Med en oppdateringsserver i menyen (Fyrlys-serveren, som har en lesenøkkel til GitHub) hentes de via den i
-/// stedet; det trengs bare om repoet er privat.
+/// Oppdaterer appen fra siste release på GitHub (CI lager en for hver versjon på main; før 2.1.10 releasen
+/// «testbygg»). Med en oppdateringsserver i menyen (Fyrlys-serveren, som har en lesenøkkel til GitHub) hentes den
+/// via serveren i stedet; det trengs bare om repoet er privat.
 /// Ser etter nye bygg ved oppstart og hver 6. time, laster ned i bakgrunnen og legger inn når appen lukkes
 /// (eller med «Start på nytt nå»). Ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
 /// starter. Bare på Windows, og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
@@ -171,7 +171,7 @@ class Updater extends ChangeNotifier {
     _timer = Timer.periodic(const Duration(hours: 6), (_) => unawaited(check()));
   }
 
-  /// Spør GitHub (eller oppdateringsserveren) etter siste testbygg. Er det nyere, lastes det ned med en gang (Windows).
+  /// Spør GitHub (eller oppdateringsserveren) etter siste versjon. Er den nyere, lastes den ned med en gang (Windows).
   /// Med [manual] kastes en [UpdateException] med forklaringen når det ikke går; ellers prøves det igjen senere.
   Future<UpdateInfo?> check({bool manual = false}) async {
     if (!enabled || state == UpdateState.checking || state == UpdateState.downloading) return available;
@@ -179,24 +179,37 @@ class Updater extends ChangeNotifier {
     _set(UpdateState.checking);
     final server = serverBase?.call();
     _via = server != null ? 'Fyrlys-serveren' : 'GitHub';
-    final url = Uri.parse(
-      server != null ? '$server/api/app/release' : 'https://api.github.com/repos/$repo/releases/tags/testbygg',
-    );
     try {
-      final r = await _client.get(
-        url,
-        headers: const {'Accept': 'application/vnd.github+json', 'User-Agent': 'Fyrlys'},
-      ).timeout(const Duration(seconds: 20));
-      // Testbyggene finnes alltid, så 404 betyr at de ikke er synlige herfra: GitHub svarer slik for et privat repo
-      // (uten nøkkel), og serveren når nøkkelen dens mangler tilgang. Ikke «du har siste versjon».
-      if (r.statusCode == 404) {
-        throw UpdateException(_serverError(r) ??
-            (server == null
-                ? 'GitHub viser ikke de nye versjonene (er repoet privat?). Velg oppdateringsserver i menyen.'
-                : 'Fant ikke oppdateringene på $server (HTTP 404). Er adressen riktig?'));
+      UpdateInfo? info;
+      if (server != null) {
+        try {
+          info = await _release(Uri.parse('$server/api/app/release'));
+        } on _Missing catch (m) {
+          throw UpdateException(m.message ?? 'Fant ikke oppdateringene på $server (HTTP 404). Er adressen riktig?');
+        }
+      } else {
+        // Siste release. Før 2.1.10 lå versjonene i releasen «testbygg», så den er reserven.
+        final releases = 'https://api.github.com/repos/$repo/releases';
+        var visible = false;
+        try {
+          info = await _release(Uri.parse('$releases/latest'));
+          visible = true;
+        } on _Missing {
+          // ingen vanlige releaser ennå (eller et privat repo)
+        }
+        if (info == null) {
+          try {
+            info = await _release(Uri.parse('$releases/tags/testbygg'));
+          } on _Missing {
+            // Et privat repo svarer 404 på alt uten nøkkel: ikke «du har siste versjon».
+            if (!visible) {
+              throw const UpdateException(
+                'GitHub viser ikke de nye versjonene (er repoet privat?). Velg oppdateringsserver i menyen.',
+              );
+            }
+          }
+        }
       }
-      if (r.statusCode != 200) throw UpdateException(_serverError(r) ?? '$_via svarte ${r.statusCode}');
-      final info = parseRelease(jsonDecode(r.body), assetSuffix!, base: url);
       if (info == null || info.build <= currentBuild!) {
         available = null;
         error = null;
@@ -217,6 +230,17 @@ class Updater extends ChangeNotifier {
       if (manual) throw UpdateException(_describe(e));
       return null;
     }
+  }
+
+  /// Releasen på [url] (null: ingen fil for denne plattformen eller uten byggnummer). 404 gir [_Missing].
+  Future<UpdateInfo?> _release(Uri url) async {
+    final r = await _client.get(
+      url,
+      headers: const {'Accept': 'application/vnd.github+json', 'User-Agent': 'Fyrlys'},
+    ).timeout(const Duration(seconds: 20));
+    if (r.statusCode == 404) throw _Missing(_serverError(r));
+    if (r.statusCode != 200) throw UpdateException(_serverError(r) ?? '$_via svarte ${r.statusCode}');
+    return parseRelease(jsonDecode(r.body), assetSuffix!, base: url);
   }
 
   /// Fyrlys-serveren forklarer feil som {"error": …}, f.eks. at den mangler GitHub-nøkkelen.
@@ -507,3 +531,10 @@ if ($Restart) {
   }
 }
 ''';
+
+/// 404: releasen finnes ikke (eller er ikke synlig), med serverens forklaring når den har en.
+class _Missing implements Exception {
+  const _Missing(this.message);
+
+  final String? message;
+}

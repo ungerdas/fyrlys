@@ -5,6 +5,7 @@
 - Versjonen vises uten byggnummer og kode, i menyen og på GitHub. Teksten til hver versjon på GitHub er nå det som
   er nytt, i stedet for en liste over endringer i koden.
 - Filene heter `Fyrlys-windows.zip` og `Fyrlys-android-….apk`.
+- Hver versjon blir en vanlig release på GitHub (fra 2.1.10), og appen ser etter siste release.
 
 ## v2.1.8
 

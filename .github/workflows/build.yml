@@ -1,12 +1,10 @@
-# Analyse og tester ved hver endring, og bygg for Windows og Android, med versjon, byggnummer og commit i
-# appens meny. Hver push til main oppdaterer releasen «testbygg» (Windows-zip og APK-er); Fyrlys på Windows
-# ser etter nye bygg der og oppdaterer seg selv.
+# Analyse og tester ved hver endring, og bygg for Windows og Android, med versjon og byggnummer i appen.
+# Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-windows.zip og
+# Fyrlys-android-<abi>.apk, faste navn), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og
+# byggnummeret står skjult i den (<!-- bygg N -->); Fyrlys på Windows ser etter nye versjoner der og oppdaterer seg selv.
+# Er versjonen ikke endret, byttes filene i releasen den har fra før.
 # Plattformmappene lages av «flutter create» her; i repoet ligger bare det vi har tilpasset
 # (AndroidManifest, ikoner, TV-banner og Windows-ikonet), og det skrives ikke over.
-# En release (Windows-zip og Android-APK-er, v0.x som forhåndsutgivelse) lages av en tag som v2.0.0, eller med
-#   gh workflow run build.yml --repo ungerdas/fyrlys -f release=v2.0.0
-# Teksten i releasen er avsnittet for versjonen i CHANGELOG.md.
-# (tagger kan ikke pushes fra Claude-økta, men den kan starte workflowen).
 # Feiler et steg, legges slutten av loggen som merknad på kjøringen (kan leses med
 # «gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations»).
 name: Bygg
@@ -14,14 +12,8 @@ name: Bygg
 on:
   push:
     branches: ["**"]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
-    inputs:
-      release:
-        description: "Lag en release med denne versjonen, f.eks. v2.0.0 (tomt: bare bygg)"
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -142,107 +134,78 @@ jobs:
             echo "::error title=$f::$msg"
           done
 
-  testbygg:
-    name: Testbygg på Releases
+  release:
+    name: Release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [windows, android]
     runs-on: ubuntu-latest
-    # to pusher rett etter hverandre skal ikke oppdatere releasen samtidig
+    # to pusher rett etter hverandre skal ikke oppdatere releasene samtidig
     concurrency:
-      group: testbygg
+      group: release
       cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 30
       - uses: actions/download-artifact@v5
         with:
           path: dist
-      - name: Pakk filene og skriv endringene
+      - name: Pakk filene og skriv teksten
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
           build=${{ github.run_number }}
-          # Appen leser byggnummeret fra en skjult kommentar i teksten (2.1.9 og nyere). Apper til og med 2.1.8 leser
-          # det fra navnet, så 2.1.9 (broen dit) har det der også; senere versjoner heter bare «Fyrlys X».
-          if [ "$version" = "2.1.9" ]; then
-            echo "TITLE=Fyrlys $version · bygg $build" | tee -a "$GITHUB_ENV"
-          else
-            echo "TITLE=Fyrlys $version" | tee -a "$GITHUB_ENV"
-          fi
+          # faste filnavn, så «releases/latest/download/Fyrlys-windows.zip» alltid gir siste versjon
           mkdir -p out
-          # faste navn, så lenkene i README alltid gir siste versjon (appen ser bare på slutten: «-windows.zip»)
           (cd dist/Fyrlys-windows && zip -qr ../../out/Fyrlys-windows.zip .)
           for f in dist/Fyrlys-android/*.apk; do
             abi=$(basename "$f" | sed 's/^app-//; s/-release\.apk$//')
             cp "$f" "out/Fyrlys-android-${abi}.apk"
           done
           ls -la out
-          # det som er nytt i versjonen (avsnittet «## vX.Y.Z» i CHANGELOG.md), og byggnummeret skjult
           awk -v v="## v${version}" 'index($0, v) == 1 {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > changes.md || true
-          {
-            echo "Nyeste versjon av Fyrlys. På Windows oppdaterer appen seg selv herfra."
-            echo
-            if [ -s changes.md ]; then cat changes.md; fi
-            [ "$version" = "2.1.9" ] || printf '\n<!-- bygg %s -->\n' "$build"
-          } > notes.md
+          [ -s changes.md ] || echo "Fyrlys ${version}" > changes.md
+          # Bro: apper til og med 2.1.8 ser bare etter releasen «testbygg» og leser byggnummeret i navnet. 2.1.9 legges
+          # ut der en siste gang (med «bygg N» i navnet); 2.1.9 og nyere ser etter siste release (og «testbygg» som
+          # reserve), så fra 2.1.10 er alt vanlige releaser, og «testbygg» slettes.
+          if [ "$version" = "2.1.9" ]; then
+            echo "TAG=testbygg" >> "$GITHUB_ENV"
+            echo "TITLE=Fyrlys $version · bygg $build" | tee -a "$GITHUB_ENV"
+            cp changes.md notes.md
+          else
+            echo "TAG=v$version" >> "$GITHUB_ENV"
+            echo "TITLE=Fyrlys $version" | tee -a "$GITHUB_ENV"
+            { cat changes.md; printf '\n<!-- bygg %s -->\n' "$build"; } > notes.md
+          fi
           cat notes.md
-      - name: Oppdater releasen «testbygg»
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Legg ut releasen
         run: |
-          git tag -f testbygg "$GITHUB_SHA"
-          git push -f origin refs/tags/testbygg
-          if gh release view testbygg > /dev/null 2>&1; then
+          if [ "$TAG" = "testbygg" ]; then
+            git tag -f testbygg "$GITHUB_SHA"
+            git push -f origin refs/tags/testbygg
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
             # Filer med andre navn (f.eks. de gamle «Fyrlys-testbygg-…») fjernes først: appen tar den første fila som
             # slutter på «-windows.zip», og den skal ikke være et gammelt bygg.
-            gh release view testbygg --json assets --jq '.assets[].name' | while read -r a; do
-              [ -f "out/$a" ] || gh release delete-asset testbygg "$a" -y
+            gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r a; do
+              [ -f "out/$a" ] || gh release delete-asset "$TAG" "$a" -y
             done
-            # filene først, så navnet: appen tror ikke at et nytt bygg er klart før filene er der
-            gh release upload testbygg out/* --clobber
-            gh release edit testbygg --title "$TITLE" --notes-file notes.md --prerelease
-          else
+            # filene først, så teksten med byggnummeret: appen tror ikke at et nytt bygg er klart før filene er der
+            gh release upload "$TAG" out/* --clobber
+            if [ "$TAG" = "testbygg" ]; then
+              gh release edit testbygg --title "$TITLE" --notes-file notes.md
+            else
+              gh release edit "$TAG" --title "$TITLE" --notes-file notes.md --latest
+            fi
+          elif [ "$TAG" = "testbygg" ]; then
             gh release create testbygg out/* --title "$TITLE" --notes-file notes.md --prerelease --verify-tag
+          else
+            # gh lager den som utkast til filene er lastet opp, og publiserer den så
+            gh release create "$TAG" out/* --target "$GITHUB_SHA" --title "$TITLE" --notes-file notes.md --latest
+          fi
+          # «testbygg» er historie fra 2.1.10
+          if [ "$TAG" != "testbygg" ] && gh release view testbygg > /dev/null 2>&1; then
+            gh release delete testbygg -y --cleanup-tag
           fi
       - name: Vis feilen som merknad
         if: failure()
-        run: echo "::error title=testbygg::Releasen testbygg ble ikke oppdatert, se loggen for jobben"
-
-  release:
-    name: Release
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
-    needs: [windows, android]
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ inputs.release || github.ref_name }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
-        with:
-          path: dist
-      - name: Teksten fra CHANGELOG.md
-        run: |
-          # avsnittet «## v2.0.0 …» fram til neste «## »
-          awk -v v="## ${VERSION}" 'index($0, v) == 1 {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md || true
-          [ -s notes.md ] || echo "Fyrlys ${VERSION}" > notes.md
-          cat notes.md
-      - name: Pakk filene
-        run: |
-          cd dist
-          (cd Fyrlys-windows && zip -qr "../Fyrlys-${VERSION}-windows.zip" .)
-          for f in Fyrlys-android/*.apk; do
-            abi=$(basename "$f" | sed 's/^app-//; s/-release\.apk$//')
-            cp "$f" "Fyrlys-${VERSION}-android-${abi}.apk"
-          done
-          ls -la
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.VERSION }}
-          target_commitish: ${{ github.sha }}
-          name: Fyrlys ${{ env.VERSION }}
-          files: |
-            dist/Fyrlys-*-windows.zip
-            dist/Fyrlys-*-android-*.apk
-          prerelease: ${{ startsWith(env.VERSION, 'v0.') }}
-          body_path: notes.md
-          make_latest: true
+        run: echo "::error title=release::Releasen ble ikke lagt ut, se loggen for jobben"

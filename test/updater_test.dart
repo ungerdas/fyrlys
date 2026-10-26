@@ -64,7 +64,7 @@ void main() {
       var downloads = 0;
       final client = MockClient((r) async {
         if (r.url.host == 'api.github.com') {
-          expect(r.url.path, '/repos/ungerdas/fyrlys/releases/tags/testbygg');
+          expect(r.url.path, '/repos/ungerdas/fyrlys/releases/latest');
           return http.Response(jsonEncode(_release(7)), 200, headers: _json);
         }
         downloads++;
@@ -86,6 +86,39 @@ void main() {
       await again.check();
       expect(again.state, UpdateState.ready);
       expect(downloads, 1);
+    });
+
+    test('siste release uten byggnummer (før 2.1.10): releasen «testbygg» er reserven', () async {
+      final paths = <String>[];
+      final client = MockClient((r) async {
+        paths.add(r.url.path);
+        if (r.url.path.endsWith('/latest')) {
+          return http.Response(
+            jsonEncode({
+              'name': 'Fyrlys v2.0.0',
+              'assets': [
+                {'name': 'Fyrlys-v2.0.0-windows.zip', 'browser_download_url': 'https://example/old.zip', 'size': 4},
+              ],
+            }),
+            200,
+            headers: _json,
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'name': 'Fyrlys 2.1.9 · bygg 9',
+            'assets': [
+              {'name': 'Fyrlys-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': 4},
+            ],
+          }),
+          200,
+          headers: _json,
+        );
+      });
+      final info = await updater(5, client).check();
+      expect(info?.build, 9);
+      expect(info?.label, 'Fyrlys 2.1.9');
+      expect(paths, ['/repos/ungerdas/fyrlys/releases/latest', '/repos/ungerdas/fyrlys/releases/tags/testbygg']);
     });
 
     test('samme eller eldre bygg: ingenting å gjøre', () async {

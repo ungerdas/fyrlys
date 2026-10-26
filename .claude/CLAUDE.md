@@ -32,27 +32,26 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `git clone --depth 1 --branch stable --filter=blob:none --sparse https://github.com/flutter/flutter.git`
   og `git sparse-checkout set packages/flutter/lib packages/flutter_test/lib` (tilsvarende for media-kit/media-kit).
   `unnecessary_import` er en advarsel og stopper bygget; sjekk hva `material.dart` eksporterer.
-- **Versjoner** (Pål-Erik 26.10): hver oppdatering han får (hver push som gir et nytt testbygg), får neste
-  patch-versjon i pubspec: 2.1.2 (26.10, det som først het 2.0.3), så 2.1.3, 2.1.4 … Øk før hver push som bygges.
-  Feiler bygget i CI, har han ikke fått noe, og rettelsen beholder nummeret. Det er versjonen vi snakker om, ikke
-  byggnummeret (det brukes bare av oppdateringen). Skriv avsnittet i `CHANGELOG.md`. GitHub-release (workflowen)
-  bare når han ber om det. Hver push oppdaterer releasen
-  `testbygg` (jobben `testbygg`: taggen flyttes, filer med andre navn slettes, filene `Fyrlys-windows.zip` og
-  `Fyrlys-android-<abi>.apk` (ikke «testbygg» i filnavnet, Pål-Erik 26.10) byttes med `--clobber`, så navnet «Fyrlys X» og teksten:
-  avsnittet `## vX.Y.Z` fra CHANGELOG.md og byggnummeret skjult som `<!-- bygg N -->`, som appen leser (2.1.9+);
-  Pål-Erik 26.10: «bygg 30 sånt kan du droppe», så aldri byggnummer eller commit i det han ser), og Fyrlys på Windows oppdaterer seg selv derfra (rett fra GitHub).
+- **Versjoner** (Pål-Erik 26.10): hver oppdatering han får (hver push til main som bygges), får neste
+  patch-versjon i pubspec: 2.1.2, 2.1.3, 2.1.4 … Øk før hver push som bygges. Feiler bygget i CI (eller avbrytes
+  før releasen), har han ikke fått noe, og rettelsen beholder nummeret. Det er versjonen vi snakker om, aldri
+  byggnummer eller commit (Pål-Erik 26.10: «bygg 30 sånt kan du droppe»). Skriv avsnittet `## vX.Y.Z` i
+  `CHANGELOG.md` før push: det blir teksten i releasen.
+- **Releaser** (Pål-Erik 26.10: «vi er ferdige med testbygg»): jobben `release` legger hver versjon ut som en vanlig
+  GitHub-release `vX.Y.Z` («Fyrlys X.Y.Z», blir «Latest»), med `Fyrlys-windows.zip` og `Fyrlys-android-<abi>.apk`
+  (faste navn, så `releases/latest/download/<fil>` alltid er siste versjon), teksten fra CHANGELOG.md og
+  byggnummeret skjult som `<!-- bygg N -->` (appen leser det). Finnes releasen alt (samme versjon på nytt), byttes
+  filene (andre filnavn slettes først) og teksten. Appen (2.1.9+) spør `releases/latest`, med `releases/tags/testbygg`
+  som reserve når siste release ikke har byggnummer (Fyrlys-serveren gjør det samme).
+  **Broen:** apper til og med 2.1.8 kjenner bare releasen `testbygg` og leser byggnummeret i navnet, så 2.1.9 legges
+  ut der én gang til («Fyrlys 2.1.9 · bygg N», fast i workflowen). Fra 2.1.10 er alt vanlige releaser, og
+  `testbygg` slettes av workflowen. Push ikke 2.1.10 før Pål-Erik har 2.1.9 på Windows-PC-en (nederst i menyen),
+  ellers må han hente den for hånd. Med 2.1.10: README-lenkene til `releases/latest/download/…` (nå `…/testbygg/…`).
+  Gamle releaser: v0.1.0 (forhåndsutgivelse) og v2.0.0 (andre filnavn, ingen byggnummer) ligger der fortsatt.
   Offentlig repo: Actions-minuttene er gratis; et bygg tar rundt 10 minutter. Bruk `[skip ci]` når en endring
   bare gjelder notater eller README. Versjonen står nederst i menyen (`appBuildLabel`; `--dart-define`
-  FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`). **Broen:** apper til og med 2.1.8 leser byggnummeret
-  fra navnet, så 2.1.9 heter «Fyrlys 2.1.9 · bygg N» (fast i workflowen); fra 2.1.10 bare «Fyrlys X». Push ikke
-  2.1.10 før Pål-Erik har 2.1.9 eller nyere på Windows-PC-en (står nederst i menyen), ellers må han hente den for hånd.
-- Release: oppdater `version` i pubspec.yaml, push, og start
-  `gh workflow run build.yml --repo ungerdas/fyrlys -f release=vX.Y.Z`. Jobben `release` lager taggen og en
-  GitHub-release med `Fyrlys-vX.Y.Z-windows.zip` og APK-er per ABI (v0.x som forhåndsutgivelse). Tagger kan
-  ikke pushes fra Claude-økta, og git/refs-API-et er stengt, men workflowen kan startes. En tag `v*` som
-  Pål-Erik lager selv, gir samme resultat. Bruk `[skip ci]` i commit-meldingen når et bygg bare er bortkastet.
-  Teksten i releasen er avsnittet `## vX.Y.Z` i `CHANGELOG.md` (skriv det før releasen). Byggnummeret
-  (`--build-number`, også versionCode på Android) er `github.run_number`.
+  FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`); byggnummeret (`--build-number`, også versionCode på
+  Android) er `github.run_number`. Kjøringer kan avbrytes med `gh run cancel <id> --repo ungerdas/fyrlys`.
 - Android-signering: med hemmelighetene `ANDROID_KEYSTORE_B64`/`ANDROID_KEYSTORE_PASSWORD`/`ANDROID_KEY_ALIAS`
   signeres APK-ene på nytt med `apksigner` etter bygget (README forklarer hvordan nøkkelen lages); uten dem har
   hvert bygg en tilfeldig debug-nøkkel. Hemmeligheter kan ikke leses eller settes fra Claude-økta (Actions-API-et
@@ -162,8 +161,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   (et spor valgt for hånd står ellers i mpv til neste fil; samme adresse, f.eks. etter spoling, beholder det).
   `tracks()` leser `aid`/`sid` fra mpv (media_kit vet bare om spor valgt via `setAudioTrack`). Bildeundertekster
   (PGS/DVB) vises ikke: media_kit tegner tekstundertekster selv (`sub-visibility=no` uten libass).
-- `core/updater.dart` – oppdatering fra releasen `testbygg` (bare Windows, bare bygg med byggnummer), rett fra
-  `api.github.com/repos/<repo>/releases/tags/testbygg`. Med en oppdateringsserver (`serverBase` =
+- `core/updater.dart` – oppdatering fra siste release (bare Windows, bare bygg med byggnummer), rett fra
+  `api.github.com/repos/<repo>/releases/latest` (`_release`; uten byggnummer der: `releases/tags/testbygg` som
+  reserve; 404 på begge = privat repo, feil med forklaring). Med en oppdateringsserver (`serverBase` =
   `Session.updateServer`, `normalizeServerAddress`; trengs bare om repoet blir privat igjen) spør den
   `<server>/api/app/release` i stedet (Fyrlys-serveren har en lesenøkkel i `data/github.json` og svarer i GitHubs
   form, med relative adresser `download/<fil>` som løses mot release-adressen). 404 = feil med forklaring (2.1.7). Sjekker etter `session.restore()` (+8 s) og hver 6. time, byggnummeret fra navnet,
