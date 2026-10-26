@@ -78,14 +78,28 @@ void main() {
       expect(downloads, 1);
     });
 
-    test('samme eller eldre bygg, eller ingen release: ingenting å gjøre', () async {
+    test('samme eller eldre bygg: ingenting å gjøre', () async {
       final client = MockClient((r) async => http.Response(jsonEncode(_release(7)), 200, headers: _json));
       expect(await updater(7, client).check(), isNull);
       expect(await updater(9, client).check(), isNull);
+    });
+
+    test('testbyggene er ikke synlige (privat repo): ikke «siste versjon», men en forklaring', () async {
       final missing = MockClient((r) async => http.Response('{"message":"Not Found"}', 404, headers: _json));
       final u = updater(5, missing);
       expect(await u.check(), isNull);
       expect(u.state, UpdateState.idle);
+      await expectLater(
+        u.check(manual: true),
+        throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('privat'))),
+      );
+      // fra oppdateringsserveren: forklaringen derfra
+      final server = MockClient((r) async => http.Response('{"error": "Fant ikke testbyggene på GitHub"}', 404));
+      final v = updater(5, server)..serverBase = () => 'http://192.168.1.10:8766';
+      await expectLater(
+        v.check(manual: true),
+        throwsA(isA<UpdateException>().having((e) => e.message, 'message', 'Fant ikke testbyggene på GitHub')),
+      );
     });
 
     test('en nedlasting som stopper halvveis gir feil, ikke en halv oppdatering', () async {

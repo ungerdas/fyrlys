@@ -228,4 +228,6 @@ offentlig (eksempeladresser som 192.168.1.10 er greit).
   valg). Fjernet `fyrlys_source.dart`, tilbakespoling på serveren (`LiveWindow`, `live_start_index`), «direkte»-økter
   og hjerteslag fra appen (serverens API-er for dem står igjen i peagstreams). Testet med tester; ekte M3U-lister og
   XMLTV fra leverandøren hans er ikke prøvd.
+- 26.10.2026: 2.1.7: 404 fra GitHub/oppdateringsserveren er en feil med forklaring, ikke «du har siste versjon»
+  (Pål-Erik sto på 2.1.4 med den meldingen mens 2.1.6 var ute; serveren svarer nå 502 i det tilfellet).
 - Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.

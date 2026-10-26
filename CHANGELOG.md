@@ -2,6 +2,12 @@
 
 Teksten under hver versjon brukes i releasen på GitHub (`.github/workflows/build.yml`).
 
+## v2.1.7
+
+- **«Du har siste versjon» når den ikke er det:** fant ikke appen testbyggene (privat repo uten
+  oppdateringsserver, eller en nøkkel på serveren uten tilgang), sa den at du hadde siste versjon. Nå sier den
+  hva som er galt.
+
 ## v2.1.6
 
 - **Ny innlogging: M3U-lenke eller Xtream Codes.** Innloggingen mot Fyrlys-serveren er borte: appen henter TV rett

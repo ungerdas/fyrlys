@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -64,7 +65,16 @@ void main() {
     final u = Updater(
       client: MockClient((r) async {
         asked.add('${r.url}');
-        return http.Response('{"error": "ingen release"}', 404);
+        // samme bygg som appen: ingenting nytt
+        return http.Response(
+          jsonEncode({
+            'name': 'Fyrlys 2.1.6 · bygg 5 (abc1234)',
+            'assets': [
+              {'name': 'Fyrlys-testbygg-windows.zip', 'browser_download_url': 'download/w.zip', 'size': 4},
+            ],
+          }),
+          200,
+        );
       }),
       currentBuild: 5,
       assetSuffix: '-windows.zip',

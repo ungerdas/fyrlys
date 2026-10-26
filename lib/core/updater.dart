@@ -179,10 +179,13 @@ class Updater extends ChangeNotifier {
         url,
         headers: const {'Accept': 'application/vnd.github+json', 'User-Agent': 'Fyrlys'},
       ).timeout(const Duration(seconds: 20));
+      // Testbyggene finnes alltid, så 404 betyr at de ikke er synlige herfra: GitHub svarer slik for et privat repo
+      // (uten nøkkel), og serveren når nøkkelen dens mangler tilgang. Ikke «du har siste versjon».
       if (r.statusCode == 404) {
-        available = null;
-        _set(UpdateState.idle);
-        return null;
+        throw UpdateException(_serverError(r) ??
+            (server == null
+                ? 'GitHub viser ikke testbyggene (repoet er privat). Velg oppdateringsserver i menyen.'
+                : 'Fant ikke oppdateringene på $server (HTTP 404). Er adressen riktig?'));
       }
       if (r.statusCode != 200) throw UpdateException(_serverError(r) ?? '$_via svarte ${r.statusCode}');
       final info = parseRelease(jsonDecode(r.body), assetSuffix!, base: url);
