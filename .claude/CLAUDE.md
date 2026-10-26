@@ -45,8 +45,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   som reserve når siste release ikke har byggnummer (Fyrlys-serveren gjør det samme).
   **Broen:** apper til og med 2.1.8 kjenner bare releasen `testbygg` og leser byggnummeret i navnet, så 2.1.9 legges
   ut der én gang til («Fyrlys 2.1.9 · bygg N», fast i workflowen). Fra 2.1.10 er alt vanlige releaser, og
-  `testbygg` slettes av workflowen. Push ikke 2.1.10 før Pål-Erik har 2.1.9 på Windows-PC-en (nederst i menyen),
-  ellers må han hente den for hånd. Med 2.1.10: README-lenkene til `releases/latest/download/…` (nå `…/testbygg/…`).
+  `testbygg` slettes av workflowen (2.1.10 ble sendt da Pål-Erik hadde 2.1.9). README-lenkene går til
+  `releases/latest/download/…`.
   Gamle releaser: v0.1.0 (forhåndsutgivelse) og v2.0.0 (andre filnavn, ingen byggnummer) ligger der fortsatt.
   Offentlig repo: Actions-minuttene er gratis; et bygg tar rundt 10 minutter. Bruk `[skip ci]` når en endring
   bare gjelder notater eller README. Versjonen står nederst i menyen (`appBuildLabel`; `--dart-define`
@@ -241,4 +241,5 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `.claude/CLAUDE.md`.
 - 26.10.2026: 2.1.9: versjonen uten byggnummer og commit (menyen, releasen), CHANGELOG-avsnittet som tekst i
   releasen, byggnummeret i `<!-- bygg N -->` (bro, se Versjoner).
+- 26.10.2026: 2.1.10: første vanlige release (`v2.1.10`), `testbygg` slettet.
 - Ideer senere: bilde-i-bilde på Android, bildeundertekster (DVB/PGS) med libass, signering av exe/APK, Play Store, iOS/macOS.

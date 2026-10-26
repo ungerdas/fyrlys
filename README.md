@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-windows.zip"><b>Last ned for Windows</b></a>
+  <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip"><b>Last ned for Windows</b></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-android-arm64-v8a.apk"><b>Last ned for Android</b></a>
+  <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-android-arm64-v8a.apk"><b>Last ned for Android</b></a>
   &nbsp;·&nbsp;
   <a href="CHANGELOG.md">Hva er nytt</a>
 </p>
@@ -42,10 +42,10 @@
 
 | Plattform | Fil |
 | --- | --- |
-| Windows 10 og 11 | [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-windows.zip) – pakk ut i en mappe du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe` |
-| Android og Android TV | [`…-arm64-v8a.apk`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-android-arm64-v8a.apk) for de fleste telefoner og TV-bokser, [`…-armeabi-v7a.apk`](https://github.com/ungerdas/fyrlys/releases/download/testbygg/Fyrlys-android-armeabi-v7a.apk) for eldre og billigere bokser |
+| Windows 10 og 11 | [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip) – pakk ut i en mappe du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe` |
+| Android og Android TV | [`…-arm64-v8a.apk`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-android-arm64-v8a.apk) for de fleste telefoner og TV-bokser, [`…-armeabi-v7a.apk`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-android-armeabi-v7a.apk) for eldre og billigere bokser |
 
-Lenkene gir alltid siste versjon ([alle filene](https://github.com/ungerdas/fyrlys/releases/tag/testbygg)).
+Lenkene gir alltid siste versjon ([alle filene](https://github.com/ungerdas/fyrlys/releases/latest)).
 Windows kan advare fordi programmet ikke er signert: velg *Mer informasjon → Kjør likevel*. På Android må
 installasjon fra ukjente kilder være tillatt.
 
