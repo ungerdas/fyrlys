@@ -20,6 +20,22 @@ class PlayTarget {
   final bool localShift;
 }
 
+/// Adressene til et program i TV-arkivet fra et punkt i programmet (de neste prøves hvis den første ikke virker),
+/// og hvor strømmen faktisk begynner: leverandøren lager den fra et helt minutt, så litt før.
+typedef ArchiveUrls = ({List<String> urls, Duration from});
+
+/// Et program i TV-arkivet. Strømmen begynner der du ber om (på minuttet), så avspilleren åpner den på nytt når du
+/// spoler lenger enn det den har hentet.
+class ArchiveClip {
+  const ArchiveClip({required this.start, required this.stop, required this.urlsAt});
+
+  final DateTime start;
+  final DateTime stop;
+  final ArchiveUrls Function(Duration from) urlsAt;
+
+  Duration get length => stop.difference(start);
+}
+
 /// En kilde til TV: IPTV-leverandøren med Xtream Codes, eller en M3U-liste.
 abstract class TvSource {
   /// 'xtream' eller 'm3u'
@@ -47,6 +63,14 @@ abstract class TvSource {
 
   /// adressene til kanalen (kaster SourceException når det ikke går)
   Future<PlayTarget> open(Channel channel);
+
+  // ── TV-arkivet (kanaler med Channel.hasArchive) ──
+
+  /// programmene som har gått de siste dagene (og det som går nå), eldst først
+  Future<List<EpgEntry>> archive(Channel channel);
+
+  /// strømmen for et program i arkivet (kaster SourceException når kanalen ikke har arkiv)
+  Future<ArchiveClip> archiveClip(Channel channel, EpgEntry program);
 
   // ── filmer og serier ──
 

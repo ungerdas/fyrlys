@@ -8,10 +8,12 @@ import '../core/models.dart';
 import '../core/session.dart';
 import '../core/updater.dart';
 import '../core/vod.dart';
+import 'archive_page.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
 import 'guide_view.dart';
 import 'language_dialog.dart';
+import 'logins_dialog.dart';
 import 'motion.dart';
 import 'player_page.dart';
 import 'start_view.dart';
@@ -110,6 +112,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _select(String filter) => setState(() => _filter = filter);
+
+  void _openArchive(Channel ch) =>
+      unawaited(Navigator.of(context).push(fadeRoute<void>((_) => ArchivePage(session: s, channel: ch))));
 
   // ── kanalnummer ──
 
@@ -269,10 +274,20 @@ class _HomePageState extends State<HomePage> {
               if (v == 'reload') unawaited(s.load(force: true));
               if (v == 'languages') unawaited(showLanguageDialog(context, s));
               if (v == 'update') unawaited(_checkUpdates());
-              if (v == 'logout') unawaited(s.logout());
+              if (v == 'logins') unawaited(showLoginsDialog(context, s));
+              if (v == 'logout') unawaited(_logout());
             },
             itemBuilder: (context) => [
-              PopupMenuItem<String>(enabled: false, child: Text(s.source?.label ?? '')),
+              PopupMenuItem<String>(
+                value: 'logins',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.account_circle_outlined),
+                  title: Text(s.currentLogin?.name ?? s.source?.label ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(s.logins.length > 1 ? 'Bytt innlogging' : 'Legg til en innlogging'),
+                ),
+              ),
+              const PopupMenuDivider(),
               const PopupMenuItem<String>(value: 'reload', child: Text('Hent listene på nytt')),
               PopupMenuItem<String>(
                 value: 'languages',
@@ -310,7 +325,12 @@ class _HomePageState extends State<HomePage> {
                     key: ValueKey(section),
                     child: switch (section) {
                       _Section.guide => GuideView(
-                          key: const ValueKey('guide'), session: s, query: _query, onPlay: _openPlayer),
+                          key: const ValueKey('guide'),
+                          session: s,
+                          query: _query,
+                          onPlay: _openPlayer,
+                          onArchive: _openArchive,
+                        ),
                       _Section.movies =>
                         VodBrowser(key: const ValueKey('filmer'), session: s, kind: VodKind.movies, query: _query),
                       _Section.series =>
@@ -370,6 +390,13 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
     );
+  }
+
+  /// Logger ut av den du bruker (etter et spørsmål): Fyrlys bytter til en annen lagret innlogging, om du har en.
+  Future<void> _logout() async {
+    final login = s.currentLogin;
+    if (login != null && !await confirmLogout(context, login)) return;
+    await s.logout();
   }
 
   Future<void> _checkUpdates() async {

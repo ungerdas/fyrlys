@@ -18,6 +18,31 @@ import 'xtream_source.dart';
 
 typedef SourceFactory = Future<TvSource?> Function(Map<String, String> saved);
 
+/// En lagret innlogging: navnet du ser og hva slags den er. Det som trengs for å logge inn (med passordet), ligger
+/// kryptert for seg.
+class SavedLogin {
+  const SavedLogin({required this.id, required this.name, required this.kind});
+
+  factory SavedLogin.fromJson(Map<Object?, Object?> j) =>
+      SavedLogin(id: '${j['id']}', name: '${j['name'] ?? ''}', kind: '${j['kind'] ?? ''}');
+
+  final String id;
+  final String name;
+
+  /// 'xtream' eller 'm3u'
+  final String kind;
+
+  String get kindName => switch (kind) {
+        'xtream' => 'Xtream Codes',
+        'm3u' => 'M3U-liste',
+        _ => kind,
+      };
+
+  SavedLogin named(String name) => SavedLogin(id: id, name: name, kind: kind);
+
+  Map<String, Object?> toJson() => {'id': id, 'name': name, 'kind': kind};
+}
+
 /// Tilstanden i appen: kilden du er logget inn på, kanallista, favoritter, «sist sett» og lys/mørk.
 class Session extends ChangeNotifier {
   Session(this._prefs, {this.sourceFactory, this.listCache, SecretCodec? secrets})
@@ -38,6 +63,10 @@ class Session extends ChangeNotifier {
   TvSource? source;
   bool restoring = true;
   ThemeMode themeMode;
+
+  /// innloggingene du har lagret, og den som er i bruk (id i lista)
+  List<SavedLogin> logins = const [];
+  String? activeLogin;
 
   List<Category> categories = const [];
   List<Channel> channels = const [];
@@ -63,48 +92,163 @@ class Session extends ChangeNotifier {
 
   // ── innlogging ──
 
-  // Innloggingen lagres kryptert i 'source_protected' (2.1.13); 'source' er klartekst (før 2.1.13, eller når
-  // krypteringen ikke virker).
-  static const _plainKey = 'source';
-  static const _protectedKey = 'source_protected';
+  // Innloggingene (2.1.14): lista i 'logins' (navn og slag), den som er i bruk i 'login', og det som trengs for å logge
+  // inn i 'login_protected:<id>' (kryptert) eller 'login_source:<id>' (klartekst, når krypteringen ikke virker).
+  // Fram til 2.1.13 var det én innlogging, i 'source_protected' eller 'source'; den flyttes over første gang.
+  static const _legacyProtected = 'source_protected';
+  static const _legacyPlain = 'source';
+  static const _listKey = 'logins';
+  static const _activeKey = 'login';
+  static String _protectedKey(String id) => 'login_protected:$id';
+  static String _plainKey(String id) => 'login_source:$id';
 
-  /// Kobler til igjen med det som ble lagret sist.
+  /// Det hver innlogging har for seg (kanalene og filmene har ulike id-er hos ulike leverandører). Lyd, språk, bilde
+  /// og lys/mørk gjelder alle.
+  static const _perLogin = ['favorites', 'favoriteCategories', 'recent', 'resume', 'continue', 'guide_cat'];
+
+  /// nøkkelen for [name] i innloggingen som er i bruk
+  String _k(String name) => '$name@${activeLogin ?? ''}';
+
+  /// Samme konto får samme id, så favorittene er der igjen hvis du logger ut og inn: leverandøren og brukeren, ikke
+  /// passordet.
+  static String loginId(Map<String, String> prefs) {
+    final kind = prefs['kind'] ?? '';
+    final who = switch (kind) {
+      'xtream' => '${prefs['server']}|${prefs['user']}',
+      'm3u' => _withoutPassword(prefs['url'] ?? ''),
+      _ => jsonEncode(prefs),
+    };
+    return stableHash('$kind|$who');
+  }
+
+  static String _withoutPassword(String url) {
+    final u = Uri.tryParse(url);
+    if (u == null || !u.hasQuery) return url;
+    const secret = {'password', 'pass', 'pwd'};
+    return u.replace(queryParameters: {
+      for (final e in u.queryParameters.entries)
+        if (!secret.contains(e.key.toLowerCase())) e.key: e.value,
+    }).toString();
+  }
+
+  /// innloggingen som er i bruk
+  SavedLogin? get currentLogin {
+    for (final l in logins) {
+      if (l.id == activeLogin) return l;
+    }
+    return null;
+  }
+
+  /// Kobler til igjen med innloggingen du brukte sist (eller den neste som lar seg åpne).
   Future<void> restore() async {
-    String? raw;
-    final protected = _prefs.getString(_protectedKey);
-    if (protected != null) raw = _secrets.unprotect(protected);
-    final plain = raw == null ? _prefs.getString(_plainKey) : null;
-    raw ??= plain;
-    TvSource? src;
-    if (raw != null) {
-      try {
-        final saved = (jsonDecode(raw) as Map).map((k, v) => MapEntry('$k', '$v'));
-        final factory = sourceFactory;
-        src = factory != null ? await factory(saved) : _fromPrefs(saved);
-        // lagret i klartekst fra før: krypteres nå
-        if (src != null && plain != null) await _saveSource(raw);
-      } on Object {
-        src = null;
+    final moved = await _migrate();
+    logins = _readLogins();
+    TvSource? src = moved?.source;
+    String? id = moved?.id;
+    if (src == null) {
+      final wanted = _prefs.getString(_activeKey);
+      for (final l in [...logins.where((l) => l.id == wanted), ...logins.where((l) => l.id != wanted)]) {
+        src = await _openLogin(l.id);
+        if (src != null) {
+          id = l.id;
+          break;
+        }
       }
     }
-    recent = _readChannels('recent');
     restoring = false;
-    if (src != null) {
-      _attach(src);
+    if (src != null && id != null) {
+      await _activate(id, src);
     } else {
       notifyListeners();
     }
   }
 
+  /// Fra før 2.1.14: én innlogging, og favorittene og resten uten id. Flyttes til lista én gang.
+  Future<({String id, TvSource source})?> _migrate() async {
+    if (_prefs.containsKey(_listKey)) return null;
+    String? raw;
+    final protected = _prefs.getString(_legacyProtected);
+    if (protected != null) raw = _secrets.unprotect(protected);
+    raw ??= _prefs.getString(_legacyPlain);
+    final saved = raw == null ? null : _decode(raw);
+    final src = saved == null ? null : await _build(saved);
+    if (src == null) {
+      await _prefs.setString(_listKey, '[]');
+      return null;
+    }
+    final prefs = src.toPrefs();
+    final id = loginId(prefs);
+    await _saveSecret(id, jsonEncode(prefs));
+    for (final name in _perLogin) {
+      final value = _prefs.get(name);
+      if (value is String) {
+        await _prefs.setString('$name@$id', value);
+      } else if (value is List) {
+        await _prefs.setStringList('$name@$id', [for (final v in value) '$v']);
+      }
+      await _prefs.remove(name);
+    }
+    await _prefs.setString(_listKey, jsonEncode([SavedLogin(id: id, name: src.label, kind: src.kind).toJson()]));
+    await _prefs.remove(_legacyProtected);
+    await _prefs.remove(_legacyPlain);
+    return (id: id, source: src);
+  }
+
+  List<SavedLogin> _readLogins() {
+    try {
+      final raw = jsonDecode(_prefs.getString(_listKey) ?? '[]');
+      return [
+        for (final j in raw is List ? raw : const [])
+          if (j is Map && j['id'] is String) SavedLogin.fromJson(j),
+      ];
+    } on FormatException {
+      return const [];
+    }
+  }
+
+  Future<void> _saveLogins() => _prefs.setString(_listKey, jsonEncode([for (final l in logins) l.toJson()]));
+
+  static Map<String, String>? _decode(String raw) {
+    try {
+      final j = jsonDecode(raw);
+      return j is Map ? j.map((k, v) => MapEntry('$k', '$v')) : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<TvSource?> _build(Map<String, String> saved) async {
+    try {
+      final factory = sourceFactory;
+      return factory != null ? await factory(saved) : _fromPrefs(saved);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// En lagret innlogging, klar til bruk (null: finnes ikke, eller kan ikke leses her, f.eks. en annen Windows-bruker).
+  Future<TvSource?> _openLogin(String id) async {
+    String? raw;
+    final protected = _prefs.getString(_protectedKey(id));
+    if (protected != null) raw = _secrets.unprotect(protected);
+    final plain = raw == null ? _prefs.getString(_plainKey(id)) : null;
+    raw ??= plain;
+    final saved = raw == null ? null : _decode(raw);
+    final src = saved == null ? null : await _build(saved);
+    // lagret i klartekst fra før: krypteres nå, når det går
+    if (src != null && plain != null && _secrets.protect(plain) != null) await _saveSecret(id, plain);
+    return src;
+  }
+
   /// Kryptert når det går (og bare når det kan leses igjen); ellers i klartekst som før.
-  Future<void> _saveSource(String json) async {
+  Future<void> _saveSecret(String id, String json) async {
     final protected = _secrets.protect(json);
     if (protected != null && _secrets.unprotect(protected) == json) {
-      await _prefs.setString(_protectedKey, protected);
-      await _prefs.remove(_plainKey);
+      await _prefs.setString(_protectedKey(id), protected);
+      await _prefs.remove(_plainKey(id));
     } else {
-      await _prefs.setString(_plainKey, json);
-      await _prefs.remove(_protectedKey);
+      await _prefs.setString(_plainKey(id), json);
+      await _prefs.remove(_protectedKey(id));
     }
   }
 
@@ -143,9 +287,77 @@ class Session extends ChangeNotifier {
   Future<void> loginXtream(String server, String user, String password) async =>
       _use(await XtreamSource.login(server, user, password));
 
+  /// Lagrer innloggingen (en du har fra før, oppdateres og beholder navnet) og bytter til den.
   Future<void> _use(TvSource src) async {
-    await _saveSource(jsonEncode(src.toPrefs()));
+    final prefs = src.toPrefs();
+    final id = loginId(prefs);
+    await _saveSecret(id, jsonEncode(prefs));
+    if (!logins.any((l) => l.id == id)) {
+      logins = [...logins, SavedLogin(id: id, name: src.label, kind: src.kind)];
+      await _saveLogins();
+    }
+    await _activate(id, src);
+  }
+
+  /// for testene: logger inn med en kilde de har laget selv
+  @visibleForTesting
+  Future<void> useSource(TvSource src) => _use(src);
+
+  Future<void> _activate(String id, TvSource src) async {
+    activeLogin = id;
+    await _prefs.setString(_activeKey, id);
     _attach(src);
+  }
+
+  /// Bytter til en annen lagret innlogging (kaster SourceException når den ikke kan åpnes her).
+  Future<void> switchLogin(String id) async {
+    if (id == activeLogin && source != null) return;
+    if (!logins.any((l) => l.id == id)) return;
+    final src = await _openLogin(id);
+    if (src == null) throw const SourceException('Fikk ikke åpnet innloggingen. Fjern den og logg inn på nytt.');
+    await _activate(id, src);
+  }
+
+  Future<void> renameLogin(String id, String name) async {
+    final text = name.trim();
+    if (text.isEmpty) return;
+    logins = [for (final l in logins) l.id == id ? l.named(text) : l];
+    await _saveLogins();
+    notifyListeners();
+  }
+
+  /// Logger ut av en innlogging: den slettes fra lista (favorittene blir liggende og er der igjen hvis du logger inn
+  /// på nytt). Var det den du brukte, byttes det til den neste som kan åpnes; ellers vises innloggingen.
+  Future<void> removeLogin(String id) async {
+    await _prefs.remove(_protectedKey(id));
+    await _prefs.remove(_plainKey(id));
+    logins = [for (final l in logins) if (l.id != id) l];
+    await _saveLogins();
+    if (id != activeLogin) {
+      notifyListeners();
+      return;
+    }
+    _detach();
+    await _prefs.remove(_activeKey);
+    for (final l in logins) {
+      final src = await _openLogin(l.id);
+      if (src != null) {
+        await _activate(l.id, src);
+        return;
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Logger ut av den du bruker.
+  Future<void> logout() async {
+    final id = activeLogin;
+    if (id != null) {
+      await removeLogin(id);
+    } else {
+      _detach();
+      notifyListeners();
+    }
   }
 
   void _attach(TvSource src) {
@@ -158,10 +370,33 @@ class Session extends ChangeNotifier {
     _filtered.clear();
     _epg.clear();
     error = null;
-    favorites = _readChannels('favorites');
-    favoriteCategories = _prefs.getStringList('favoriteCategories') ?? const [];
+    loading = false;
+    favorites = _readChannels(_k('favorites'));
+    favoriteCategories = _prefs.getStringList(_k('favoriteCategories')) ?? const [];
+    recent = _readChannels(_k('recent'));
+    _resume = null;
+    _continue = null;
     notifyListeners();
     unawaited(_startLists(src));
+  }
+
+  void _detach() {
+    source?.dispose();
+    source = null;
+    activeLogin = null;
+    categories = const [];
+    channels = const [];
+    categoryCounts = const {};
+    favorites = const [];
+    favoriteCategories = const [];
+    recent = const [];
+    _resume = null;
+    _continue = null;
+    _byId = const {};
+    _filtered.clear();
+    _epg.clear();
+    error = null;
+    loading = false;
   }
 
   /// Lista fra sist vises med en gang, og den nye hentes i bakgrunnen.
@@ -180,23 +415,6 @@ class Session extends ChangeNotifier {
   }
 
   static String _cacheKey(TvSource src) => '${src.kind}|${src.label}';
-
-  Future<void> logout() async {
-    source?.dispose();
-    source = null;
-    await _prefs.remove(_plainKey);
-    await _prefs.remove(_protectedKey);
-    categories = const [];
-    channels = const [];
-    categoryCounts = const {};
-    favorites = const [];
-    favoriteCategories = const [];
-    _byId = const {};
-    _filtered.clear();
-    _epg.clear();
-    error = null;
-    notifyListeners();
-  }
 
   // ── lister ──
 
@@ -318,6 +536,22 @@ class Session extends ChangeNotifier {
     }
   }
 
+  // ── TV-arkivet ──
+
+  /// Programmene i arkivet for en kanal (de siste dagene, og det som går nå), eldst først.
+  Future<List<EpgEntry>> archive(Channel channel) async {
+    final src = source;
+    if (src == null || !channel.hasArchive) return const [];
+    return cleanEpg(await src.archive(channel));
+  }
+
+  /// Strømmen for et program i arkivet (kaster SourceException når det ikke går).
+  Future<ArchiveClip> archiveClip(Channel channel, EpgEntry program) async {
+    final src = source;
+    if (src == null) throw const SourceException('Ikke logget inn');
+    return src.archiveClip(channel, program);
+  }
+
   // ── favoritter og «sist sett» ──
 
   bool isFavorite(String id) => favorites.any((c) => c.id == id);
@@ -354,13 +588,13 @@ class Session extends ChangeNotifier {
   }
 
   Future<void> _saveFavorites() async {
-    await _prefs.setString('favorites', jsonEncode([for (final c in favorites) c.toJson()]));
-    await _prefs.setStringList('favoriteCategories', favoriteCategories);
+    await _prefs.setString(_k('favorites'), jsonEncode([for (final c in favorites) c.toJson()]));
+    await _prefs.setStringList(_k('favoriteCategories'), favoriteCategories);
   }
 
   void addRecent(Channel ch) {
     recent = [ch, for (final c in recent) if (c.id != ch.id) c].take(12).toList();
-    unawaited(_prefs.setString('recent', jsonEncode([for (final c in recent) c.toJson()])));
+    unawaited(_prefs.setString(_k('recent'), jsonEncode([for (final c in recent) c.toJson()])));
     notifyListeners();
   }
 
@@ -379,9 +613,9 @@ class Session extends ChangeNotifier {
   }
 
   /// kanalene TV-guiden viste sist: 'fav', 'all' eller en kategori-id (null: aldri valgt)
-  String? get guideCategory => _prefs.getString('guide_cat');
+  String? get guideCategory => _prefs.getString(_k('guide_cat'));
 
-  void saveGuideCategory(String filter) => unawaited(_prefs.setString('guide_cat', filter));
+  void saveGuideCategory(String filter) => unawaited(_prefs.setString(_k('guide_cat'), filter));
 
   // ── lyd og språk ──
 
@@ -430,7 +664,7 @@ class Session extends ChangeNotifier {
     if (cached != null) return cached;
     final out = <String, List<int>>{};
     try {
-      final raw = jsonDecode(_prefs.getString('resume') ?? '{}');
+      final raw = jsonDecode(_prefs.getString(_k('resume')) ?? '{}');
       if (raw is Map) {
         for (final e in raw.entries) {
           final v = e.value;
@@ -467,7 +701,7 @@ class Session extends ChangeNotifier {
     while (m.length > 300) {
       m.remove(m.keys.first);
     }
-    unawaited(_prefs.setString('resume', jsonEncode(m)));
+    unawaited(_prefs.setString(_k('resume'), jsonEncode(m)));
   }
 
   /// Hvor du slapp og hvor lang den er, når det er verdt å fortsette (som [resumeAt]).
@@ -488,7 +722,7 @@ class Session extends ChangeNotifier {
     if (cached != null) return cached;
     final out = <ContinueItem>[];
     try {
-      final raw = jsonDecode(_prefs.getString('continue') ?? '[]');
+      final raw = jsonDecode(_prefs.getString(_k('continue')) ?? '[]');
       if (raw is List) {
         for (final j in raw) {
           if (j is Map && j['key'] is String) out.add(ContinueItem.fromJson(j));
@@ -517,7 +751,7 @@ class Session extends ChangeNotifier {
   /// Uten notifyListeners: dette lagres mens filmen spiller (og når spilleren lukkes), og sidene som viser lista,
   /// tegnes på nytt når du kommer tilbake til dem.
   void _saveContinue() {
-    unawaited(_prefs.setString('continue', jsonEncode([for (final c in _continue ?? const <ContinueItem>[]) c.toJson()])));
+    unawaited(_prefs.setString(_k('continue'), jsonEncode([for (final c in _continue ?? const <ContinueItem>[]) c.toJson()])));
   }
 
   // ── utseende ──

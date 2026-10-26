@@ -1,5 +1,15 @@
 # Endringer
 
+## v2.1.14
+
+- **TV-arkiv** (Xtream Codes): har leverandøren arkiv for en kanal, kan du se det som har gått de siste dagene.
+  Trykk på klokka ved kanalnavnet i TV-guiden, eller på «TV-arkiv» (A) i spilleren, og velg et program. Du kan spole,
+  fortsette der du slapp, og spilleren går videre til neste program av seg selv.
+- **Se fra start:** begynte programmet før du slo på, ser du det fra begynnelsen med én knapp i spilleren.
+- **Flere innlogginger:** legg til en innlogging til (en annen leverandør eller et annet abonnement) og bytt mellom
+  dem øverst i menyen. Du kan gi dem navn. Hver innlogging har sine egne favoritter, «sist sett» og «Fortsett å se»,
+  og det du har fra før, følger med den du har nå.
+
 ## v2.1.13
 
 - **Installasjonsprogram:** `Fyrlys-oppsett.exe` installerer Fyrlys for deg (uten administrator), med snarvei i

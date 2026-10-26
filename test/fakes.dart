@@ -10,10 +10,16 @@ import 'package:fyrlys/ui/playback.dart';
 
 /// En kilde uten nett, med tre kanaler i to kategorier. NRK 1 har program nå og etterpå.
 class FakeSource implements TvSource {
-  FakeSource({this.localShift = false, this.hasVod = true});
+  FakeSource({this.localShift = false, this.hasVod = true, this.name = 'Test', this.withArchive = false});
 
   /// direktesendinger der avspilleren tar vare på det siste (pause og spoling)
   final bool localShift;
+
+  /// navnet (label), og en del av det som lagres: to kilder med ulike navn er to innlogginger
+  final String name;
+
+  /// NRK 1 har TV-arkiv (sju dager)
+  final bool withArchive;
 
   @override
   final bool hasVod;
@@ -26,7 +32,7 @@ class FakeSource implements TvSource {
   String get kind => 'fake';
 
   @override
-  String get label => 'Test';
+  String get label => name;
 
   @override
   Map<String, String> get httpHeaders => const {};
@@ -40,7 +46,7 @@ class FakeSource implements TvSource {
 
   @override
   Future<List<Channel>> channels({bool force = false}) async => const [
-        Channel(id: '101', name: 'NRK 1 HD', categoryId: '1', number: '1'),
+        Channel(id: '101', name: 'NRK 1 HD', categoryId: '1', number: '1', archiveDays: withArchive ? 7 : 0),
         Channel(id: '102', name: 'TV 2 HD', categoryId: '1', number: '2'),
         Channel(id: '103', name: '15:00 Man United - Bournemouth | Premier League', categoryId: '2', hasEpg: false),
       ];
@@ -76,6 +82,48 @@ class FakeSource implements TvSource {
 
   @override
   String redact(String text) => text.replaceAll('hemmelig', '***');
+
+  // ── TV-arkivet: i går kveld, et program leverandøren ikke har, og det som går nå ──
+
+  /// i dag kl. 20 for [daysAgo] dager siden (lokal tid)
+  static DateTime evening(int daysAgo, [int hour = 20]) {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day - daysAgo, hour);
+  }
+
+  final archiveRequests = <String>[];
+
+  @override
+  Future<List<EpgEntry>> archive(Channel channel) async {
+    archiveRequests.add(channel.id);
+    if (!channel.hasArchive) return const [];
+    final now = DateTime.now();
+    return [
+      EpgEntry(title: 'Dagsrevyen', start: evening(1, 19), stop: evening(1), description: 'I går.', inArchive: true),
+      EpgEntry(title: 'Debatten', start: evening(1), stop: evening(1, 21), inArchive: true),
+      EpgEntry(title: 'Ikke lagret', start: evening(1, 21), stop: evening(1, 22)),
+      EpgEntry(
+        title: 'Dagsrevyen',
+        start: now.subtract(const Duration(minutes: 10)),
+        stop: now.add(const Duration(minutes: 20)),
+        inArchive: true,
+      ),
+    ];
+  }
+
+  @override
+  Future<ArchiveClip> archiveClip(Channel channel, EpgEntry program) async {
+    if (!channel.hasArchive) throw const SourceException('Kanalen har ikke TV-arkiv');
+    return ArchiveClip(
+      start: program.start,
+      stop: program.stop,
+      urlsAt: (from) {
+        final minutes = from.inMinutes < 0 ? 0 : from.inMinutes;
+        final base = 'http://example/arkiv/${channel.id}/${program.start.millisecondsSinceEpoch ~/ 1000}/$minutes';
+        return (urls: ['$base.m3u8', '$base.ts'], from: Duration(minutes: minutes));
+      },
+    );
+  }
 
   // ── filmer og serier ──
 
@@ -134,7 +182,7 @@ class FakeSource implements TvSource {
   String episodeUrl(Episode episode) => 'http://example/series/${episode.id}.${episode.ext}';
 
   @override
-  Map<String, String> toPrefs() => const {'kind': 'fake'};
+  Map<String, String> toPrefs() => name == 'Test' ? const {'kind': 'fake'} : {'kind': 'fake', 'name': name};
 
   @override
   void dispose() {}
@@ -143,7 +191,15 @@ class FakeSource implements TvSource {
 /// En avspiller uten mpv: husker adressene og volumet, og «spiller» med en gang.
 class FakePlayback implements Playback {
   /// sender posisjonen, som om filmen spiller
-  void moveTo(Duration p) => _position.add(p);
+  void moveTo(Duration p) {
+    _pos = p;
+    _position.add(p);
+  }
+
+  Duration _pos = Duration.zero;
+
+  /// som når mpv ikke får åpnet adressen
+  void fail(String message) => _error.add(message);
 
   /// som når filmen er ferdig
   void finish() => _completed.add(true);
@@ -188,7 +244,7 @@ class FakePlayback implements Playback {
   Stream<Duration> get durationStream => _duration.stream;
 
   @override
-  Duration get position => Duration.zero;
+  Duration get position => _pos;
 
   @override
   Duration get duration => length ?? Duration.zero;
@@ -221,6 +277,7 @@ class FakePlayback implements Playback {
   Future<void> open(String url, Map<String, String> headers, {Duration? start}) async {
     urls.add(url);
     starts.add(start);
+    _pos = Duration.zero;
     final l = length;
     if (l != null) _duration.add(l);
     playing = true;

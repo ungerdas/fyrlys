@@ -55,8 +55,18 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
 ## Arkitektur (`lib/`)
 - `core/source.dart` – `TvSource` (`kind` `xtream`/`m3u`, `hasVod`): kilde til kanaler, EPG, strømadresser og
   favoritter. `PlayTarget(urls, localShift:)`. Begge kildene spiller rett fra leverandøren (`localShift: true`).
+  TV-arkivet (2.1.14): `archive(channel)` (programmene, `EpgEntry.inArchive`) og `archiveClip(channel, program)` →
+  `ArchiveClip(start, stop, urlsAt(from))`, som gir adressene fra et punkt i programmet og hvor strømmen faktisk
+  begynner (et helt minutt). `Channel.archiveDays`/`hasArchive` (JSON `arc`). Bare Xtream; M3U har det ikke.
   - `core/xtream_source.dart` – Xtream Codes (port av `xtream.py`): `player_api.php`,
     User-Agent som VLC, strøm `/live/<bruker>/<passord>/<id>.m3u8` og `.ts` som reserve, EPG i base64.
+    Arkivet: `tv_archive`/`tv_archive_duration` i get_live_streams, programmene fra `get_simple_data_table`
+    (`parseArchive`: begynt de siste N dagene, `has_archive` 0 = ikke lagret, det som går nå kan alltid ses fra start),
+    strømmen `/timeshift/<bruker>/<passord>/<minutter>/<ÅÅÅÅ-MM-DD:TT-MM>/<id>.m3u8` (så `.ts`), på minuttet, ut
+    programmet. Starten i serverens tid: `serverClockOffset` (time_now mot timestamp_now i server_info, hentes én gang
+    med player_api.php uten action), `archiveOffset` (går serveren likt med PC-en nå, brukes PC-ens sone med
+    sommertid; ellers serverens forskjell som den er; uten svar PC-ens, som Kodi), `xtreamTime`. Ikke prøvd mot en
+    ekte leverandør: tidssonen og om HLS-varianten finnes, er usikkert.
   - `core/m3u_source.dart` (2.1.6) – en vanlig M3U-liste: `parseM3u` (`#EXTINF` med tvg-id/tvg-name/tvg-logo/
     group-title/tvg-chno, `#EXTGRP`, `url-tvg`/`x-tvg-url` i toppen; filmer/episoder etter sti eller filtype hoppes
     over), kanal-id = `stableHash` av tvg-id+navn (ellers gruppe+navn), kategorier = gruppene, nummer = tvg-chno
@@ -72,10 +82,17 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   og `ImageStore` (bildene i `getApplicationCacheDirectory()/bilder`, filnavn `stableHash(url)`, fornyes etter 14 dager,
   det gamle brukes når nettet feiler, 404 huskes i 10 min, `prune()` ved start holder det under 300 MB). Settes opp i
   `main.dart` (path_provider); uten dem (testene) hentes alt som før.
-- `core/session.dart` – tilstanden (ChangeNotifier): innlogging (`toPrefs()` som JSON, kryptert med DPAPI i
-  `source_protected` via `core/secrets.dart` (`SecretCodec`; `DpapiCodec` = CryptProtectData/CryptUnprotectData med
-  FFI; `NoSecretCodec` utenfor Windows, og i testene en egen); lagres bare kryptert når det kan leses tilbake, ellers
-  i klartekst i `source` som før 2.1.13, og `restore` krypterer det som ligger i klartekst), lister, EPG-mellomlager (5 min, 4 om gangen),
+- `core/session.dart` – tilstanden (ChangeNotifier): innloggingene (2.1.14, `SavedLogin`): lista i `logins` (id, navn,
+  slag), den i bruk i `login`, og hver innlogging (`toPrefs()` som JSON) kryptert med DPAPI i `login_protected:<id>`
+  via `core/secrets.dart` (`SecretCodec`; `DpapiCodec` = CryptProtectData/CryptUnprotectData med FFI; `NoSecretCodec`
+  utenfor Windows, og i testene en egen), eller i klartekst i `login_source:<id>` når krypteringen ikke kan leses
+  tilbake (krypteres når det går). Id = `Session.loginId` (`stableHash` av leverandør + bruker, ikke passordet), så
+  samme konto igjen blir samme innlogging og får favorittene tilbake. Favoritter, favorittkategorier, sist sett,
+  `resume`, `continue` og `guide_cat` ligger per innlogging (`<navn>@<id>`, `_k`); lyd, språk, bilde, tema og vindu
+  er felles. `_migrate` flytter innloggingen fra før (`source_protected`/`source`) og disse nøklene uten id over én
+  gang. `switchLogin`, `renameLogin`, `removeLogin` (data blir liggende; var den i bruk, tas den neste som kan åpnes),
+  `logout` = fjern den i bruk, `useSource` for testene. `app.dart` gir HomePage nøkkelen `innlogging:<id>`, så den
+  begynner på nytt ved bytte. Lister, EPG-mellomlager (5 min, 4 om gangen),
   `epg(id, limit:)` (en lengre liste fra guiden brukes også av kortene; `cleanEpg` i `models.dart` slår sammen
   doble programmer og kutter overlapp, som `clean_epg` på serveren), favoritter (lokalt, `favorites` og
   `favoriteCategories`), «sist sett», lys/mørk, og «fortsett der du
@@ -84,7 +101,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   `lang_audio`/`lang_subs` i shared_preferences; `LanguagePrefs` og kodene i `core/languages.dart`). Lista fra
   `listCache` vises med en gang (`_startLists`), `load` skriver den nye; `_prefetchEpg` henter programinfo for 12
   favoritter og 8 sist sett når lista er klar.
-- `ui/login_page.dart` (to valg: «M3U-lenke» med valgfri EPG-lenke, og «Xtream Codes»), `ui/home_page.dart`
+- `ui/login_page.dart` (to valg: «M3U-lenke» med valgfri EPG-lenke, og «Xtream Codes»; `adding: true` = en til, med
+  AppBar «Ny innlogging», lukkes når den er lagt til), `ui/logins_dialog.dart` (2.1.14: «Innlogginger» fra øverste
+  valg i menyen: bytt, «Gi nytt navn», «Logg ut og fjern», «Legg til innlogging»; `confirmLogout` brukes også av «Logg
+  ut» i menyen), `ui/home_page.dart`
   (TV/TV-guide/Filmer/Serier, de to siste bare med `hasVod` (`_sectionList`/`_current`): SegmentedButton i toppen
   ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; «Se etter oppdateringer» i menyen når oppdateringen er
   på (Pål-Erik 26.10: oppdateringsserveren trengs ikke, fjernet i 2.1.11); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
@@ -112,7 +132,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   som begynte før det synlige, flyttes inn (ListenableBuilder på den vannrette). Hver rad henter
   `session.epg(id, limit: 14)` etter 150 ms framme (`epgCached` gir det som alt er hentet uten å vente). Trykk på
   det som går nå eller på kanalnavnet = spill; senere/tidligere program = info med «Se kanalen». På PC kan
-  guiden dras med musa, og programmene har verktøytips.
+  guiden dras med musa, og programmene har verktøytips. Kanaler med arkiv har en klokke-knapp («TV-arkiv») ved navnet.
+- `ui/archive_page.dart` (2.1.14) – TV-arkivet for én kanal: programmene nyeste øverst, dag for dag (`archiveDay`:
+  I dag / I går / «Lørdag 24. oktober»), «Går nå», «Ikke i arkivet» dempet, strek for det du har sett. Et trykk lager
+  `VodPlayItem`-er for alle som kan ses (`archiveItems`/`archivePlayItem`, nøkkel `arkiv:<kanal>:<start>`) og åpner
+  filmspilleren på det valgte.
 - `ui/vod_browser.dart` (plakater i rutenett, kategori, sortering, sider hentes når du er 30 fra slutten, søk
   med 350 ms pause; «Fortsett å se» øverst når det ikke er søk/kategori: `Session.continueItems` (`continue` i
   shared_preferences, `ContinueItem` i `vod.dart`, maks 50), oppdatert av filmspilleren via `VodPlayItem.continueAs`:
@@ -124,7 +148,12 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   <kategori>»; serie: sesonger og episoder i rutenett (to kolonner på brede skjermer), `episodeTitle` fjerner
   «Serie - S01E01 - », bakgrunnsbildet med nummeret når episoden mangler bilde; `Poster`), `ui/vod_player_page.dart` (egen spiller for filer: tidslinje, ±10 s,
   neste/forrige episode, volum, spor, fullskjerm; lagrer hvor du er hvert 10. s og når du går ut, starter med
-  `Media(start:)`, går til neste episode 1,5 s etter slutten).
+  `Media(start:)`, går til neste episode 1,5 s etter slutten). Arkivet (2.1.14, `VodPlayItem.archive`): `setup(live:
+  true)` (bufferet), lengden er programmets, posisjonen `_base` + strømmens; HLS-adressen først og MPEG-TS ved feil
+  før start (den som virket, huskes i `_variant`); spoling i HLS med kjent lengde = `seek`, ellers i bufferet
+  (`liveCache` + `seekBy`), ellers åpnes strømmen på nytt fra minuttet og resten hoppes over når det er hentet
+  (`_skip`); ←/→ samles i 450 ms; slutter strømmen før programmet (det som går nå), åpnes den igjen inntil tre ganger i
+  minuttet. `startFull`: åpnet fra TV-spilleren i fullskjerm.
 - `ui/player_page.dart` – som spilleren på nettsiden (alltid mørk): bildet med kontroller og programinfo under,
   kanallista (`ui/side_list.dart`: lista du kom fra / ★ Favoritter, søk) til høyre fra 860 px, ellers under.
   Fullskjerm = bare bildet (window_manager; et maksimert vindu gjøres vanlig først,
@@ -147,7 +176,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   strømmen kommer i biter, derfor 15 s slakk i `_atLive`), bak direkte = foran − det. Spoling = `seekBy` (mpv
   `seek <s> relative`) i bufferet, uten å åpne på nytt (`package:clock` for tida på pause, så testene kan spole den).
   Ikke prøvd i ekte mpv. Tidslinje, −10/+10 (samles i 450 ms), «DIREKTE» (trykk = direkte), ←, → (på PC og i
-  fullskjerm; ellers inn i lista), L/End.
+  fullskjerm; ellers inn i lista), L/End. Kanaler med arkiv (2.1.14): «Se fra start» (programmet som går nå, når det
+  har gått et minutt) og «TV-arkiv» (A) i kontrollene (ikke i smalt vindu) og som knapper under bildet. `_away` stopper
+  direktesendingen mens arkivet er oppe (én tilkobling) og åpner kanalen igjen etterpå; `_shownFull = false` etter
+  filmspilleren, så vinduet settes slik spilleren var.
 - `ui/playback.dart` – `Playback`: mpv via media_kit (`MpvPlayback`), en falsk i testene (`playbackFactory`
   byttes ut i testene for sider som lager avspilleren selv). Fullskjerm for begge spillerne:
   `WindowFullscreen` i `ui/window_effects.dart`. Språk: `setLanguages` setter `alang`/`slang` og
@@ -173,8 +205,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   shared_preferences, bare når tittellinja ligger på en skjerm, `screen_retriever`) og maksimert; lagres 600 ms etter
   flytting/endring, ikke i fullskjerm eller minimert (maksimert beholder den vanlige størrelsen).
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
-- Tester i `test/`: navn, Xtream-kilden, M3U-kilden og innloggingen (`m3u_source_test.dart`, med MockClient og
-  `http.runWithClient`; også krypteringen av innloggingen), oppdateringen (`updater_test.dart`), vinduet og én Fyrlys
+- Tester i `test/`: navn, Xtream-kilden (også arkivet: klokka, tidene, `parseArchive`, adressene), M3U-kilden og
+  innloggingen (`m3u_source_test.dart`, med MockClient og `http.runWithClient`; også krypteringen av innloggingen),
+  flere innlogginger (`logins_test.dart`: flyttingen fra før, bytte, navn, logg ut, menyen), TV-arkivet
+  (`archive_test.dart`: guiden, arkivsiden, filmspilleren med reserve/spoling/neste, «Se fra start» i spilleren;
+  `FakeSource(withArchive: true, name:)`, `FakePlayback.fail`), oppdateringen (`updater_test.dart`), vinduet og én Fyrlys
   (`window_test.dart`, ekte lokal port),
   widget-tester for TV-siden og spilleren (`player_test.dart`, tilbakespoling i `timeshift_test.dart`) med falsk
   kilde og avspiller (`fakes.dart`),
@@ -250,5 +285,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); Pål-Erik gjør det unde
   i `TvSource`, testbygg-reserver, flyttingen fra Fyrlys-serveren), nye versjoner av actions. Testet med tester;
   Installasjonsprogrammet virker på PC-en hans (Pål-Erik 26.10: «Funka veldig fint»); DPAPI, vinduet og
   én-om-gangen er ikke bekreftet hver for seg.
-- Ideer senere: minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeundertekster
-  (DVB/PGS) med libass, signering av exe-en.
+- 26.10.2026: 2.1.14 (Pål-Eriks valg 1 og 12 fra lista over det som mangler): TV-arkiv med «Se fra start» (Xtream),
+  og flere innlogginger med egne favoritter. Testet med tester; arkivet mot leverandøren hans (tidssonen i adressen,
+  HLS eller TS, spoling i ekte mpv) er ikke prøvd.
+- Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
+  kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
+  lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,
+  signering av exe-en.

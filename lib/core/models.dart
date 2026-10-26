@@ -21,6 +21,7 @@ class Channel {
     this.icon,
     this.number,
     this.hasEpg = true,
+    this.archiveDays = 0,
   });
 
   factory Channel.fromJson(Map<String, Object?> j) => Channel(
@@ -30,6 +31,7 @@ class Channel {
         icon: j['icon'] is String ? j['icon'] as String : null,
         number: j['num']?.toString(),
         hasEpg: j['epg'] != false,
+        archiveDays: j['arc'] is int ? j['arc'] as int : 0,
       );
 
   final String id;
@@ -41,7 +43,20 @@ class Channel {
   final String? number;
   final bool hasEpg;
 
-  Map<String, Object?> toJson() => {'id': id, 'name': name, 'cat': categoryId, 'icon': icon, 'num': number, 'epg': hasEpg};
+  /// hvor mange dager bakover leverandøren tar vare på (TV-arkivet); 0: ingen arkiv
+  final int archiveDays;
+
+  bool get hasArchive => archiveDays > 0;
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'name': name,
+        'cat': categoryId,
+        'icon': icon,
+        'num': number,
+        'epg': hasEpg,
+        if (archiveDays > 0) 'arc': archiveDays,
+      };
 }
 
 /// Plassen i [list] til kanalen med nummeret du tastet («012» er kanal 12), eller -1.
@@ -52,12 +67,21 @@ int channelByNumber(List<Channel> list, String digits) {
 }
 
 class EpgEntry {
-  const EpgEntry({required this.title, required this.start, required this.stop, this.description = ''});
+  const EpgEntry({
+    required this.title,
+    required this.start,
+    required this.stop,
+    this.description = '',
+    this.inArchive = false,
+  });
 
   final String title;
   final String description;
   final DateTime start;
   final DateTime stop;
+
+  /// kan ses i TV-arkivet (bare i lista fra arkivet)
+  final bool inArchive;
 
   bool isOnAt(DateTime t) => !start.isAfter(t) && stop.isAfter(t);
 
@@ -91,6 +115,7 @@ List<EpgEntry> cleanEpg(List<EpgEntry> list) {
           start: k.start,
           stop: e.stop.isAfter(k.stop) ? e.stop : k.stop,
           description: k.description.isNotEmpty ? k.description : e.description,
+          inArchive: k.inArchive || e.inArchive,
         );
         merged = true;
         break;
@@ -99,7 +124,8 @@ List<EpgEntry> cleanEpg(List<EpgEntry> list) {
         out.removeLast();
         continue;
       }
-      out[out.length - 1] = EpgEntry(title: k.title, start: k.start, stop: e.start, description: k.description);
+      out[out.length - 1] =
+          EpgEntry(title: k.title, start: k.start, stop: e.start, description: k.description, inArchive: k.inArchive);
       break;
     }
     if (!merged) out.add(e);

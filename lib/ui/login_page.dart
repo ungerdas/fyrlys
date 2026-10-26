@@ -7,9 +7,12 @@ enum _Mode { m3u, xtream }
 
 /// Innlogging hos IPTV-leverandøren: med M3U-lenken (og en EPG-lenke om du vil), eller med Xtream Codes.
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, required this.session});
+  const LoginPage({super.key, required this.session, this.adding = false});
 
   final Session session;
+
+  /// en innlogging til (fra menyen): siden lukkes når den er lagt til
+  final bool adding;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -47,6 +50,7 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         await widget.session.loginXtream(_server.text, _user.text, _password.text);
       }
+      if (widget.adding && mounted) Navigator.of(context).pop();
     } on SourceException catch (e) {
       if (mounted) {
         setState(() {
@@ -71,6 +75,7 @@ class _LoginPageState extends State<LoginPage> {
     final scheme = theme.colorScheme;
     final hint = TextStyle(color: scheme.onSurfaceVariant);
     return Scaffold(
+      appBar: widget.adding ? AppBar(title: const Text('Ny innlogging')) : null,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -92,6 +97,14 @@ class _LoginPageState extends State<LoginPage> {
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
                   ),
+                  if (widget.adding) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Den lagres ved siden av den du har, og du bytter mellom dem i menyen.',
+                      textAlign: TextAlign.center,
+                      style: hint,
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   SegmentedButton<_Mode>(
                     segments: const [

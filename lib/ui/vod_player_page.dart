@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../core/names.dart';
 import '../core/session.dart';
+import '../core/source.dart';
 import '../core/vod.dart';
 import '../theme.dart';
 import 'language_dialog.dart';
@@ -17,11 +19,18 @@ export '../core/names.dart' show formatDuration;
 /// Spilleren er alltid mørk, som på nettsiden.
 final ThemeData _playerTheme = fyrlysTheme(Brightness.dark);
 
-/// Noe å spille: en film eller en episode.
+/// Noe å spille: en film, en episode eller et program i TV-arkivet.
 class VodPlayItem {
-  const VodPlayItem({required this.key, required this.title, required this.url, this.subtitle = '', this.continueAs});
+  const VodPlayItem({
+    required this.key,
+    required this.title,
+    this.url = '',
+    this.subtitle = '',
+    this.continueAs,
+    this.archive,
+  });
 
-  /// for «fortsett der du slapp», f.eks. «film:123» eller «episode:456»
+  /// for «fortsett der du slapp», f.eks. «film:123», «episode:456» eller «arkiv:101:1793041200»
   final String key;
   final String title;
   final String subtitle;
@@ -29,11 +38,14 @@ class VodPlayItem {
 
   /// slik den står i «Fortsett å se» mens du ser den
   final ContinueItem? continueAs;
+
+  /// et program i TV-arkivet: adressen lages fra der i programmet du er (i stedet for [url])
+  final ArchiveClip? archive;
 }
 
-
-/// Spilleren for filmer og episoder: tidslinje med spoling, ±10 sekunder, neste og forrige episode, lydspor og
-/// undertekster, volum og fullskjerm. Husker hvor du slapp, og går videre til neste episode når en er ferdig.
+/// Spilleren for filmer, episoder og TV-arkivet: tidslinje med spoling, ±10 sekunder, neste og forrige episode (eller
+/// program), lydspor og undertekster, volum og fullskjerm. Husker hvor du slapp, og går videre til den neste når en er
+/// ferdig.
 class VodPlayerPage extends StatelessWidget {
   const VodPlayerPage({
     super.key,
@@ -41,6 +53,7 @@ class VodPlayerPage extends StatelessWidget {
     required this.items,
     this.index = 0,
     this.resume = true,
+    this.startFull = false,
     this.playback,
   });
 
@@ -52,6 +65,9 @@ class VodPlayerPage extends StatelessWidget {
 
   /// fortsett der du slapp (false: fra begynnelsen)
   final bool resume;
+
+  /// vinduet er alt i fullskjerm (åpnet fra TV-spilleren i fullskjerm)
+  final bool startFull;
 
   /// testene bruker en falsk avspiller
   final Playback Function()? playback;
@@ -83,7 +99,7 @@ class _VodPlayerState extends State<_VodPlayer> {
   bool _ending = false;
   String? _status;
   bool _controls = true;
-  bool _full = false;
+  late bool _full = widget.page.startFull;
   double? _seekValue;
   bool _dragging = false;
   late double _volume = _session.volume;
@@ -95,11 +111,41 @@ class _VodPlayerState extends State<_VodPlayer> {
   Timer? _saveTimer;
   Timer? _nextTimer;
 
+  // ── TV-arkivet: strømmen begynner på et helt minutt, og åpnes på nytt når du spoler utenfor det som er hentet ──
+
+  /// hvor i programmet strømmen begynner
+  Duration _base = Duration.zero;
+
+  /// adressene for der den ble åpnet sist, og hvilken som prøves
+  List<String> _urls = const [];
+  int _urlIndex = 0;
+
+  /// den som virket sist (HLS eller MPEG-TS): prøves først neste gang
+  int _variant = 0;
+
+  /// lengden strømmen selv oppgir (et HLS-arkiv kjenner den, og da spoler avspilleren selv)
+  Duration _streamLength = Duration.zero;
+
+  /// hoppet fram fra minuttet til der du skulle, når avspilleren har hentet så langt
+  Duration? _skip;
+  Timer? _skipTimer;
+
+  /// ←/→ samles litt før det spoles
+  Duration? _seekTarget;
+  Timer? _seekTimer;
+
+  /// nye åpninger når strømmen slutter før programmet (det som går nå, vokser mens du ser)
+  final List<DateTime> _reopens = [];
+
   Session get _session => widget.page.session;
   List<VodPlayItem> get _items => widget.page.items;
   VodPlayItem get _item => _items[_index];
   bool get _hasNext => _index + 1 < _items.length;
   bool get _hasPrev => _index > 0;
+  ArchiveClip? get _clip => _item.archive;
+
+  /// «episode» eller «program» (TV-arkivet)
+  String get _unit => _item.archive != null ? 'program' : 'episode';
 
   @override
   void initState() {
@@ -107,11 +153,23 @@ class _VodPlayerState extends State<_VodPlayer> {
     _subs
       ..add(_pb.playingStream.listen((v) => _set(() => _playing = v)))
       ..add(_pb.bufferingStream.listen((v) => _set(() => _buffering = v)))
-      ..add(_pb.durationStream.listen((d) => _set(() => _duration = d)))
+      ..add(_pb.durationStream.listen((d) {
+        // arkivet: lengden er programmets; strømmens egen brukes bare til å spole i HLS
+        if (_clip != null) {
+          _streamLength = d;
+        } else {
+          _set(() => _duration = d);
+        }
+      }))
       ..add(_pb.positionStream.listen(_onPosition))
       ..add(_pb.errorStream.listen(_onError))
       ..add(_pb.completedStream.listen((done) {
-        if (done && _started) _onEnd();
+        if (!done || !_started) return;
+        if (_clip != null) {
+          _onArchiveEnd();
+        } else {
+          _onEnd();
+        }
       }));
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
     unawaited(_start());
@@ -128,6 +186,8 @@ class _VodPlayerState extends State<_VodPlayer> {
     _hideTimer?.cancel();
     _saveTimer?.cancel();
     _nextTimer?.cancel();
+    _skipTimer?.cancel();
+    _seekTimer?.cancel();
     unawaited(_pb.dispose());
     _focus.dispose();
     if (_full) unawaited(WindowFullscreen.instance.set(false));
@@ -141,7 +201,8 @@ class _VodPlayerState extends State<_VodPlayer> {
   // ── avspilling ──
 
   Future<void> _start() async {
-    await _pb.setup();
+    // arkivet: avspilleren tar vare på det den har hentet, så det går an å spole i det uten å åpne på nytt
+    await _pb.setup(live: _items.any((i) => i.archive != null));
     await _pb.setLanguages(_session.languages);
     await _pb.setPicture(_session.picture);
     await _pb.setVolume(_muted ? 0 : _volume);
@@ -151,6 +212,11 @@ class _VodPlayerState extends State<_VodPlayer> {
   Future<void> _open({bool resume = true}) async {
     final item = _item;
     final start = resume ? _session.resumeAt(item.key) : null;
+    if (item.archive != null) {
+      if (start != null) _showFlash('Fortsetter fra ${formatDuration(start)}');
+      await _openArchive(start ?? Duration.zero);
+      return;
+    }
     _set(() {
       _status = null;
       _started = false;
@@ -170,10 +236,18 @@ class _VodPlayerState extends State<_VodPlayer> {
     }
   }
 
-  void _onPosition(Duration p) {
-    if (!_started && p > Duration.zero) _set(() => _started = true);
+  void _onPosition(Duration raw) {
+    // arkivet: strømmen begynner [_base] inn i programmet
+    final p = _clip != null ? _base + raw : raw;
+    if (!_started && raw > Duration.zero) {
+      _variant = _urlIndex;
+      _set(() => _started = true);
+      if (_skip != null) _waitForSkip();
+    }
     // spolt tilbake etter slutten: ikke ferdig likevel (og ikke videre til neste episode)
     if (_ending && _duration > Duration.zero && p < _duration - const Duration(seconds: 10)) _ending = false;
+    // mens ←/→ samles, står tidslinja der du skal
+    if (_seekTarget != null) return;
     // tegnes på nytt én gang i sekundet, ikke for hver melding fra avspilleren
     if (p.inSeconds != _position.inSeconds) {
       _set(() => _position = p);
@@ -187,6 +261,12 @@ class _VodPlayerState extends State<_VodPlayer> {
     final message = _session.source?.redact(raw) ?? raw;
     debugPrint('mpv: $message');
     if (!mounted || _started) return;
+    // arkivet: HLS først, så MPEG-TS
+    if (_clip != null && _urlIndex + 1 < _urls.length) {
+      _urlIndex++;
+      unawaited(_pb.open(_urls[_urlIndex], _session.source?.httpHeaders ?? const {}));
+      return;
+    }
     _set(() {
       _status = 'Kunne ikke spille av ($message).';
       _buffering = false;
@@ -208,7 +288,8 @@ class _VodPlayerState extends State<_VodPlayer> {
       _session.removeContinue(current.key);
     }
     if (_hasNext) {
-      _showFlash('Neste: ${_items[_index + 1].subtitle}');
+      final next = _items[_index + 1];
+      _showFlash('Neste: ${next.archive != null ? next.title : next.subtitle}');
       _nextTimer?.cancel();
       _nextTimer = Timer(const Duration(milliseconds: 1500), () {
         if (mounted && _ending) _go(_index + 1);
@@ -230,6 +311,9 @@ class _VodPlayerState extends State<_VodPlayer> {
   void _go(int index) {
     if (index < 0 || index >= _items.length) return;
     _save();
+    _reopens.clear();
+    _seekTimer?.cancel();
+    _seekTarget = null;
     setState(() => _index = index);
     unawaited(_open());
     _wake();
@@ -240,7 +324,159 @@ class _VodPlayerState extends State<_VodPlayer> {
     _wake();
   }
 
+  /// «Prøv igjen»: arkivet der du var, ellers som da den ble åpnet
+  void _retry() {
+    _reopens.clear();
+    if (_clip != null) {
+      unawaited(_openArchive(_position));
+    } else {
+      unawaited(_open());
+    }
+  }
+
+  // ── TV-arkivet ──
+
+  /// Åpner arkivet [at] inn i programmet: strømmen begynner på minuttet før, og resten hoppes over når avspilleren
+  /// har hentet så langt.
+  Future<void> _openArchive(Duration at) async {
+    final clip = _clip;
+    if (clip == null) return;
+    final length = clip.length;
+    var target = at < Duration.zero ? Duration.zero : at;
+    if (length > const Duration(seconds: 1) && target > length - const Duration(seconds: 1)) {
+      target = length - const Duration(seconds: 1);
+    }
+    final u = clip.urlsAt(target);
+    if (u.urls.isEmpty) return;
+    _skipTimer?.cancel();
+    _base = u.from;
+    _urls = u.urls;
+    _urlIndex = math.min(_variant, u.urls.length - 1);
+    _streamLength = Duration.zero;
+    final skip = target - u.from;
+    _skip = skip > const Duration(seconds: 2) ? skip : null;
+    _set(() {
+      _status = null;
+      _started = false;
+      _ending = false;
+      _buffering = true;
+      _position = target;
+      _duration = length;
+    });
+    try {
+      await _pb.open(_urls[_urlIndex], _session.source?.httpHeaders ?? const {});
+    } on Object catch (e) {
+      _set(() {
+        _status = 'Kunne ikke spille av (${_session.source?.redact('$e') ?? e}).';
+        _buffering = false;
+      });
+    }
+  }
+
+  bool get _isHls => _urls.isNotEmpty && _urls[math.min(_urlIndex, _urls.length - 1)].contains('.m3u8');
+
+  /// Når avspilleren har hentet langt nok, hoppes det fram til der du skulle (strømmen begynte på minuttet før).
+  void _waitForSkip() {
+    _skipTimer?.cancel();
+    final until = DateTime.now().add(const Duration(seconds: 20));
+    Future<void> tick() async {
+      final skip = _skip;
+      if (!mounted || skip == null) return;
+      if (DateTime.now().isAfter(until)) {
+        // kom ikke så langt: blir der den er
+        _skip = null;
+        return;
+      }
+      if (_isHls && _streamLength > Duration.zero) {
+        _skip = null;
+        await _pb.seek(skip);
+        return;
+      }
+      final delta = skip - _pb.position;
+      final c = await _pb.liveCache();
+      if (!mounted || _skip != skip) return;
+      if (c != null && delta <= c.ahead) {
+        _skip = null;
+        if (delta > const Duration(milliseconds: 500)) await _pb.seekBy(delta);
+        return;
+      }
+      _skipTimer = Timer(const Duration(milliseconds: 500), () => unawaited(tick()));
+    }
+
+    unawaited(tick());
+  }
+
+  /// Spoler til [target] i programmet: i det avspilleren har (eller i HLS-strømmen), ellers åpnes den på nytt der.
+  Future<void> _seekArchive(Duration target) async {
+    final clip = _clip;
+    if (clip == null) return;
+    final last = clip.length - const Duration(seconds: 1);
+    final to = target < Duration.zero ? Duration.zero : (target > last ? last : target);
+    _skip = null;
+    if (_started) {
+      if (_isHls && _streamLength > Duration.zero) {
+        final rel = to - _base;
+        if (rel >= Duration.zero && rel <= _streamLength) {
+          await _pb.seek(rel);
+          _set(() => _position = to);
+          return;
+        }
+      }
+      final delta = to - (_base + _pb.position);
+      final c = await _pb.liveCache();
+      if (c != null && delta >= -c.back && delta <= c.ahead) {
+        await _pb.seekBy(delta);
+        _set(() => _position = to);
+        return;
+      }
+    }
+    await _openArchive(to);
+  }
+
+  /// Strømmen sluttet. Ferdig når programmet er sett; ellers (det som går nå, er ikke ferdig lagret ennå) åpnes
+  /// den igjen der du er, inntil tre ganger i minuttet.
+  void _onArchiveEnd() {
+    final clip = _clip;
+    if (clip == null) return;
+    if (_position >= clip.length - const Duration(minutes: 1)) {
+      _onEnd();
+      return;
+    }
+    final now = DateTime.now();
+    _reopens.removeWhere((t) => now.difference(t) > const Duration(minutes: 1));
+    if (_reopens.length >= 3) {
+      _set(() {
+        _status = clip.stop.isAfter(now)
+            ? 'Du har tatt igjen sendingen. Prøv igjen om litt for å se resten.'
+            : 'Arkivet stoppet før programmet var slutt.';
+        _buffering = false;
+      });
+      return;
+    }
+    _reopens.add(now);
+    unawaited(_openArchive(_position));
+  }
+
   void _seekBy(int seconds) {
+    if (_clip != null) {
+      // trykk som kommer tett, samles før det spoles
+      final from = _seekTarget ?? _position;
+      final last = _duration - const Duration(seconds: 1);
+      var to = from + Duration(seconds: seconds);
+      if (to < Duration.zero) to = Duration.zero;
+      if (last > Duration.zero && to > last) to = last;
+      _seekTarget = to;
+      _set(() => _position = to);
+      _showFlash(seconds < 0 ? '−${-seconds} s' : '+$seconds s');
+      _seekTimer?.cancel();
+      _seekTimer = Timer(const Duration(milliseconds: 450), () {
+        final t = _seekTarget;
+        _seekTarget = null;
+        if (mounted && t != null) unawaited(_seekArchive(t));
+      });
+      _wake();
+      return;
+    }
     if (_duration <= Duration.zero) return;
     var to = _position + Duration(seconds: seconds);
     if (to < Duration.zero) to = Duration.zero;
@@ -348,7 +584,7 @@ class _VodPlayerState extends State<_VodPlayer> {
     _wake();
     if (_status != null && !repeat && _focus.hasPrimaryFocus && (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select)) {
       // OK når «Prøv igjen» vises: knappen på kortet (den får ikke fokus selv)
-      unawaited(_open());
+      _retry();
     } else if (_playKeys.contains(key) && !repeat && _focus.hasPrimaryFocus) {
       _togglePlay();
     } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyJ || key == LogicalKeyboardKey.mediaRewind) {
@@ -569,7 +805,7 @@ class _VodPlayerState extends State<_VodPlayer> {
                             ? (v) {
                                 _dragging = false;
                                 final to = Duration(milliseconds: (v * 1000).round());
-                                unawaited(_pb.seek(to));
+                                unawaited(_clip != null ? _seekArchive(to) : _pb.seek(to));
                                 setState(() {
                                   _seekValue = null;
                                   _position = to;
@@ -591,8 +827,8 @@ class _VodPlayerState extends State<_VodPlayer> {
                   _ctl(Icons.replay_10, '10 sekunder tilbake (←)', () => _seekBy(-10)),
                   _ctl(Icons.forward_10, '10 sekunder fram (→)', () => _seekBy(10)),
                   if (_items.length > 1) ...[
-                    _ctl(Icons.skip_previous, 'Forrige episode (P)', _hasPrev ? () => _go(_index - 1) : null),
-                    _ctl(Icons.skip_next, 'Neste episode (N)', _hasNext ? () => _go(_index + 1) : null),
+                    _ctl(Icons.skip_previous, 'Forrige $_unit (P)', _hasPrev ? () => _go(_index - 1) : null),
+                    _ctl(Icons.skip_next, 'Neste $_unit (N)', _hasNext ? () => _go(_index + 1) : null),
                   ],
                   const Spacer(),
                   _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
@@ -675,7 +911,7 @@ class _VodPlayerState extends State<_VodPlayer> {
             children: [
               Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
               const SizedBox(height: 16),
-              FilledButton(autofocus: true, onPressed: () => unawaited(_open()), child: const Text('Prøv igjen')),
+              FilledButton(autofocus: true, onPressed: _retry, child: const Text('Prøv igjen')),
             ],
           ),
         ),

@@ -395,6 +395,15 @@ class M3uSource implements TvSource {
     return PlayTarget([e.url], localShift: true);
   }
 
+  // ── TV-arkiv har ikke en vanlig M3U-liste (en Xtream-lenke logges inn som Xtream Codes) ──
+
+  @override
+  Future<List<EpgEntry>> archive(Channel channel) async => const [];
+
+  @override
+  Future<ArchiveClip> archiveClip(Channel channel, EpgEntry program) async =>
+      throw const SourceException('Denne lista har ikke TV-arkiv');
+
   // ── filmer og serier finnes ikke her (fanene skjules) ──
 
   @override

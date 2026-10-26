@@ -27,13 +27,16 @@ typedef GuidePlay = void Function(List<Channel> channels, int index, String titl
 /// TV-guiden: kanalene nedover, de neste timene bortover, med en strek for «nå». Kanalnavnene står fast til
 /// venstre og følger med når lista rulles. Som på nettsiden.
 class GuideView extends StatefulWidget {
-  const GuideView({super.key, required this.session, required this.query, required this.onPlay});
+  const GuideView({super.key, required this.session, required this.query, required this.onPlay, this.onArchive});
 
   final Session session;
 
   /// søket i toppen av siden (kanalnavn)
   final String query;
   final GuidePlay onPlay;
+
+  /// TV-arkivet for en kanal (knappen ved kanalnavnet, for kanaler som har det)
+  final ValueChanged<Channel>? onArchive;
 
   @override
   State<GuideView> createState() => _GuideViewState();
@@ -319,6 +322,7 @@ class _GuideViewState extends State<GuideView> {
         channel: list[i],
         narrow: narrow,
         onTap: () => _play(list, i, filter),
+        onArchive: list[i].hasArchive && widget.onArchive != null ? () => widget.onArchive!(list[i]) : null,
       ),
     );
     final rows = ListView.builder(
@@ -461,12 +465,22 @@ class _NowLine extends StatelessWidget {
 
 /// Kanalen til venstre i guiden: logo og navn. Trykk for å se den.
 class _ChannelCell extends StatelessWidget {
-  const _ChannelCell({super.key, required this.session, required this.channel, required this.narrow, required this.onTap});
+  const _ChannelCell({
+    super.key,
+    required this.session,
+    required this.channel,
+    required this.narrow,
+    required this.onTap,
+    this.onArchive,
+  });
 
   final Session session;
   final Channel channel;
   final bool narrow;
   final VoidCallback onTap;
+
+  /// kanalen har TV-arkiv
+  final VoidCallback? onArchive;
 
   @override
   Widget build(BuildContext context) {
@@ -494,6 +508,15 @@ class _ChannelCell extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
                 ),
               ),
+              if (onArchive != null)
+                IconButton(
+                  tooltip: 'TV-arkiv',
+                  onPressed: onArchive,
+                  icon: Icon(Icons.history, size: 18, color: Theme.of(context).colorScheme.primary),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                ),
             ],
           ),
         ),

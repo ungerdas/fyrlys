@@ -11,11 +11,14 @@ import '../core/names.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../theme.dart';
+import 'archive_page.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
 import 'language_dialog.dart';
+import 'motion.dart';
 import 'playback.dart';
 import 'side_list.dart';
+import 'vod_player_page.dart';
 import 'window_effects.dart';
 
 /// Spilleren er alltid mørk, som på nettsiden.
@@ -698,6 +701,82 @@ class _PlayerState extends State<_Player> {
     unawaited(_open());
   }
 
+  // ── TV-arkivet ──
+
+  bool get _hasArchive => _channel.hasArchive;
+
+  /// Programmet som går nå, når det har gått mer enn et minutt (da er det noe å se fra start).
+  EpgEntry? get _startable {
+    if (!_hasArchive) return null;
+    final now = DateTime.now();
+    final cur = nowAndNext(_epg, now).now;
+    if (cur == null || now.difference(cur.start) < const Duration(minutes: 1)) return null;
+    return cur;
+  }
+
+  /// Direktesendingen stopper mens du er i arkivet (abonnementet har kanskje bare én tilkobling), og starter igjen
+  /// når du kommer tilbake.
+  Future<void> _away(Future<void> Function() visit) async {
+    _seq++;
+    _zapTimer?.cancel();
+    _pendingZap = null;
+    _probeTimer?.cancel();
+    _target = null;
+    _resetShift();
+    await _pb.stop();
+    _set(() {
+      _started = false;
+      _buffering = false;
+      _status = null;
+    });
+    await visit();
+    if (!mounted) return;
+    _retries.clear();
+    unawaited(_open());
+  }
+
+  /// Programmet som går nå, fra start (i spilleren for arkivet, i fullskjerm om du er der).
+  Future<void> _startOver() async {
+    final cur = _startable;
+    if (cur == null) return;
+    final ch = _channel;
+    final ArchiveClip clip;
+    try {
+      clip = await _session.archiveClip(ch, cur);
+    } on SourceException catch (e) {
+      _showFlash(e.message);
+      return;
+    }
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    final full = _full;
+    await _away(() async {
+      await nav.push(fadeRoute<void>((_) => VodPlayerPage(
+            session: _session,
+            items: [archivePlayItem(ch, cur, clip)],
+            resume: false,
+            startFull: full,
+          )));
+      // spilleren for arkivet tar vinduet ut av fullskjerm når den lukkes; her settes det slik det var
+      _shownFull = false;
+    });
+  }
+
+  /// TV-arkivet for kanalen.
+  Future<void> _openArchive() async {
+    if (!_hasArchive) return;
+    final ch = _channel;
+    final nav = Navigator.of(context);
+    // arkivet er en vanlig side: ut av fullskjerm først
+    if (_full) {
+      setState(() {
+        _full = false;
+        _sideOpen = false;
+      });
+    }
+    await _away(() => nav.push(fadeRoute<void>((_) => ArchivePage(session: _session, channel: ch))));
+  }
+
   void _close() {
     final nav = Navigator.of(context);
     if (nav.canPop()) nav.pop();
@@ -803,6 +882,8 @@ class _PlayerState extends State<_Player> {
       _toggleFull();
     } else if (key == LogicalKeyboardKey.keyC || key == LogicalKeyboardKey.contextMenu) {
       _toggleSide();
+    } else if (key == LogicalKeyboardKey.keyA && _hasArchive) {
+      unawaited(_openArchive());
     } else if (key == LogicalKeyboardKey.backspace) {
       _lastChannel();
     } else if (key == LogicalKeyboardKey.escape) {
@@ -1156,6 +1237,11 @@ class _PlayerState extends State<_Player> {
                   ],
                   if (!compact)
                     _ctl(Icons.swap_horiz, 'Kanalen du så sist (Backspace)', _last == null ? null : _lastChannel),
+                  // smalt vindu: knappene står under bildet
+                  if (_hasArchive && (!compact || full)) ...[
+                    _ctl(Icons.restart_alt, 'Se fra start', _startable == null ? null : () => unawaited(_startOver())),
+                    _ctl(Icons.history, 'TV-arkiv (A)', () => unawaited(_openArchive())),
+                  ],
                   _ctl(volumeIcon, _muted ? 'Lyd på (M)' : 'Lyd av (M)', _toggleMute),
                   if (!compact) _volumeSlider(volume),
                   if (full) _ctl(Icons.list, 'Kanaler (C)', _toggleSide, on: _sideOpen),
@@ -1603,6 +1689,26 @@ class _PlayerState extends State<_Player> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: _ink2, fontSize: 14),
+              ),
+            ),
+          if (_hasArchive)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _startable == null ? null : () => unawaited(_startOver()),
+                    icon: const Icon(Icons.restart_alt, size: 18),
+                    label: const Text('Se fra start'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => unawaited(_openArchive()),
+                    icon: const Icon(Icons.history, size: 18),
+                    label: const Text('TV-arkiv'),
+                  ),
+                ],
               ),
             ),
           if (wide && cur != null && cur.description.isNotEmpty)

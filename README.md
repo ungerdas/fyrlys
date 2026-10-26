@@ -28,10 +28,13 @@
 - **TV-guide** – kanalene nedover og de neste seks timene bortover, med en strek for nå.
 - **Spiller** – kanallista ved siden av bildet, programinfo under, fullskjerm og rask kanalbytting.
 - **Pause og spol tilbake** i direktesendinger. Appen tar selv vare på det siste mens du ser.
+- **TV-arkiv** (Xtream Codes, når leverandøren har det) – se det som har gått de siste dagene, eller programmet som går
+  nå fra start.
 - **Kanalnummer** – tast nummeret, så går den dit.
 - **Språk** – velg språk for lyd og undertekster én gang, så velger spilleren riktig spor selv.
 - **Filmer og serier** (Xtream Codes) – plakater, kategorier, «Fortsett å se» og neste episode av seg selv.
 - **mpv** spiller det meste: H.265, AC3, DTS, MKV, flere lydspor og undertekster, med maskinvaredekoding.
+- **Flere innlogginger** – bytt mellom leverandører eller abonnementer i menyen; hver har sine egne favoritter.
 - **Oppdaterer seg selv** når det kommer en ny versjon.
 - Husker størrelsen og plassen til vinduet, og starter du Fyrlys en gang til, kommer vinduet som er åpent fram.
 - Mørkt og lyst tema, og fungerer med mus og tastatur.
@@ -58,7 +61,7 @@ sted du kan skrive til (f.eks. Dokumenter) og start `fyrlys.exe`. Lenkene gir al
 - **Xtream Codes** – server, brukernavn og passord fra leverandøren. Gir TV, TV-guide, filmer og serier.
 
 Innloggingen og favorittene lagres bare på PC-en, og innloggingen er kryptert så bare din Windows-bruker kan lese
-den.
+den. Har du flere abonnementer, legger du til de andre øverst i menyen (der innloggingen din står) og bytter der.
 
 ## Taster
 
@@ -72,11 +75,12 @@ den.
 | Backspace | kanalen du så sist |
 | F | fullskjerm |
 | C | kanallista over bildet |
+| A | TV-arkivet for kanalen (når den har det) |
 | M | lyd av og på |
 | Esc | tilbake |
 
-I filmspilleren: ←/→ ti sekunder, ↑/↓ lyd, mellomrom pause, N/P neste og forrige episode, F fullskjerm og Esc
-tilbake.
+I filmspilleren (også for TV-arkivet): ←/→ ti sekunder, ↑/↓ lyd, mellomrom pause, N/P neste og forrige episode
+eller program, F fullskjerm og Esc tilbake.
 
 ## Oppdateringer
 

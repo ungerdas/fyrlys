@@ -211,8 +211,11 @@ void main() {
       );
       expect(s.source?.kind, 'm3u');
       final prefs = await SharedPreferences.getInstance();
-      expect(jsonDecode(prefs.getString('source')!),
+      // uten kryptering (testene er ikke på Windows): i klartekst, som før
+      expect(jsonDecode(prefs.getString('login_source:${s.activeLogin}')!),
           {'kind': 'm3u', 'url': 'http://iptv.example/liste.m3u', 'epg': 'http://epg.example/guide.xml'});
+      expect(s.logins.single.name, 'M3U-liste fra iptv.example');
+      expect(s.logins.single.kindName, 'M3U-liste');
 
       final next = Session(prefs);
       await next.restore();
@@ -232,10 +235,12 @@ void main() {
             : http.Response('mangler', 404)),
       );
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('source'), isNull);
-      final stored = prefs.getString('source_protected')!;
+      expect(prefs.getKeys().where((k) => k.startsWith('login_source:')), isEmpty);
+      final stored = prefs.getString('login_protected:${s.activeLogin}')!;
       expect(stored, isNot(contains('hemmelig')));
       expect(jsonDecode(secrets.unprotect(stored)!), containsPair('url', link));
+      // lista over innlogginger har ikke passordet
+      expect(prefs.getString('logins'), isNot(contains('hemmelig')));
 
       // neste gang: leses tilbake
       final next = Session(prefs, secrets: secrets);
@@ -243,12 +248,13 @@ void main() {
       expect((next.source! as M3uSource).url, link);
       next.source!.dispose();
 
-      // fra før 2.1.13: i klartekst, krypteres når appen starter
+      // fra før 2.1.13: i klartekst, krypteres og flyttes til lista når appen starter
       final old = await session({'source': jsonEncode({'kind': 'm3u', 'url': link, 'epg': ''})}, secrets);
       expect(old.source, isA<M3uSource>());
       final after = await SharedPreferences.getInstance();
       expect(after.getString('source'), isNull);
-      expect(after.getString('source_protected'), isNotNull);
+      expect(after.getString('login_protected:${old.activeLogin}'), isNotNull);
+      expect(old.logins, hasLength(1));
       old.source!.dispose();
     });
 
@@ -259,10 +265,13 @@ void main() {
         () => MockClient((r) async => http.Response.bytes(utf8.encode(_m3u), 200)),
       );
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('source_protected'), isNull);
-      expect(jsonDecode(prefs.getString('source')!), containsPair('url', 'http://iptv.example/liste.m3u'));
+      final id = s.activeLogin!;
+      expect(prefs.getString('login_protected:$id'), isNull);
+      expect(jsonDecode(prefs.getString('login_source:$id')!), containsPair('url', 'http://iptv.example/liste.m3u'));
       await s.logout();
-      expect(prefs.getString('source'), isNull);
+      expect(prefs.getString('login_source:$id'), isNull);
+      expect(s.source, isNull);
+      expect(s.logins, isEmpty);
     });
   });
 }

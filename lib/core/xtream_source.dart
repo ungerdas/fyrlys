@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:isolate';
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
@@ -174,6 +175,68 @@ SeriesInfo parseSeriesInfo(Object? d) {
   );
 }
 
+// ── TV-arkivet ──
+
+final _clockRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?');
+
+/// Hvor langt serverens klokke er foran UTC: time_now (serverens tid) mot timestamp_now i server_info, rundet til
+/// nærmeste kvarter. null når serveren ikke sier det.
+Duration? serverClockOffset(Object? serverInfo) {
+  if (serverInfo is! Map) return null;
+  final stamp = _number(serverInfo['timestamp_now']);
+  final m = _clockRe.firstMatch(_text(serverInfo['time_now']));
+  if (stamp == null || m == null) return null;
+  int n(int i) => int.parse(m.group(i) ?? '0');
+  final wall = DateTime.utc(n(1), n(2), n(3), n(4), n(5), n(6));
+  final diff = wall.difference(DateTime.fromMillisecondsSinceEpoch((stamp * 1000).round(), isUtc: true));
+  final quarters = (diff.inSeconds / 900).round();
+  if (quarters.abs() > 14 * 4) return null;
+  return Duration(minutes: quarters * 15);
+}
+
+/// Serverens klokke da [t] var. Går den likt med PC-en nå (eller sier ikke serveren noe), brukes PC-ens tidssone
+/// med sommertid og vintertid; ellers serverens forskjell slik den er nå.
+Duration archiveOffset(DateTime t, Duration? server, {DateTime? now}) {
+  final local = t.toLocal().timeZoneOffset;
+  if (server == null || server == (now ?? DateTime.now()).timeZoneOffset) return local;
+  return server;
+}
+
+/// «2026-10-26:20-00»: starten i arkivet slik Xtream vil ha den, i serverens tid.
+String xtreamTime(DateTime t, Duration offset) {
+  final s = t.toUtc().add(offset);
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${s.year}-${two(s.month)}-${two(s.day)}:${two(s.hour)}-${two(s.minute)}';
+}
+
+/// Programmene i arkivet fra get_simple_data_table: det som har begynt de siste [days] dagene, eldst først.
+/// has_archive: 0 betyr at leverandøren ikke har det; det som går nå, kan alltid ses fra start.
+List<EpgEntry> parseArchive(Object? d, {required DateTime now, required int days}) {
+  final listings = d is Map ? d['epg_listings'] : null;
+  final from = now.subtract(Duration(days: days));
+  final out = <EpgEntry>[];
+  for (final e in listings is List ? listings : const []) {
+    if (e is! Map) continue;
+    final start = _number(e['start_timestamp']);
+    final stop = _number(e['stop_timestamp']);
+    if (start == null || stop == null) continue;
+    final a = _time(start);
+    final b = _time(stop);
+    if (!b.isAfter(a) || a.isAfter(now) || a.isBefore(from)) continue;
+    final flag = e['has_archive'];
+    final saved = flag == null || flag == true || '$flag' == '1';
+    out.add(EpgEntry(
+      title: decodeBase64Text(e['title']),
+      description: decodeBase64Text(e['description']),
+      start: a,
+      stop: b,
+      inArchive: saved || b.isAfter(now),
+    ));
+  }
+  out.sort((a, b) => a.start.compareTo(b.start));
+  return out;
+}
+
 /// IPTV-leverandøren direkte (Xtream Codes).
 class XtreamSource implements TvSource {
   XtreamSource({required this.server, required this.user, required this.password, http.Client? client})
@@ -184,6 +247,10 @@ class XtreamSource implements TvSource {
   final String password;
   final http.Client _http;
   Map<Object?, Object?>? _info;
+
+  /// serverens klokke mot UTC (for TV-arkivet), og om den er spurt
+  Duration? _clock;
+  bool _clockAsked = false;
   List<Channel>? _channels;
   DateTime? _channelsAt;
   List<Category>? _categories;
@@ -249,6 +316,10 @@ class XtreamSource implements TvSource {
 
   Future<Map<Object?, Object?>?> _userInfo() async {
     final info = await _api(null);
+    if (info is Map) {
+      _clock = serverClockOffset(info['server_info']);
+      _clockAsked = true;
+    }
     final ui = info is Map ? info['user_info'] : null;
     return ui is Map ? ui : null;
   }
@@ -297,6 +368,8 @@ class XtreamSource implements TvSource {
         if (s is! Map || s['stream_id'] == null) continue;
         final icon = s['stream_icon'];
         final epgId = s['epg_channel_id'];
+        // TV-arkivet: tv_archive 1 og hvor mange dager (noen oppgir ikke dagene: minst én)
+        final archive = '${s['tv_archive'] ?? ''}' == '1' || s['tv_archive'] == true;
         list.add(Channel(
           id: '${s['stream_id']}',
           name: '${s['name'] ?? ''}'.trim(),
@@ -304,6 +377,7 @@ class XtreamSource implements TvSource {
           icon: icon is String && (icon.startsWith('http://') || icon.startsWith('https://')) ? icon : null,
           number: s['num']?.toString(),
           hasEpg: epgId != null && '$epgId'.isNotEmpty,
+          archiveDays: archive ? math.max(1, _number(s['tv_archive_duration'])?.toInt() ?? 1) : 0,
         ));
       }
     }
@@ -345,6 +419,46 @@ class XtreamSource implements TvSource {
     final base = '$server/live/$_creds/${channel.id}';
     // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
     return PlayTarget(['$base.m3u8', '$base.ts'], localShift: true);
+  }
+
+  // ── TV-arkivet ──
+
+  @override
+  Future<List<EpgEntry>> archive(Channel channel) async {
+    if (!channel.hasArchive) return const [];
+    final d = await _api('get_simple_data_table', {'stream_id': channel.id});
+    return parseArchive(d, now: DateTime.now(), days: channel.archiveDays);
+  }
+
+  /// Serverens klokke (spurt én gang; null når den ikke sier det, og da brukes PC-ens).
+  Future<Duration?> _serverClock() async {
+    if (!_clockAsked) {
+      try {
+        _info = await _userInfo() ?? _info;
+      } on SourceException {
+        // PC-ens klokke
+      }
+      _clockAsked = true;
+    }
+    return _clock;
+  }
+
+  @override
+  Future<ArchiveClip> archiveClip(Channel channel, EpgEntry program) async {
+    if (!channel.hasArchive) throw const SourceException('Kanalen har ikke TV-arkiv');
+    final clock = await _serverClock();
+    return ArchiveClip(
+      start: program.start,
+      stop: program.stop,
+      urlsAt: (from) {
+        // på minuttet (arkivet ligger i biter på ett minutt hos leverandøren), og ut programmet
+        final ms = program.start.add(from < Duration.zero ? Duration.zero : from).millisecondsSinceEpoch;
+        final at = DateTime.fromMillisecondsSinceEpoch(ms - ms % 60000);
+        final minutes = math.max(1, (program.stop.difference(at).inSeconds / 60).ceil());
+        final base = '$server/timeshift/$_creds/$minutes/${xtreamTime(at, archiveOffset(at, clock))}/${channel.id}';
+        return (urls: ['$base.m3u8', '$base.ts'], from: at.difference(program.start));
+      },
+    );
   }
 
   // ── filmer og serier: hele lista hentes (mellomlagret 30 min), og appen filtrerer og deler i sider ──

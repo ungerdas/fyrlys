@@ -54,7 +54,8 @@ class _FyrlysAppState extends State<FyrlysApp> with WidgetsBindingObserver {
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
             : session.source == null
                 ? LoginPage(session: session)
-                : HomePage(session: session, updater: widget.updater),
+                // en ny side for hver innlogging (kategorier og filmer er ulike hos ulike leverandører)
+                : HomePage(key: ValueKey('innlogging:${session.activeLogin}'), session: session, updater: widget.updater),
       ),
     );
   }
