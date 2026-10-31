@@ -30,6 +30,7 @@ Appen er på norsk eller engelsk (som Windows; byttes under tannhjulet → Utsee
 - Flere innlogginger, hver med sine egne favoritter, og multiview med en kanal fra hvert abonnement
 - mpv som avspiller: de fleste formater, lydspor og undertekster
 - Minispiller som ligger øverst, bildeformat og lydforsinkelse per kanal
+- Cast til TV med Chromecast (PC-en må stå på mens du caster)
 - Oppdaterer seg selv
 
 ## Kom i gang

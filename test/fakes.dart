@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:fyrlys/core/cast/caster.dart';
 import 'package:fyrlys/core/languages.dart';
 import 'package:fyrlys/core/picture.dart';
 import 'package:fyrlys/core/models.dart';
@@ -372,5 +373,145 @@ class FakePlayback implements Playback {
     for (final c in [_playing, _buffering, _position, _error, _completed, _height, _duration]) {
       await c.close();
     }
+  }
+}
+
+/// En Chromecast uten nett: «Stue» svarer, og alt som sendes, huskes.
+class FakeCaster extends Caster {
+  List<CastDevice> devices = [
+    const CastDevice(id: 'stue', name: 'Stue', host: '192.168.1.20', model: 'Chromecast'),
+  ];
+
+  /// det som er sendt til TV-en, og kallene (connect, play, pause, seek, stop …)
+  final loads = <CastItem>[];
+  final calls = <String>[];
+
+  /// connect feiler (TV-en svarer ikke)
+  bool failConnect = false;
+
+  CastDevice? _device;
+  CastState _state = CastState.off;
+  String? _error;
+  CastItem? _item;
+  Duration _position = Duration.zero;
+  Duration? _duration;
+  double _volume = 0.5;
+  bool _muted = false;
+
+  @override
+  CastDevice? get device => _device;
+
+  @override
+  CastState get state => _state;
+
+  @override
+  String? get error => _error;
+
+  @override
+  CastItem? get item => _item;
+
+  @override
+  Duration get position => _position;
+
+  @override
+  Duration? get duration => _duration;
+
+  @override
+  double get volume => _volume;
+
+  @override
+  bool get muted => _muted;
+
+  @override
+  Stream<CastDevice> discover() => Stream.fromIterable(devices);
+
+  @override
+  Future<void> connect(CastDevice device) async {
+    calls.add('connect ${device.id}');
+    if (failConnect) {
+      _error = 'Fikk ikke kontakt med ${device.name}.';
+      notifyListeners();
+      throw StateError('svarer ikke');
+    }
+    _device = device;
+    _error = null;
+    _state = CastState.ready;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> load(CastItem item) async {
+    loads.add(item);
+    _item = item;
+    _position = item.start;
+    _duration = item.live ? null : const Duration(minutes: 100);
+    _state = CastState.playing;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> play() async {
+    calls.add('play');
+    _state = CastState.playing;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> pause() async {
+    calls.add('pause');
+    _state = CastState.paused;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    calls.add('seek ${position.inSeconds}');
+    _position = position;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setVolume(double level) async {
+    _volume = level;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setMuted(bool muted) async {
+    calls.add(muted ? 'mute' : 'unmute');
+    _muted = muted;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> stop() async {
+    calls.add('stop');
+    _device = null;
+    _item = null;
+    _state = CastState.off;
+    _error = null;
+    notifyListeners();
+  }
+
+  /// som når TV-en ikke kan spille det
+  void fail(String message) {
+    _state = CastState.failed;
+    _error = message;
+    notifyListeners();
+  }
+
+  /// som når filmen er ferdig på TV-en
+  void finish() {
+    _state = CastState.ended;
+    notifyListeners();
+  }
+
+  /// som når Chromecasten blir borte
+  void lose() {
+    _device = null;
+    _item = null;
+    _state = CastState.off;
+    _error = 'Mistet kontakten med Stue.';
+    notifyListeners();
   }
 }

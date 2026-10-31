@@ -97,4 +97,37 @@ const enPlayer = <String, String>{
   'jevn bevegelse virker ikke her': "smooth motion isn't working here",
   '1 tapt bilde': '1 dropped frame',
   '{n} tapte bilder': '{n} dropped frames',
+
+  // Chromecast
+  'Cast til TV': 'Cast to TV',
+  'Cast til TV (Chromecast)': 'Cast to TV (Chromecast)',
+  'Leter etter Chromecast …': 'Looking for Chromecasts…',
+  'Fant ingen Chromecast. Den må være på samme nettverk som PC-en, og Windows-brannmuren må slippe '
+          'Fyrlys gjennom på private nettverk.':
+      'No Chromecast found. It must be on the same network as the PC, and Windows Firewall must let Fyrlys '
+          'through on private networks.',
+  'PC-en sender strømmen videre til TV-en, så den må stå på mens du caster.':
+      'The PC passes the stream on to the TV, so it has to stay on while you cast.',
+  'Let igjen': 'Search again',
+  'Laster …': 'Loading…',
+  'Pauset': 'Paused',
+  'Pause': 'Pause',
+  'Spilles på {name}': 'Playing on {name}',
+  'Castes til {name}': 'Casting to {name}',
+  'Stopp casting': 'Stop casting',
+  'Volum på TV-en {n} %': 'TV volume {n}%',
+  'Chromecasten kunne ikke spille dette.': "The Chromecast couldn't play this.",
+  'Fikk ikke kontakt med {name}. Er den på og på samme nettverk som PC-en?':
+      "Couldn't reach {name}. Is it on, and on the same network as the PC?",
+  'Chromecasten fikk ikke hentet strømmen fra PC-en. Har Windows-brannmuren stoppet Fyrlys? '
+          'Tillat Fyrlys på private nettverk, og prøv igjen.':
+      "The Chromecast couldn't get the stream from the PC. Has Windows Firewall blocked Fyrlys? Allow Fyrlys on "
+          'private networks and try again.',
+  'Chromecasten kunne ikke spille dette. Den spiller HLS med H.264 og AAC; noen kanaler sendes på en måte '
+          'den ikke støtter.':
+      "The Chromecast couldn't play this. It plays HLS with H.264 and AAC; some channels are sent in a way it "
+          "doesn't support.",
+  'Mistet kontakten med {name}.': 'Lost the connection to {name}.',
+  'Castingen til {name} ble stoppet.': 'Casting to {name} was stopped.',
+  'Chromecasten stoppet avspillingen (feil i strømmen).': 'The Chromecast stopped playback (error in the stream).',
 };

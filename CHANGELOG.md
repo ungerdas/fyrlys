@@ -1,5 +1,16 @@
 # Endringer
 
+## v2.1.24
+
+- **Cast til TV (Chromecast):** ny knapp i spilleren og filmspilleren. Velg en Chromecast (eller en TV med Google TV)
+  på nettverket, så spilles kanalen, filmen eller programmet fra TV-arkivet der. Spilleren styrer TV-en: pause,
+  volum, forrige og neste kanal, spoling i filmer og «Stopp casting», og du kan gå ut av spilleren mens det castes
+  (linja nederst på forsiden har pause og stopp). Stopper du, spilles det videre på PC-en.
+- PC-en sender strømmen videre til TV-en, så den må stå på mens du caster. Første gang spør Windows-brannmuren om
+  Fyrlys får bruke nettverket: tillat det på private nettverk.
+- Chromecasten spiller HLS med H.264 og AAC, og det sender de fleste IPTV-leverandører. Kanaler med MPEG-2 eller
+  MP2-lyd, og filmer i MKV, spiller den ikke.
+
 ## v2.1.23
 
 - **«Fjern striper» virker nå.** Fyrlys har fått en fullstendig utgave av avspilleren mpv. Den som fulgte med før,

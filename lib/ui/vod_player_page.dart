@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/cast/caster.dart';
 import '../core/failure.dart';
 import '../core/names.dart';
 import '../core/picture.dart';
@@ -13,6 +14,7 @@ import '../core/source.dart';
 import '../core/vod.dart';
 import '../l10n/tr.dart';
 import '../theme.dart';
+import 'cast_ui.dart';
 import 'language_dialog.dart';
 import 'mini_player.dart';
 import 'picture_dialogs.dart';
@@ -145,6 +147,22 @@ class _VodPlayerState extends State<_VodPlayer> {
   /// nye forsøk før feilen vises (rett etter TV-spilleren kan leverandøren ennå telle den tilkoblingen)
   int _openTries = 0;
 
+  // ── Chromecast: det spilles på TV-en, og spilleren her viser det i stedet for bildet ──
+
+  bool _wasCasting = appCaster.active;
+  CastState? _castState;
+
+  /// arkivet på TV-en: strømmen begynner så langt inn i programmet
+  Duration _castBase = Duration.zero;
+
+  /// hvor langt TV-en har kommet, hvert sekund (for «fortsett der du slapp»)
+  Timer? _castTimer;
+
+  /// kobler til en Chromecast (går det ikke, sier _startCast fra og spiller videre her)
+  bool _connecting = false;
+
+  bool get _casting => appCaster.active;
+
   Session get _session => widget.page.session;
   List<VodPlayItem> get _items => widget.page.items;
   VodPlayItem get _item => _items[_index];
@@ -177,6 +195,8 @@ class _VodPlayerState extends State<_VodPlayer> {
         }
       }));
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
+    appCaster.addListener(_onCast);
+    if (_casting) _startCastTimer();
     unawaited(_start());
     _wake();
   }
@@ -184,6 +204,8 @@ class _VodPlayerState extends State<_VodPlayer> {
   @override
   void dispose() {
     _save();
+    appCaster.removeListener(_onCast);
+    _castTimer?.cancel();
     for (final s in _subs) {
       unawaited(s.cancel());
     }
@@ -220,6 +242,11 @@ class _VodPlayerState extends State<_VodPlayer> {
     final item = _item;
     debugPrint('Spiller ${item.key}');
     final start = resume ? _session.resumeAt(item.key) : null;
+    if (_casting) {
+      if (start != null) _showFlash(tr('Fortsetter fra {time}', {'time': formatDuration(start)}));
+      await _castOpen(start ?? Duration.zero);
+      return;
+    }
     if (item.archive != null) {
       if (start != null) _showFlash(tr('Fortsetter fra {time}', {'time': formatDuration(start)}));
       await _openArchive(start ?? Duration.zero);
@@ -350,6 +377,10 @@ class _VodPlayerState extends State<_VodPlayer> {
   }
 
   void _togglePlay() {
+    if (_casting) {
+      unawaited(castIsPlaying(appCaster) ? appCaster.pause() : appCaster.play());
+      return;
+    }
     unawaited(_pb.playOrPause());
     _wake();
   }
@@ -358,11 +389,154 @@ class _VodPlayerState extends State<_VodPlayer> {
   void _retry() {
     _reopens.clear();
     _openTries = 0;
-    if (_clip != null) {
+    if (_casting) {
+      unawaited(_castOpen(_position));
+    } else if (_clip != null) {
       unawaited(_openArchive(_position));
     } else {
       unawaited(_open());
     }
+  }
+
+  // ── Chromecast ──
+
+  /// Spiller det som er valgt, på TV-en fra [at] (arkivet: fra minuttet før, som her).
+  Future<void> _castOpen(Duration at) async {
+    final item = _item;
+    final clip = item.archive;
+    final src = _session.source;
+    var target = at < Duration.zero ? Duration.zero : at;
+    final List<String> urls;
+    final Duration start;
+    if (clip != null) {
+      if (clip.length > const Duration(seconds: 1) && target > clip.length - const Duration(seconds: 1)) {
+        target = clip.length - const Duration(seconds: 1);
+      }
+      final u = clip.urlsAt(target);
+      if (u.urls.isEmpty) return;
+      urls = u.urls;
+      _castBase = u.from;
+      start = target - u.from;
+    } else {
+      urls = [item.url];
+      _castBase = Duration.zero;
+      start = target;
+    }
+    _set(() {
+      _status = null;
+      _started = false;
+      _ending = false;
+      _buffering = false;
+      _position = target;
+      if (clip != null) _duration = clip.length;
+    });
+    try {
+      await appCaster.load(CastItem(
+        urls: urls,
+        title: item.title,
+        subtitle: item.subtitle,
+        headers: src?.httpHeaders ?? const {},
+        start: start,
+      ));
+    } on Object catch (e) {
+      debugPrint('Chromecast: $e');
+    }
+  }
+
+  /// Spoler på TV-en (arkivet åpnes på nytt fra minuttet, som her).
+  Future<void> _castSeek(Duration to) async {
+    _position = to;
+    if (_clip != null) {
+      await _castOpen(to);
+    } else {
+      await appCaster.seek(to);
+    }
+  }
+
+  /// Velg en Chromecast og spill videre der, fra der du er.
+  Future<void> _startCast() async {
+    final device = await pickCastDevice(context);
+    if (device == null || !mounted) return;
+    if (_mini) await _setMini(false);
+    if (!mounted) return;
+    if (_full) _toggleFull();
+    final at = _position;
+    _save();
+    _seekTimer?.cancel();
+    _seekTarget = null;
+    _skipTimer?.cancel();
+    _skip = null;
+    // abonnementet har kanskje bare én tilkobling: TV-en får den
+    await _pb.stop();
+    _connecting = true;
+    try {
+      await appCaster.connect(device);
+    } on Object {
+      // fikk ikke kontakt: videre her, med hvorfor
+      _connecting = false;
+      if (!mounted) return;
+      _snack(appCaster.error ?? tr('Fikk ikke kontakt med {name}. Er den på og på samme nettverk som PC-en?', {'name': device.name}));
+      _openTries = 0;
+      unawaited(_open());
+      return;
+    }
+    _connecting = false;
+    if (!mounted) return;
+    await _castOpen(at);
+  }
+
+  void _startCastTimer() {
+    _castTimer?.cancel();
+    _castTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_casting) return;
+      if (_seekTarget == null) _position = _castBase + appCaster.position;
+      final d = appCaster.duration;
+      if (_clip == null && d != null && d > Duration.zero) _duration = d;
+      if (!_started && appCaster.state == CastState.playing) _started = true;
+    });
+  }
+
+  /// Chromecasten har endret seg: castingen stoppet (da spilles det videre her, fra der TV-en var), filmen er
+  /// ferdig (neste episode), eller det feilet.
+  void _onCast() {
+    if (!mounted) return;
+    if (!appCaster.active) {
+      if (_wasCasting) {
+        _wasCasting = false;
+        _castState = null;
+        _castTimer?.cancel();
+        final error = appCaster.error;
+        if (error != null && !_connecting) _snack(error);
+        if (!_connecting) {
+          _save();
+          _openTries = 0;
+          unawaited(_open());
+        }
+      }
+      _set(() {});
+      return;
+    }
+    if (!_wasCasting) {
+      _wasCasting = true;
+      _startCastTimer();
+    }
+    final state = appCaster.state;
+    final before = _castState;
+    _castState = state;
+    if (state != before && before != null && _status == null) {
+      if (state == CastState.ended) {
+        _onEnd();
+      } else if (state == CastState.failed) {
+        _status = appCaster.error ?? tr('Chromecasten kunne ikke spille dette.');
+      }
+    }
+    _set(() {});
+  }
+
+  void _snack(String text) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 5)));
   }
 
   // ── TV-arkivet ──
@@ -489,6 +663,24 @@ class _VodPlayerState extends State<_VodPlayer> {
   }
 
   void _seekBy(int seconds) {
+    if (_casting) {
+      final total = _clip?.length ?? appCaster.duration ?? Duration.zero;
+      final from = _seekTarget ?? (_castBase + appCaster.position);
+      var to = from + Duration(seconds: seconds);
+      if (to < Duration.zero) to = Duration.zero;
+      if (total > const Duration(seconds: 1) && to > total - const Duration(seconds: 1)) {
+        to = total - const Duration(seconds: 1);
+      }
+      _seekTarget = to;
+      _showFlash(seconds < 0 ? '−${-seconds} s' : '+$seconds s');
+      _seekTimer?.cancel();
+      _seekTimer = Timer(const Duration(milliseconds: 450), () {
+        final t = _seekTarget;
+        _seekTarget = null;
+        if (mounted && t != null) unawaited(_castSeek(t));
+      });
+      return;
+    }
     if (_clip != null) {
       // trykk som kommer tett, samles før det spoles
       final from = _seekTarget ?? _position;
@@ -535,6 +727,10 @@ class _VodPlayerState extends State<_VodPlayer> {
   }
 
   void _toggleMute() {
+    if (_casting) {
+      unawaited(appCaster.setMuted(!appCaster.muted));
+      return;
+    }
     setState(() {
       _muted = !_muted;
       if (!_muted && _volume == 0) _volume = 50;
@@ -544,6 +740,11 @@ class _VodPlayerState extends State<_VodPlayer> {
   }
 
   void _nudgeVolume(double step) {
+    if (_casting) {
+      unawaited(appCaster.setVolume(appCaster.volume + step / 100));
+      _showFlash(tr('Volum på TV-en {n} %', {'n': (appCaster.volume * 100).round()}));
+      return;
+    }
     _setVolume((_muted ? 0 : _volume) + step);
     _showFlash(_muted ? tr('Lyd av') : tr('Lyd {n} %', {'n': _volume.round()}));
   }
@@ -574,7 +775,7 @@ class _VodPlayerState extends State<_VodPlayer> {
 
   /// Minispilleren (I). Fra fullskjerm går det rett dit.
   Future<void> _setMini(bool on) async {
-    if (on == _mini || !mounted) return;
+    if (on == _mini || !mounted || (on && _casting)) return;
     setState(() {
       _mini = on;
       if (on) _full = false;
@@ -606,6 +807,8 @@ class _VodPlayerState extends State<_VodPlayer> {
   }
 
   void _toggleFull() {
+    // mens det castes, er det ikke noe bilde her å vise stort
+    if (_casting && !_full && !_mini) return;
     // minispilleren: tilbake til det store vinduet
     if (_mini) {
       unawaited(_setMini(false));
@@ -716,7 +919,7 @@ class _VodPlayerState extends State<_VodPlayer> {
           focusNode: _focus,
           autofocus: true,
           onKeyEvent: _onKey,
-          child: Listener(
+          child: _casting ? _castStage(compact: compact) : Listener(
             onPointerDown: (e) => _pointer = e.kind,
             onPointerSignal: _onWheel,
             child: MouseRegion(
@@ -780,6 +983,62 @@ class _VodPlayerState extends State<_VodPlayer> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Mens det castes: hva og hvor, tidslinja, og knapper for spoling, forrige/neste, pause, volumet på TV-en og
+  /// «Stopp casting».
+  Widget _castStage({required bool compact}) {
+    final item = _item;
+    final status = _status;
+    final total = _clip?.length ?? appCaster.duration ?? Duration.zero;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CastPanel(
+          caster: appCaster,
+          title: item.title,
+          subtitle: item.subtitle,
+          compact: compact,
+          progress: total > Duration.zero
+              ? CastProgress(
+                  position: () => _seekTarget ?? (_castBase + appCaster.position),
+                  duration: total,
+                  onSeek: (to) => unawaited(_castSeek(to)),
+                )
+              : null,
+          leading: [
+            if (_items.length > 1)
+              _ctl(Icons.skip_previous, _clip != null ? tr('Forrige program (P)') : tr('Forrige episode (P)'),
+                  _hasPrev ? () => _go(_index - 1) : null),
+            _ctl(Icons.replay_10, tr('10 sekunder tilbake (←)'), () => _seekBy(-10)),
+            _ctl(Icons.forward_10, tr('10 sekunder fram (→)'), () => _seekBy(10)),
+            if (_items.length > 1)
+              _ctl(Icons.skip_next, _clip != null ? tr('Neste program (N)') : tr('Neste episode (N)'),
+                  _hasNext ? () => _go(_index + 1) : null),
+          ],
+          onStop: () => unawaited(appCaster.stop()),
+        ),
+        Positioned(
+          left: 12,
+          top: 12,
+          child: SafeArea(
+            right: false,
+            bottom: false,
+            child: Material(
+              color: const Color(0x8C000000),
+              shape: const CircleBorder(side: BorderSide(color: Color(0x2EFFFFFF))),
+              child: IconButton(
+                tooltip: tr('Lukk (Esc)'),
+                icon: const Icon(Icons.close, size: 20),
+                color: Colors.white,
+                onPressed: _close,
+              ),
+            ),
+          ),
+        ),
+        if (status != null) _card(status),
+      ],
     );
   }
 
@@ -925,6 +1184,7 @@ class _VodPlayerState extends State<_VodPlayer> {
                   _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
                   if (!compact) _volumeSlider(volume),
                   _tracksButton(),
+                  if (!compact) _ctl(Icons.cast, tr('Cast til TV (Chromecast)'), () => unawaited(_startCast())),
                   if (!compact)
                     _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
                   _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen,

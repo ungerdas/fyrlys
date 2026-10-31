@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/cast/caster.dart';
 import '../core/failure.dart';
 import '../core/models.dart';
 import '../core/names.dart';
@@ -15,6 +16,7 @@ import '../core/source.dart';
 import '../l10n/tr.dart';
 import '../theme.dart';
 import 'archive_page.dart';
+import 'cast_ui.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
 import 'language_dialog.dart';
@@ -180,14 +182,26 @@ class _PlayerState extends State<_Player> {
   bool _switching = false;
   Timer? _bannerTimer;
 
+  /// det castes til en Chromecast (spilleren viser da det i stedet for bildet), og hva den sa sist
+  bool _wasCasting = appCaster.active;
+  CastState? _castState;
+
+  /// arkivet eller multiview er åpne over spilleren (castingen styres derfra imens)
+  bool _visiting = false;
+
+  /// kobler til en Chromecast (går det ikke, sier _startCast fra og spiller kanalen her igjen)
+  bool _connecting = false;
+
   Channel get _channel => _list[_index];
   Session get _session => widget.page.session;
+  bool get _casting => appCaster.active;
   TvSource? get _source => _session.source;
 
   @override
   void initState() {
     super.initState();
     _session.addListener(_onSession);
+    appCaster.addListener(_onCast);
     _subs
       ..add(_pb.playingStream.listen((v) => _set(() => _playing = v)))
       ..add(_pb.bufferingStream.listen((v) => _set(() => _buffering = v)))
@@ -215,6 +229,7 @@ class _PlayerState extends State<_Player> {
   @override
   void dispose() {
     _session.removeListener(_onSession);
+    appCaster.removeListener(_onCast);
     for (final s in _subs) {
       unawaited(s.cancel());
     }
@@ -282,6 +297,10 @@ class _PlayerState extends State<_Player> {
       debugPrint('TV: kanal ${ch.id}');
       _target = t;
       _url = 0;
+      if (_casting) {
+        await _castLoad(ch, t);
+        return;
+      }
       await _pb.open(t.urls.first, src.httpHeaders);
     } on SourceException catch (e) {
       if (my != _seq || !mounted) return;
@@ -361,7 +380,7 @@ class _PlayerState extends State<_Player> {
   /// på (pause og tilbakespoling).
   void _check() {
     final t = _target;
-    if (!mounted || _status != null || t == null) return;
+    if (!mounted || _status != null || t == null || _casting) return;
     if (t.localShift && (_started || _userPaused)) unawaited(_pollCache());
     final now = DateTime.now();
     final pos = _pb.position;
@@ -429,6 +448,10 @@ class _PlayerState extends State<_Player> {
   }
 
   void _togglePlay() {
+    if (_casting) {
+      unawaited(castIsPlaying(appCaster) ? appCaster.pause() : appCaster.play());
+      return;
+    }
     if (_playing) {
       _userPaused = true;
       _localLive = false;
@@ -565,6 +588,10 @@ class _PlayerState extends State<_Player> {
   }
 
   void _toggleMute() {
+    if (_casting) {
+      unawaited(appCaster.setMuted(!appCaster.muted));
+      return;
+    }
     setState(() {
       _muted = !_muted;
       if (!_muted && _volume == 0) _volume = 50;
@@ -790,6 +817,105 @@ class _PlayerState extends State<_Player> {
     unawaited(_open());
   }
 
+  // ── Chromecast ──
+
+  /// Kanalen på TV-en: Chromecasten henter strømmen via mellomstasjonen på PC-en.
+  Future<void> _castLoad(Channel ch, PlayTarget t) async {
+    final src = _source;
+    final now = nowAndNext(_session.epgCached(ch.id) ?? _epg, DateTime.now()).now;
+    try {
+      await appCaster.load(CastItem(
+        urls: t.urls,
+        title: nameParts(ch.name).main,
+        subtitle: now?.title ?? '',
+        image: src?.logoUrl(ch.icon),
+        live: true,
+        headers: src?.httpHeaders ?? const {},
+      ));
+    } on Object catch (e) {
+      debugPrint('Chromecast: $e');
+    }
+  }
+
+  /// Velg en Chromecast og spill kanalen der. Avspillingen her stopper (abonnementet har kanskje bare én
+  /// tilkobling).
+  Future<void> _startCast() async {
+    final device = await pickCastDevice(context);
+    if (device == null || !mounted) return;
+    if (_mini) await _setMini(false);
+    if (!mounted) return;
+    if (_full) _toggleFull();
+    _seq++;
+    _zapTimer?.cancel();
+    _pendingZap = null;
+    _probeTimer?.cancel();
+    _target = null;
+    _resetShift();
+    await _pb.stop();
+    _set(() {
+      _started = false;
+      _buffering = false;
+      _status = null;
+    });
+    _connecting = true;
+    try {
+      await appCaster.connect(device);
+    } on Object {
+      // fikk ikke kontakt: videre her, med hvorfor
+      _connecting = false;
+      if (!mounted) return;
+      _snack(appCaster.error ?? tr('Fikk ikke kontakt med {name}. Er den på og på samme nettverk som PC-en?', {'name': device.name}));
+      _retries.clear();
+      _openTries = 0;
+      unawaited(_open());
+      return;
+    }
+    _connecting = false;
+    if (!mounted) return;
+    _retries.clear();
+    _openTries = 0;
+    unawaited(_open());
+  }
+
+  /// Chromecasten har endret seg: castingen stoppet (her, på TV-en eller fordi kontakten ble borte) – da spilles
+  /// kanalen her igjen – eller sendingen på TV-en stoppet eller feilet.
+  void _onCast() {
+    if (!mounted) return;
+    if (!appCaster.active) {
+      if (_wasCasting) {
+        _wasCasting = false;
+        _castState = null;
+        if (!_visiting && !_connecting) {
+          final error = appCaster.error;
+          if (error != null) _snack(error);
+          _retries.clear();
+          _openTries = 0;
+          unawaited(_open());
+        }
+      }
+      _set(() {});
+      return;
+    }
+    _wasCasting = true;
+    final state = appCaster.state;
+    final before = _castState;
+    _castState = state;
+    if (state != before && before != null && !_visiting && _status == null) {
+      if (state == CastState.ended) {
+        _ended(tr('Kanalen stoppet (sendingen stoppet).'));
+      } else if (state == CastState.failed) {
+        _status = appCaster.error ?? tr('Chromecasten kunne ikke spille dette.');
+      }
+    }
+    _set(() {});
+  }
+
+  void _snack(String text) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 5)));
+  }
+
   // ── TV-arkivet ──
 
   bool get _hasArchive => _channel.hasArchive;
@@ -824,7 +950,12 @@ class _PlayerState extends State<_Player> {
       _buffering = false;
       _status = null;
     });
-    await visit();
+    _visiting = true;
+    try {
+      await visit();
+    } finally {
+      _visiting = false;
+    }
     if (!mounted) return;
     _retries.clear();
     _openTries = 0;
@@ -860,7 +991,8 @@ class _PlayerState extends State<_Player> {
 
   /// Flere kanaler samtidig, med denne i det første bildet (i fullskjerm om du er der).
   Future<void> _openMultiview() async {
-    if (!_session.canMultiview) return;
+    // multiview spiller her på PC-en, og TV-en har tilkoblingen
+    if (!_session.canMultiview || _casting) return;
     final ch = _channel;
     final nav = Navigator.of(context);
     final full = _full;
@@ -967,6 +1099,7 @@ class _PlayerState extends State<_Player> {
       }
       return KeyEventResult.handled;
     }
+    if (_casting) return _onCastKey(key) ? KeyEventResult.handled : KeyEventResult.ignored;
     if (_upKeys.contains(key)) {
       _zap(-1);
     } else if (_downKeys.contains(key)) {
@@ -1030,10 +1163,38 @@ class _PlayerState extends State<_Player> {
     return KeyEventResult.handled;
   }
 
+  /// Tastene mens det castes: kanal, pause, lyd (på TV-en), forrige kanal og lukk.
+  bool _onCastKey(LogicalKeyboardKey key) {
+    if (_upKeys.contains(key)) {
+      _zap(-1);
+    } else if (_downKeys.contains(key)) {
+      _zap(1);
+    } else if (_playKeys.contains(key) ||
+        key == LogicalKeyboardKey.mediaPlay ||
+        key == LogicalKeyboardKey.mediaPause) {
+      _togglePlay();
+    } else if (key == LogicalKeyboardKey.keyM) {
+      _toggleMute();
+    } else if (key == LogicalKeyboardKey.backspace) {
+      _lastChannel();
+    } else if (key == LogicalKeyboardKey.escape) {
+      _close();
+    } else if (_okKeys.contains(key) && _focus.hasPrimaryFocus && _status != null) {
+      _retry();
+    } else if (key == LogicalKeyboardKey.arrowRight && _focus.hasPrimaryFocus && !_fullNow) {
+      _sideKey.currentState?.focusCurrent();
+    } else {
+      return false;
+    }
+    return true;
+  }
+
   // ── visning ──
 
   /// «1080p · H.264 · maskinvaredekoding (d3d11va) · AAC stereo · HLS rett fra leverandøren»
-  String _meta() => [
+  String _meta() => _casting
+      ? tr('Castes til {name}', {'name': appCaster.device?.name ?? ''})
+      : [
         if ((_height ?? 0) > 0) '${_height}p',
         if (_tech.isNotEmpty) _tech,
         _route(),
@@ -1160,6 +1321,7 @@ class _PlayerState extends State<_Player> {
   /// Bildet med det som ligger over: kontroller, venting, beskjeder. Samme widget i alle oppsett (GlobalKey),
   /// så avspillingen ikke forstyrres når du går inn og ut av fullskjerm.
   Widget _stage({required bool full, required bool compact}) {
+    if (_casting) return _castStage(compact: compact);
     final status = _status;
     final flash = _flash;
     final showBars = _controls || status != null;
@@ -1235,29 +1397,58 @@ class _PlayerState extends State<_Player> {
     );
   }
 
+  /// Mens det castes: hvor og hva, med knapper for kanal, pause, volumet på TV-en og «Stopp casting».
+  Widget _castStage({required bool compact}) {
+    final zap = _pendingZap;
+    final ch = zap != null ? _list[zap] : _channel;
+    final parts = nameParts(ch.name);
+    final now = zap == null ? nowAndNext(_epg, DateTime.now()).now : null;
+    final status = _status;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CastPanel(
+          caster: appCaster,
+          title: [if (ch.number != null) ch.number!, if (parts.time.isNotEmpty) parts.time, parts.main].join('  '),
+          subtitle: now?.title ?? parts.sub,
+          compact: compact,
+          leading: [
+            _ctl(Icons.keyboard_arrow_up, tr('Forrige kanal (↑)'), () => _zap(-1)),
+            _ctl(Icons.keyboard_arrow_down, tr('Neste kanal (↓)'), () => _zap(1)),
+          ],
+          onStop: () => unawaited(appCaster.stop()),
+        ),
+        _closeButton(),
+        if (status != null) _card(text: status, action: tr('Prøv igjen'), onPressed: _retry),
+      ],
+    );
+  }
+
+  Widget _closeButton() => Positioned(
+        left: 12,
+        top: 12,
+        child: SafeArea(
+          right: false,
+          bottom: false,
+          child: Material(
+            color: const Color(0x8C000000),
+            shape: const CircleBorder(side: BorderSide(color: Color(0x2EFFFFFF))),
+            child: IconButton(
+              tooltip: tr('Lukk (Esc)'),
+              icon: const Icon(Icons.close, size: 20),
+              color: Colors.white,
+              onPressed: _close,
+            ),
+          ),
+        ),
+      );
+
   Widget _overlay({required bool full, required bool compact}) {
     return Stack(
       children: [
         // kanalinfoen nederst viser det samme mens den er framme
         if (full && !_bannerVisible) Positioned(left: 0, right: 0, top: 0, child: _topBar()),
-        Positioned(
-          left: 12,
-          top: 12,
-          child: SafeArea(
-            right: false,
-            bottom: false,
-            child: Material(
-              color: const Color(0x8C000000),
-              shape: const CircleBorder(side: BorderSide(color: Color(0x2EFFFFFF))),
-              child: IconButton(
-                tooltip: tr('Lukk (Esc)'),
-                icon: const Icon(Icons.close, size: 20),
-                color: Colors.white,
-                onPressed: _close,
-              ),
-            ),
-          ),
-        ),
+        _closeButton(),
         Positioned(
           left: 0,
           right: 0,
@@ -1379,6 +1570,8 @@ class _PlayerState extends State<_Player> {
                   if (!compact) _volumeSlider(volume),
                   if (full) _ctl(Icons.list, tr('Kanaler (C)'), _toggleSide, on: _sideOpen),
                   _tracksButton(),
+                  if (!compact || full)
+                    _ctl(Icons.cast, tr('Cast til TV (Chromecast)'), () => unawaited(_startCast())),
                   if (!compact || full)
                     _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
                   _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen,

@@ -9,6 +9,7 @@ import '../core/updater.dart';
 import '../core/vod.dart';
 import '../l10n/tr.dart';
 import 'archive_page.dart';
+import 'cast_ui.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
 import 'guide_view.dart';
@@ -352,15 +353,22 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      bottomNavigationBar: wide
-          ? null
-          : NavigationBar(
+      // mens det castes og spilleren er lukket: hva som spilles på TV-en, med pause og stopp
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const CastBar(),
+          if (!wide)
+            NavigationBar(
               selectedIndex: sections.indexOf(section),
               onDestinationSelected: (i) => _setSection(sections[i]),
               destinations: [
                 for (final x in sections) NavigationDestination(icon: Icon(_sectionIcon(x)), label: _sectionName(x)),
               ],
             ),
+        ],
+      ),
     );
   }
 

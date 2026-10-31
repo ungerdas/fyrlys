@@ -24,6 +24,7 @@ The app is in English or Norwegian (it follows Windows; change it under the gear
 - Several logins, each with its own favorites, and multiview with a channel from each subscription
 - mpv as the player: most formats, audio tracks and subtitles
 - Mini player that stays on top, picture format and audio delay per channel
+- Cast to a TV with Chromecast (the PC has to stay on while you cast)
 - Updates itself
 
 ## Getting started

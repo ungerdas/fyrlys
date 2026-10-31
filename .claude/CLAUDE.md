@@ -254,6 +254,34 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   slag innlogginger (ikke navnene), abonnementet, listene, innstillingene, loggen og slutten av oppdateringsloggen;
   `saveReport` i Nedlastinger, `showInExplorer`, `openUrl` byttes ut i testene). Innstillinger → Hjelp. Skjemaene for
   GitHub-saker ligger i `.github/ISSUE_TEMPLATE` (feil, ønske).
+- Chromecast (2.1.24, eierens ønske «Lag en egen versjon ja!»): `core/cast/` – `mdns.dart` (`discoverCastDevices`:
+  PTR-spørsmål etter `_googlecast._tcp.local` fra en tilfeldig port på hvert nettverkskort og en lytter på 5353,
+  `parseCastResponse` med navnepekere, TXT `fn`/`md`/`id`, SRV-porten, A-posten eller avsenderen), `cast_protocol.dart`
+  (CASTV2: protobuf-meldingen CastMessage kodet for hånd, fire byte lengde foran, `CastFrameReader`),
+  `chromecast.dart` (`CastConnection`: TLS 8009 med selvsignert sertifikat (`chromecastSocket`, en vanlig socket i
+  testene), PING/PONG, `request` med requestId; `ChromecastCaster`: CONNECT, LAUNCH av Googles avspiller
+  `CC1AD845` (Default Media Receiver), CONNECT til transportId, LOAD med `contentId` fra mellomstasjonen, `LIVE`/
+  `BUFFERED`, `hlsSegmentFormat: ts` for HLS, MEDIA_STATUS → `CastState`, PLAY/PAUSE/SEEK, SET_VOLUME, STOP;
+  RECEIVER_STATUS uten vår økt = stoppet på TV-en), `cast_proxy.dart` (`CastProxy`: HttpServer på en ledig port,
+  adresser `http://<PC-ens adresse mot Chromecasten>:<port>/<tilfeldig merke>/<løpenr>/strom.<ext>` så Chromecasten
+  aldri ser brukernavn/passord; henter med kildens hoder (User-Agent), sender videre med CORS (Googles avspiller
+  krever det for HLS, leverandørene har det ikke), skriver om spillelister (`rewritePlaylist`, også `URI="…"`), går
+  rett til der en spilleliste ble videresendt neste gang, Range videre for filmer; `requests` = 0 etter en feil gir
+  beskjeden om Windows-brannmuren) og `caster.dart` (`Caster` med `CastState`/`CastItem` (HLS foretrekkes,
+  `contentType` etter filen), og `appCaster`, én for hele appen; testene bytter den med `FakeCaster` i `fakes.dart`).
+  `ui/cast_ui.dart`: `pickCastDevice` (dialogen, «Let igjen»), `CastPanel` (vises i stedet for bildet: hvor, hva,
+  tilstand, pause, volum på TV-en, «Stopp casting»; `leading` for kanal-/spoleknapper), `CastProgress` (tidslinja for
+  filmer), `CastBar` (nederst på forsiden når spilleren er lukket). TV-spilleren: cast-knappen (ikke i smalt vindu),
+  `_startCast` stopper mpv (én tilkobling), `_open` sender kanalen til TV-en mens `appCaster.active` (`_castLoad`),
+  `_onCast` spiller her igjen når castingen stopper (ikke mens `_connecting` eller `_visiting`, dvs. arkivet over),
+  `ended` → `_ended` (nye forsøk), `failed` → kortet med «Prøv igjen»; tastene i `_onCastKey`; ikke multiview mens
+  det castes. Filmspilleren: `_castOpen` (arkivet: fra minuttet, som her; spoling i arkivet åpner på nytt, ellers
+  SEEK), `_castTimer` holder `_position` oppdatert for «fortsett der du slapp», `ended` → `_onEnd` (neste episode),
+  og når castingen stopper, fortsetter den her der TV-en var. Testet i `cast_test.dart` (meldingene, mDNS-pakker,
+  spillelister, mellomstasjonen mot en lokal leverandør, `ChromecastCaster` mot en falsk Chromecast over en vanlig
+  socket) og `cast_ui_test.dart` (spillerne og linja med `FakeCaster`). Ikke prøvd mot en ekte Chromecast:
+  oppdagelsen på Windows (5353 og brannmuren), om Googles avspiller godtar http fra PC-en, `hlsSegmentFormat`, og
+  hvilke kanaler den faktisk spiller.
 - Språk (grunnlaget i 2.1.20, engelsk i 2.1.21): `l10n/tr.dart` (`tr('norsk tekst', {'navn': verdi})` slår opp i
   `english` når `appLanguage` er 'en'; norsken er nøkkelen). `english` i `l10n/en.dart` slår sammen `en_core`,
   `en_home`, `en_player`, `en_settings` og `en_vod` (etter hvor teksten står; samme nøkkel i flere filer må ha samme
@@ -387,10 +415,12 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   filteret `yadif` («filter 'yadif' not found»), så «Fjern striper» virker ikke (ikke rettet ennå; mulig vei:
   `deinterlace=yes` og maskinvarens `d3d11vpp`). Ellers i loggen: «property not found _setProperty(osc, 1)» og
   «dxva2-egl: Failed to create EGL surface» fra media_kit (ufarlig så langt).
+- 31.10.2026: 2.1.24: Chromecast (se Arkitektur). Bare testet med tester.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
-  `probesize`, `demuxer-lavf-probe-info=nostreams`). Når den kommer: velg det raskeste som 2.1.24.
+  `probesize`, `demuxer-lavf-probe-info=nostreams`). Når den kommer: velg det raskeste som neste versjon.
+  Chromecast i 2.1.24 er ikke prøvd mot en ekte Chromecast ennå.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,
