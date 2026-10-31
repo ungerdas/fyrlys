@@ -54,6 +54,7 @@ class _FakeChromecast {
     server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((s) {
       client = s;
+      unawaited(s.done.then<void>((_) {}, onError: (Object _) {}));
       s.listen((data) {
         for (final m in _reader.add(data)) {
           unawaited(_on(m));
@@ -318,6 +319,7 @@ void main() {
       expect(caster.active, isTrue);
       expect(caster.state, CastState.ready);
       expect(caster.volume, closeTo(0.4, 0.001));
+      await _until(() => tv.received.where((m) => m.type == 'CONNECT').length == 2);
       expect(tv.received.map((m) => m.type), containsAllInOrder(['CONNECT', 'LAUNCH', 'CONNECT']));
       expect(tv.received.lastWhere((m) => m.type == 'CONNECT').destination, 'web-5');
 

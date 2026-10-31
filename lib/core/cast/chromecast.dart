@@ -35,6 +35,8 @@ Future<Socket> chromecastSocket(String host, int port) =>
 class CastConnection {
   CastConnection._(this._socket) {
     _socket.listen(_onData, onDone: _onDone, onError: (Object _) => _onDone(), cancelOnError: true);
+    // skriving til en forbindelse Chromecasten har brutt, feiler her (og ellers som en uventet feil i appen)
+    unawaited(_socket.done.then<void>((_) {}, onError: (Object _) => _onDone()));
     _ping = Timer.periodic(const Duration(seconds: 5), (_) {
       if (DateTime.now().difference(_heard) > const Duration(seconds: 20)) {
         debugPrint('Chromecast: ingen svar på 20 s');
