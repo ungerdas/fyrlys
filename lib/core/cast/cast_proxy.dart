@@ -333,8 +333,13 @@ class CastProxy {
           ok && (entry.playlist || type.contains('mpegurl') || _looksLikePlaylist(at) || _looksLikePlaylist(original));
       List<int> head = const [];
       if (ok && !playlist && req.method != 'HEAD') {
-        // sendt med en annen type fra en adresse uten .m3u8: se etter #EXTM3U i begynnelsen
-        if (await input.moveNext()) head = input.current;
+        // sendt med en annen type fra en adresse uten .m3u8: se etter #EXTM3U i begynnelsen (den kan komme i flere
+        // små biter, f.eks. BOM for seg)
+        final first = BytesBuilder(copy: false);
+        while (first.length < 32 && await input.moveNext()) {
+          first.add(input.current);
+        }
+        head = first.takeBytes();
         playlist = startsLikePlaylist(head);
       }
       res.statusCode = upRes.statusCode;
