@@ -252,7 +252,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   uventede feil, satt opp i `main.dart`; `scrub` fjerner vertsnavn, IP, `/live|movie|series|timeshift/<bruker>/<passord>`,
   `username=`/`password=`, e-post og `C:\Users\<navn>`), `core/report.dart` (`buildReport`: versjon, Windows, antall og
   slag innlogginger (ikke navnene), abonnementet, listene, innstillingene, loggen og slutten av oppdateringsloggen;
-  `saveReport` i Nedlastinger, `showInExplorer`, `openUrl` byttes ut i testene). Innstillinger → Hjelp. Skjemaene for
+  `saveReport` i Nedlastinger, `showInExplorer`, `openUrl` byttes ut i testene; `windowsName` (2.1.25): Windows 11 sier
+  selv «Windows 10» i `Platform.operatingSystemVersion`, så bygg ≥ 22000 gir «Windows 11»). Innstillinger → Hjelp. Skjemaene for
   GitHub-saker ligger i `.github/ISSUE_TEMPLATE` (feil, ønske).
 - Chromecast (2.1.24, eierens ønske «Lag en egen versjon ja!»): `core/cast/` – `mdns.dart` (`discoverCastDevices`:
   PTR-spørsmål etter `_googlecast._tcp.local` fra en tilfeldig port på hvert nettverkskort og en lytter på 5353,
@@ -261,13 +262,21 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `chromecast.dart` (`CastConnection`: TLS 8009 med selvsignert sertifikat (`chromecastSocket`, en vanlig socket i
   testene), PING/PONG, `request` med requestId; `ChromecastCaster`: CONNECT, LAUNCH av Googles avspiller
   `CC1AD845` (Default Media Receiver), CONNECT til transportId, LOAD med `contentId` fra mellomstasjonen, `LIVE`/
-  `BUFFERED`, `hlsSegmentFormat: ts` for HLS, MEDIA_STATUS → `CastState`, PLAY/PAUSE/SEEK, SET_VOLUME, STOP;
-  RECEIVER_STATUS uten vår økt = stoppet på TV-en), `cast_proxy.dart` (`CastProxy`: HttpServer på en ledig port,
+  `BUFFERED`, `hlsSegmentFormat: ts` for HLS, uten `currentTime` for direktesendinger (2.1.25; 0 er det eldste
+  segmentet i lista), MEDIA_STATUS → `CastState`, PLAY/PAUSE/SEEK, SET_VOLUME, STOP; RECEIVER_STATUS uten vår økt =
+  stoppet på TV-en; ERROR/LOAD_FAILED med `detailedErrorCode` → `_errorText` (102/110 bilde/lyd, 104/316 format,
+  103/30x/31x nettet, ellers koden), også når koden kommer etter IDLE med ERROR; tilstandene og feilene logges),
+  `cast_proxy.dart` (`CastProxy`: HttpServer på en ledig port,
   adresser `http://<PC-ens adresse mot Chromecasten>:<port>/<tilfeldig merke>/<løpenr>/strom.<ext>` så Chromecasten
   aldri ser brukernavn/passord; henter med kildens hoder (User-Agent), sender videre med CORS (Googles avspiller
   krever det for HLS, leverandørene har det ikke), skriver om spillelister (`rewritePlaylist`, også `URI="…"`), går
   rett til der en spilleliste ble videresendt neste gang, Range videre for filmer; `requests` = 0 etter en feil gir
-  beskjeden om Windows-brannmuren) og `caster.dart` (`Caster` med `CastState`/`CastItem` (HLS foretrekkes,
+  beskjeden om Windows-brannmuren. 2.1.25: en adresse som én gang var en spilleliste, skrives alltid om
+  (`_Entry.playlist`), ellers kjennes den på type, .m3u8 eller `startsLikePlaylist` (#EXTM3U først); siste ledd i
+  adressen må stemme (`_Entry.name`), så et relativt segment som ikke ble skrevet om gir 404 og en linje i loggen.
+  Loggen (`_note`, samme beskjed høyst hvert 10. s): `describePlaylist` første gang (segmenter, mål, varianter med
+  CODECS, ENDLIST, fMP4, kryptering; aldri adressene), svar ≥ 400 fra leverandøren, og hvert 20. s hva Chromecasten
+  har hentet, eller at den har sluttet) og `caster.dart` (`Caster` med `CastState`/`CastItem` (HLS foretrekkes,
   `contentType` etter filen), og `appCaster`, én for hele appen; testene bytter den med `FakeCaster` i `fakes.dart`).
   `ui/cast_ui.dart`: `pickCastDevice` (dialogen, «Let igjen»), `CastPanel` (vises i stedet for bildet: hvor, hva,
   tilstand, pause, volum på TV-en, «Stopp casting»; `leading` for kanal-/spoleknapper), `CastProgress` (tidslinja for
@@ -416,11 +425,17 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `deinterlace=yes` og maskinvarens `d3d11vpp`). Ellers i loggen: «property not found _setProperty(osc, 1)» og
   «dxva2-egl: Failed to create EGL surface» fra media_kit (ufarlig så langt).
 - 31.10.2026: 2.1.24: Chromecast (se Arkitektur). Bare testet med tester.
+- 31.10.2026: 2.1.25: første forsøk med Chromecast hos eieren (feilrapport fra 2.1.24): koblet til,
+  mellomstasjonen startet, kanalen ble sendt til TV-en og 8 s senere åpnet på nytt; loggen sa ikke hvorfor. Rettet
+  det som kan ha vært årsaken (`currentTime` 0 for direktesendinger, spillelister som bare ble kjent igjen første
+  gang) og lagt inn logging av hva TV-en og mellomstasjonen gjør. Leverandørens spilleliste har typen
+  `application/x-mpegurl` («mime type is not rfc8216 compliant» fra mpv), som ble kjent igjen også før. Eieren
+  rettet også at rapporten sa Windows 10 (han har Windows 11).
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
   `probesize`, `demuxer-lavf-probe-info=nostreams`). Når den kommer: velg det raskeste som neste versjon.
-  Chromecast i 2.1.24 er ikke prøvd mot en ekte Chromecast ennå.
+  Chromecast: venter på hva TV-en viste i første forsøk og en ny feilrapport fra 2.1.25.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

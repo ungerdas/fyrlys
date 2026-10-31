@@ -186,6 +186,9 @@ class _PlayerState extends State<_Player> {
   bool _wasCasting = appCaster.active;
   CastState? _castState;
 
+  /// feilen fra Chromecasten som vises (byttes ut når den sier mer om hva som var galt)
+  String? _castError;
+
   /// arkivet eller multiview er åpne over spilleren (castingen styres derfra imens)
   bool _visiting = false;
 
@@ -904,8 +907,12 @@ class _PlayerState extends State<_Player> {
       if (state == CastState.ended) {
         _ended(tr('Kanalen stoppet (sendingen stoppet).'));
       } else if (state == CastState.failed) {
-        _status = appCaster.error ?? tr('Chromecasten kunne ikke spille dette.');
+        _status = _castError = appCaster.error ?? tr('Chromecasten kunne ikke spille dette.');
       }
+    } else if (state == CastState.failed && _status != null && _status == _castError) {
+      // Chromecasten sa hva som var galt etter at den stoppet
+      final error = appCaster.error;
+      if (error != null) _status = _castError = error;
     }
     _set(() {});
   }

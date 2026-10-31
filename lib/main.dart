@@ -11,6 +11,7 @@ import 'app.dart';
 import 'build_info.dart';
 import 'core/app_log.dart';
 import 'core/cache.dart';
+import 'core/report.dart';
 import 'core/session.dart';
 import 'core/single_instance.dart';
 import 'core/updater.dart';
@@ -62,7 +63,7 @@ Future<void> main() async {
 
 /// Loggen til feilrapporten: alt som skrives med debugPrint, og feil ingen tok seg av.
 void _keepLog() {
-  final log = AppLog.instance..add('$appBuildLabel ${Platform.operatingSystemVersion}');
+  final log = AppLog.instance..add('$appBuildLabel ${windowsName(Platform.operatingSystemVersion)}');
   final original = debugPrint;
   debugPrint = (message, {wrapWidth}) {
     if (message != null) log.add(message);

@@ -50,6 +50,9 @@ class _FakeChromecast {
   /// LOAD svarer LOAD_FAILED
   bool failLoad = false;
 
+  /// etter LOAD: IDLE med ERROR og så ERROR med denne koden (den rekkefølgen kan en ekte sende dem i)
+  int? errorCode;
+
   Future<void> start() async {
     server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((s) {
@@ -105,6 +108,23 @@ class _FakeChromecast {
           },
           from: 'web-5',
         );
+        final code = errorCode;
+        if (code != null) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          send(
+            nsMedia,
+            {
+              'type': 'MEDIA_STATUS',
+              'requestId': 0,
+              'status': [
+                {'mediaSessionId': 3, 'playerState': 'IDLE', 'idleReason': 'ERROR'},
+              ],
+            },
+            from: 'web-5',
+          );
+          send(nsMedia, {'type': 'ERROR', 'requestId': 0, 'detailedErrorCode': code, 'reason': 'GENERIC'},
+              from: 'web-5');
+        }
       case 'PAUSE':
         send(
           nsMedia,
@@ -142,6 +162,18 @@ Future<HttpServer> _provider(Map<String, String?> seen) async {
       case '/hls/abc/seg1.ts':
         res.headers.contentType = ContentType('video', 'mp2t');
         res.add(List.filled(1000, 0x47));
+      // en leverandør som sender spillelista som tekst, fra en adresse uten .m3u8 (og med BOM)
+      case '/live/u/p/2.m3u8':
+        res
+          ..statusCode = HttpStatus.found
+          ..headers.set(HttpHeaders.locationHeader, '/stream/xyz');
+      case '/stream/xyz' || '/plain/list':
+        res.headers.contentType = ContentType('text', 'plain');
+        res.add([0xEF, 0xBB, 0xBF]);
+        res.write('#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg3.ts\n');
+      case '/stream/seg3.ts':
+        res.headers.contentType = ContentType('application', 'octet-stream');
+        res.add(List.filled(500, 0x47));
       default:
         res.statusCode = HttpStatus.notFound;
     }
@@ -286,6 +318,72 @@ void main() {
     expect(proxy.requests, greaterThanOrEqualTo(5));
   });
 
+  test('spillelista beskrives uten adressene: segmenter, varianter med kodeker, slutt, fMP4 og kryptering', () {
+    expect(
+      describePlaylist('#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXTINF:10,\nhttp://iptv.example/live/u/p/1.ts\n'
+          '#EXTINF:10,\n2.ts\n'),
+      '2 segmenter, mål 10 s',
+    );
+    expect(
+      describePlaylist('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1,CODECS="avc1.64001f,mp4a.40.2"\nlow.m3u8\n'
+          '#EXT-X-STREAM-INF:BANDWIDTH=2,CODECS="avc1.640028,mp4a.40.2"\nhigh.m3u8\n'),
+      'hovedliste, 2 varianter (avc1.64001f,mp4a.40.2 / avc1.640028,mp4a.40.2)',
+    );
+    expect(
+      describePlaylist('#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-MAP:URI="init.mp4"\n'
+          '#EXT-X-KEY:METHOD=AES-128,URI="http://iptv.example/key"\n#EXTINF:6,\na.m4s\n#EXT-X-ENDLIST\n'),
+      '1 segment, VOD, slutt (ENDLIST), fMP4 (EXT-X-MAP), kryptert (AES-128)',
+    );
+    expect(startsLikePlaylist(utf8.encode('#EXTM3U\n')), isTrue);
+    expect(startsLikePlaylist([0xEF, 0xBB, 0xBF, ...utf8.encode('\r\n#EXTM3U')]), isTrue);
+    expect(startsLikePlaylist(List.filled(10, 0x47)), isFalse);
+    expect(startsLikePlaylist(utf8.encode('#EXT')), isFalse);
+  });
+
+  test('mellomstasjonen: en spilleliste sendt som tekst fra en adresse uten .m3u8 skrives om hver gang, '
+      'og adresser som ikke ble skrevet om, avvises', () async {
+    final seen = <String, String?>{};
+    final provider = await _provider(seen);
+    final proxy = CastProxy();
+    await proxy.start('127.0.0.1');
+    final client = HttpClient();
+    addTearDown(() async {
+      client.close(force: true);
+      await proxy.close();
+      await provider.close(force: true);
+    });
+
+    Future<({int code, String body})> get(String url) async {
+      final res = await (await client.getUrl(Uri.parse(url))).close();
+      final body = await res.fold<List<int>>([], (all, chunk) => all..addAll(chunk));
+      return (code: res.statusCode, body: utf8.decode(body, allowMalformed: true));
+    }
+
+    List<String> uris(String body) => body.split('\n').where((l) => l.isNotEmpty && !l.startsWith('#')).toList();
+
+    final local = proxy.add('http://127.0.0.1:${provider.port}/live/u/p/2.m3u8', {'User-Agent': 'VLC/3.0.21'});
+    var segment = '';
+    // første gang via .m3u8-adressen, så rett fra /stream/xyz (uten .m3u8, sendt som text/plain)
+    for (var i = 0; i < 3; i++) {
+      final list = await get(local);
+      expect(list.code, 200);
+      expect(list.body, startsWith('#EXTM3U'));
+      segment = uris(list.body).single;
+      expect(segment, startsWith('http://127.0.0.1:${proxy.port}/'));
+    }
+    expect(seen.keys, containsAll(['/live/u/p/2.m3u8', '/stream/xyz']));
+    final ts = await get(segment);
+    expect(ts.code, 200);
+    expect(ts.body.length, 500);
+
+    // en adresse rett til en slik liste: kjennes igjen på #EXTM3U
+    final plain = await get(proxy.add('http://127.0.0.1:${provider.port}/plain/list', const {}));
+    expect(uris(plain.body).single, startsWith('http://127.0.0.1:${proxy.port}/'));
+
+    // et relativt segment som ikke ble skrevet om, gjort helt ut fra vår adresse: ikke spillelista
+    expect((await get(local.replaceFirst(RegExp(r'strom\.m3u8$'), 'seg3.ts'))).code, 404);
+  });
+
   group('Chromecasten', () {
     late _FakeChromecast tv;
     late HttpServer provider;
@@ -331,6 +429,8 @@ void main() {
       expect(load.json['sessionId'], 'okt-1');
       final media = load.json['media']! as Map;
       expect(media['streamType'], 'LIVE');
+      // direktesending: begynner der sendingen er nå, ikke ved det eldste segmentet i lista
+      expect(load.json.containsKey('currentTime'), isFalse);
       expect(media['contentType'], 'application/x-mpegurl');
       expect(media['hlsSegmentFormat'], 'ts');
       expect(media['contentId'], isNot(contains('/u/p/')));
@@ -378,6 +478,14 @@ void main() {
       await caster.load(channel());
       expect(caster.state, CastState.failed);
       expect(caster.error, startsWith('Chromecasten kunne ikke spille dette.'));
+    });
+
+    test('Googles avspiller stopper med en feilkode: forklaringen etter koden, også når koden kommer sist', () async {
+      tv.errorCode = 104;
+      await caster.connect(device);
+      await caster.load(channel());
+      await _until(() => caster.state == CastState.failed && (caster.error ?? '').contains('104'));
+      expect(caster.error, 'Chromecasten støtter ikke formatet denne kanalen sendes i (kode 104).');
     });
 
     test('får ikke kontakt: feil med navnet', () async {

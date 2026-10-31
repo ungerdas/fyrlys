@@ -130,4 +130,15 @@ const enPlayer = <String, String>{
   'Mistet kontakten med {name}.': 'Lost the connection to {name}.',
   'Castingen til {name} ble stoppet.': 'Casting to {name} was stopped.',
   'Chromecasten stoppet avspillingen (feil i strømmen).': 'The Chromecast stopped playback (error in the stream).',
+  'Chromecasten stoppet avspillingen (feil i strømmen, kode {code}).':
+      'The Chromecast stopped playback (error in the stream, code {code}).',
+  'Chromecasten klarte ikke å vise denne kanalen (feil i bildet eller lyden, kode {code}). Den spiller H.264 og AAC; '
+          'kanalen sendes trolig med noe annet.':
+      'The Chromecast could not show this channel (error in the picture or sound, code {code}). It plays H.264 and '
+          'AAC; this channel is probably sent in something else.',
+  'Chromecasten støtter ikke formatet denne kanalen sendes i (kode {code}).':
+      "The Chromecast doesn't support the format this channel is sent in (code {code}).",
+  'Chromecasten fikk ikke hentet strømmen via PC-en (kode {code}). Prøv igjen, eller se om kanalen spilles på PC-en.':
+      "The Chromecast couldn't fetch the stream through the PC (code {code}). Try again, or check whether the channel "
+          'plays on the PC.',
 };

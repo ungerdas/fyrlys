@@ -152,6 +152,9 @@ class _VodPlayerState extends State<_VodPlayer> {
   bool _wasCasting = appCaster.active;
   CastState? _castState;
 
+  /// feilen fra Chromecasten som vises (byttes ut når den sier mer om hva som var galt)
+  String? _castError;
+
   /// arkivet på TV-en: strømmen begynner så langt inn i programmet
   Duration _castBase = Duration.zero;
 
@@ -527,8 +530,12 @@ class _VodPlayerState extends State<_VodPlayer> {
       if (state == CastState.ended) {
         _onEnd();
       } else if (state == CastState.failed) {
-        _status = appCaster.error ?? tr('Chromecasten kunne ikke spille dette.');
+        _status = _castError = appCaster.error ?? tr('Chromecasten kunne ikke spille dette.');
       }
+    } else if (state == CastState.failed && _status != null && _status == _castError) {
+      // Chromecasten sa hva som var galt etter at den stoppet
+      final error = appCaster.error;
+      if (error != null) _status = _castError = error;
     }
     _set(() {});
   }

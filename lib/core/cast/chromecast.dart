@@ -206,6 +206,15 @@ class ChromecastCaster extends Caster {
   double _volume = 1;
   bool _muted = false;
 
+  /// tilstanden på TV-en sist den ble logget («PLAYING», «IDLE (ERROR)»)
+  String? _reported;
+
+  /// detailedErrorCode fra den siste feilen fra Googles avspiller
+  int? _errorCode;
+
+  /// forespørsler til mellomstasjonen før siste LOAD (like mange etterpå: Chromecasten kom ikke fram til PC-en)
+  int _loadBefore = 0;
+
   @override
   CastDevice? get device => _device;
 
@@ -308,11 +317,14 @@ class ChromecastCaster extends Caster {
     final seq = ++_loadSeq;
     _item = item;
     _mediaSessionId = null;
+    _reported = null;
+    _errorCode = null;
     _position = item.start;
     _positionAt = DateTime.now();
     _duration = null;
     _set(CastState.loading);
     final before = proxy.requests;
+    _loadBefore = before;
     final local = proxy.add(item.url, item.headers);
     final image = item.image;
     final media = <String, Object?>{
@@ -333,6 +345,8 @@ class ChromecastCaster extends Caster {
       if (item.isHls) 'hlsSegmentFormat': 'ts',
       if (item.isHls) 'hlsVideoSegmentFormat': 'mpeg2_ts',
     };
+    debugPrint('Chromecast: spiller av (${item.live ? 'LIVE' : 'BUFFERED'}, ${item.contentType}'
+        '${item.start > Duration.zero ? ', fra ${item.start.inSeconds} s' : ''})');
     final CastMessage reply;
     try {
       reply = await conn.request(
@@ -342,7 +356,9 @@ class ChromecastCaster extends Caster {
           'sessionId': _sessionId,
           'media': media,
           'autoplay': true,
-          'currentTime': item.start.inMilliseconds / 1000,
+          // uten currentTime begynner en direktesending der den er nå; 0 er begynnelsen av det spillelista har
+          // (det eldste segmentet, som leverandøren kan ha fjernet før Chromecasten rekker å hente det)
+          if (!item.live || item.start > Duration.zero) 'currentTime': item.start.inMilliseconds / 1000,
         },
         to: transport,
         timeout: const Duration(seconds: 45),
@@ -358,20 +374,36 @@ class ChromecastCaster extends Caster {
       _onMediaStatus(reply);
       return;
     }
-    // LOAD_FAILED, LOAD_CANCELLED eller INVALID_REQUEST
+    // LOAD_FAILED, LOAD_CANCELLED eller INVALID_REQUEST (logget i _onMessage)
     if (reply.type == 'LOAD_CANCELLED') return;
-    debugPrint('Chromecast: ${reply.type} ${reply.json['reason'] ?? ''} ${reply.json['detailedErrorCode'] ?? ''}');
-    _set(CastState.failed, error: _loadError(proxy, before));
+    _set(CastState.failed, error: _loadError(proxy, before, code: _code(reply)));
   }
 
-  String _loadError(CastProxy proxy, int before) {
+  String _loadError(CastProxy proxy, int before, {int? code}) {
     if (proxy.requests == before) {
       return tr('Chromecasten fikk ikke hentet strømmen fra PC-en. Har Windows-brannmuren stoppet Fyrlys? '
           'Tillat Fyrlys på private nettverk, og prøv igjen.');
     }
-    return tr('Chromecasten kunne ikke spille dette. Den spiller HLS med H.264 og AAC; noen kanaler sendes på en måte '
-        'den ikke støtter.');
+    return _errorText(code) ??
+        tr('Chromecasten kunne ikke spille dette. Den spiller HLS med H.264 og AAC; noen kanaler sendes på en måte '
+            'den ikke støtter.');
   }
+
+  static int? _code(CastMessage m) {
+    final c = m.json['detailedErrorCode'];
+    return c is int ? c : (c is num ? c.toInt() : null);
+  }
+
+  /// Hva Googles avspiller mente ([detailedErrorCode] i cast.framework.messages.DetailedErrorCode).
+  static String? _errorText(int? code) => switch (code) {
+        null => null,
+        102 || 110 => tr('Chromecasten klarte ikke å vise denne kanalen (feil i bildet eller lyden, kode {code}). Den '
+            'spiller H.264 og AAC; kanalen sendes trolig med noe annet.', {'code': code}),
+        104 || 316 => tr('Chromecasten støtter ikke formatet denne kanalen sendes i (kode {code}).', {'code': code}),
+        103 || 300 || 301 || 311 || 312 || 315 => tr('Chromecasten fikk ikke hentet strømmen via PC-en (kode {code}). '
+            'Prøv igjen, eller se om kanalen spilles på PC-en.', {'code': code}),
+        _ => tr('Chromecasten stoppet avspillingen (feil i strømmen, kode {code}).', {'code': code}),
+      };
 
   void _media(String type, [Map<String, Object?> extra = const {}]) {
     final conn = _conn;
@@ -420,6 +452,7 @@ class ChromecastCaster extends Caster {
 
   @override
   Future<void> stop() async {
+    if (_device != null) debugPrint('Chromecast: stoppet fra Fyrlys');
     _connectSeq++;
     _loadSeq++;
     await _disconnect(stopApp: true);
@@ -451,6 +484,7 @@ class ChromecastCaster extends Caster {
   }
 
   void _onLost() {
+    debugPrint('Chromecast: forbindelsen ble brutt');
     final name = _device?.name ?? '';
     unawaited(_disconnect(stopApp: false));
     _device = null;
@@ -475,6 +509,11 @@ class ChromecastCaster extends Caster {
         final app = receiverApp(m);
         // avspilleren vår er borte fra TV-en (stoppet med fjernkontrollen, eller noen andre caster)
         if (_state != CastState.connecting && _sessionId != null && (app == null || app.sessionId != _sessionId)) {
+          final status = m.json['status'];
+          final apps = status is Map ? status['applications'] : null;
+          final ids = apps is List ? [for (final a in apps) if (a is Map) '${a['appId']}'] : const <String>[];
+          debugPrint('Chromecast: avspilleren er borte fra TV-en '
+              '(${ids.isEmpty ? 'ingen apper' : 'apper: ${ids.join(', ')}'})');
           final name = _device?.name ?? '';
           unawaited(_disconnect(stopApp: false));
           _device = null;
@@ -485,8 +524,23 @@ class ChromecastCaster extends Caster {
         notifyListeners();
       case nsMedia when m.type == 'MEDIA_STATUS':
         _onMediaStatus(m);
+      case nsMedia when const ['ERROR', 'LOAD_FAILED', 'INVALID_REQUEST', 'INVALID_PLAYER_STATE'].contains(m.type):
+        _onMediaError(m);
       case nsConnection when m.type == 'CLOSE' && m.source == _transportId:
         _onLost();
+    }
+  }
+
+  /// Googles avspiller sier fra om en feil, med en kode som forteller hva (før eller etter IDLE med ERROR).
+  void _onMediaError(CastMessage m) {
+    final code = _code(m);
+    final reason = m.json['reason'];
+    debugPrint('Chromecast: ${m.type}${reason is String ? ' $reason' : ''}${code != null ? ' (kode $code)' : ''}');
+    if (code == null) return;
+    _errorCode = code;
+    // kom IDLE med ERROR først, står det en forklaring uten kode: bytt den ut (ikke den om brannmuren)
+    if (_state == CastState.failed && m.type == 'ERROR' && _proxy?.requests != _loadBefore) {
+      _set(CastState.failed, error: _errorText(code));
     }
   }
 
@@ -508,7 +562,14 @@ class ChromecastCaster extends Caster {
     }
     final volume = status['volume'];
     if (volume is Map && volume['level'] is num) _volume = (volume['level'] as num).toDouble().clamp(0.0, 1.0).toDouble();
-    switch (status['playerState']) {
+    final player = status['playerState'];
+    final idle = status['idleReason'];
+    final report = player is String ? '$player${idle is String ? ' ($idle)' : ''}' : null;
+    if (report != null && report != _reported) {
+      _reported = report;
+      debugPrint('Chromecast: $report${time is num ? ' ved ${time.round()} s' : ''}');
+    }
+    switch (player) {
       case 'PLAYING':
         _set(CastState.playing);
       case 'PAUSED':
@@ -517,11 +578,13 @@ class ChromecastCaster extends Caster {
       case 'LOADING':
         _set(_state == CastState.loading ? CastState.loading : CastState.buffering);
       case 'IDLE':
-        switch (status['idleReason']) {
+        switch (idle) {
           case 'FINISHED':
             _set(CastState.ended);
           case 'ERROR':
-            _set(CastState.failed, error: tr('Chromecasten stoppet avspillingen (feil i strømmen).'));
+            if (_state == CastState.failed) return;
+            _set(CastState.failed,
+                error: _errorText(_errorCode) ?? tr('Chromecasten stoppet avspillingen (feil i strømmen).'));
           default:
             // avbrutt av en ny avspilling, eller ingenting lastet ennå
             notifyListeners();

@@ -63,6 +63,14 @@ void main() {
     expect(text, contains('\r\n'));
   });
 
+  test('Windows 11 heter Windows 11 (Windows sier selv «Windows 10» med bygg 22000 og høyere)', () {
+    expect(windowsName('"Windows 10 Pro" 10.0 (Build 26100)'), '"Windows 11 Pro" 10.0 (Build 26100)');
+    expect(windowsName('"Windows 10 Home" 10.0 (Build 22000)'), '"Windows 11 Home" 10.0 (Build 22000)');
+    expect(windowsName('"Windows 10 Pro" 10.0 (Build 19045)'), '"Windows 10 Pro" 10.0 (Build 19045)');
+    expect(windowsName('"Windows 11 Home" 10.0 (Build 26100)'), '"Windows 11 Home" 10.0 (Build 26100)');
+    expect(windowsName('Linux 6.1'), 'Linux 6.1');
+  });
+
   test('lagres i Nedlastinger med dato i navnet', () async {
     final dir = Directory.systemTemp.createTempSync('fyrlys-rapport');
     addTearDown(() => dir.deleteSync(recursive: true));

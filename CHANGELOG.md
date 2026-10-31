@@ -1,5 +1,16 @@
 # Endringer
 
+## v2.1.25
+
+- **Chromecast:** direktesendinger begynner nå der sendingen er. Før ba Fyrlys TV-en begynne ved det eldste stykket i
+  spillelista, og det kan leverandøren ha fjernet før TV-en rekker å hente det.
+- Spillelister som leverandøren sender med en uvanlig filtype, kjennes igjen hver gang, ikke bare første gang.
+- Stopper Chromecasten med en feil, står det hva slags: bildet eller lyden, formatet, eller at strømmen ikke kom fram
+  (med koden fra Googles avspiller).
+- Feilrapporten forteller mer om castingen: hva TV-en gjør (spiller, laster, stoppet og hvorfor), hvordan
+  spillelista ser ut (uten adressene) og hvor mye TV-en har hentet via PC-en.
+- Feilrapporten sier Windows 11 når det er Windows 11 (overfor apper kaller Windows 11 seg fortsatt Windows 10).
+
 ## v2.1.24
 
 - **Cast til TV (Chromecast):** ny knapp i spilleren og filmspilleren. Velg en Chromecast (eller en TV med Google TV)

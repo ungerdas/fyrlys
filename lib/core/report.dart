@@ -19,7 +19,7 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
     ..writeln('${tr('Laget')}: ${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}')
     ..writeln('${tr('Versjon')}: $appBuildLabel'
         '${appBuild.isEmpty ? '' : ' (${tr('bygg')} $appBuild${appCommit.isEmpty ? '' : ', ${_short(appCommit)}'})'}')
-    ..writeln('Windows: ${windows ?? Platform.operatingSystemVersion}')
+    ..writeln('Windows: ${windowsName(windows ?? Platform.operatingSystemVersion)}')
     ..writeln('${tr('Språk')}: $appLanguage');
 
   out.writeln();
@@ -74,6 +74,14 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
   }
   // en gang til over alt, også det som ikke kom fra loggen (feilmeldinger fra leverandøren o.l.)
   return scrub(out.toString()).replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
+}
+
+/// Windows-utgaven slik Dart gir den («"Windows 10 Pro" 10.0 (Build 26100)»), med riktig navn: Windows 11 heter
+/// fortsatt «Windows 10» i registeret Dart leser fra, men har byggnummer 22000 og høyere.
+String windowsName(String version) {
+  final build = int.tryParse(RegExp(r'Build (\d+)').firstMatch(version)?[1] ?? '');
+  if (build == null || build < 22000) return version;
+  return version.replaceFirst('Windows 10', 'Windows 11');
 }
 
 String _short(String commit) => commit.length > 7 ? commit.substring(0, 7) : commit;
