@@ -387,6 +387,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   filteret `yadif` («filter 'yadif' not found»), så «Fjern striper» virker ikke (ikke rettet ennå; mulig vei:
   `deinterlace=yes` og maskinvarens `d3d11vpp`). Ellers i loggen: «property not found _setProperty(osc, 1)» og
   «dxva2-egl: Failed to create EGL surface» fra media_kit (ufarlig så langt).
+- Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
+  arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
+  vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
+  `probesize`, `demuxer-lavf-probe-info=nostreams`). Når den kommer: velg det raskeste som 2.1.24.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,
