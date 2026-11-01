@@ -28,6 +28,7 @@ Appen er på norsk eller engelsk (som Windows eller telefonen; byttes under tann
 - TV med favoritter, kategorier, søk og kanalnummer
 - TV-guide, og TV-arkiv når leverandøren har det
 - Pause og spol tilbake i direktesendinger
+- NRK1, NRK2, NRK3 og NRK Super fra NRK sine egne direktesendinger (leverandørens strøm er reserven)
 - Filmer og serier med «Fortsett å se» (Xtream Codes)
 - Flere innlogginger, hver med sine egne favoritter, og multiview med en kanal fra hvert abonnement
 - mpv som avspiller: de fleste formater, lydspor og undertekster

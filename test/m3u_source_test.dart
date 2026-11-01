@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/core/m3u_source.dart';
+import 'package:fyrlys/core/public_streams.dart';
 import 'package:fyrlys/core/secrets.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/core/source.dart';
@@ -127,7 +128,7 @@ void main() {
       expect(requests.where((u) => u.contains('guide.xml.gz')), hasLength(1));
 
       final target = await src.open(channels[0]);
-      expect(target.urls, ['http://iptv.example/live/kari/hemmelig/101.m3u8']);
+      expect(target.urls, [publicStreams['nrk1'], 'http://iptv.example/live/kari/hemmelig/101.m3u8']);
       expect(target.localShift, isTrue);
     });
 

@@ -9,6 +9,7 @@ import '../l10n/tr.dart';
 import 'cache.dart' show stableHash;
 import 'failure.dart' show httpStatus;
 import 'models.dart';
+import 'public_streams.dart';
 import 'source.dart';
 import 'vod.dart';
 import 'xtream_source.dart' show xtreamUserAgent;
@@ -404,8 +405,10 @@ class M3uSource implements TvSource {
     await _ensure();
     final e = _entries[channel.id];
     if (e == null) throw SourceException(tr('Fant ikke kanalen i lista. Hent listene på nytt i innstillingene.'));
+    // NRK-kanalene fra NRK selv (leverandørens adresse er reserven)
+    final public = publicStreamFor(channel.name);
     // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
-    return PlayTarget([e.url], localShift: true);
+    return PlayTarget([if (public != null && public != e.url) public, e.url], localShift: true);
   }
 
   // ── TV-arkiv har ikke en vanlig M3U-liste (en Xtream-lenke logges inn som Xtream Codes) ──

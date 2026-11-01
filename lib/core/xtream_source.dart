@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../l10n/tr.dart';
 import 'failure.dart' show httpStatus;
 import 'models.dart';
+import 'public_streams.dart';
 import 'source.dart';
 import 'vod.dart';
 
@@ -419,8 +420,10 @@ class XtreamSource implements TvSource {
   Future<PlayTarget> open(Channel channel) async {
     // HLS fra leverandøren starter ved direktepunktet; MPEG-TS er reserven
     final base = '$server/live/$_creds/${channel.id}';
+    // NRK-kanalene fra NRK selv (leverandørens adresser er reserven)
+    final public = publicStreamFor(channel.name);
     // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
-    return PlayTarget(['$base.m3u8', '$base.ts'], localShift: true);
+    return PlayTarget([if (public != null) public, '$base.m3u8', '$base.ts'], localShift: true);
   }
 
   // ── TV-arkivet ──

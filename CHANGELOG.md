@@ -1,5 +1,12 @@
 # Endringer
 
+## v2.1.27
+
+- **NRK fra NRK:** NRK1, NRK2, NRK3 og NRK Super spilles (og castes) fra NRK sine egne direktesendinger i stedet for
+  fra IPTV-leverandøren. Kanalene beholder navnet, logoen, TV-guiden og arkivet fra leverandøren, og virker ikke NRK
+  sin strøm, brukes leverandørens. Regionale NRK1-kanaler spilles som før.
+- Infoen i spilleren sier «HLS rett fra NRK» når strømmen kommer derfra.
+
 ## v2.1.26
 
 - **Fyrlys for Android-telefoner:** samme app som på Windows, med TV, TV-guide, TV-arkiv, filmer og serier,

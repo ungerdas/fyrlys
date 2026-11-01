@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/core/models.dart';
+import 'package:fyrlys/core/public_streams.dart';
 import 'package:fyrlys/core/source.dart';
 import 'package:fyrlys/core/vod.dart';
 import 'package:fyrlys/core/xtream_source.dart';
@@ -97,10 +98,16 @@ void main() {
     expect(epg.map((e) => e.title), ['Dagsrevyen', 'Senere']);
     expect(epg.first.description, 'Nyheter');
 
+    // NRK 1 fra NRK selv, leverandøren som reserve
     final target = await src.open(chans.first);
     expect(target.urls, [
+      publicStreams['nrk1'],
       'http://iptv.example:8080/live/bob/hemmelig/101.m3u8',
       'http://iptv.example:8080/live/bob/hemmelig/101.ts',
+    ]);
+    expect((await src.open(chans[1])).urls, [
+      'http://iptv.example:8080/live/bob/hemmelig/102.m3u8',
+      'http://iptv.example:8080/live/bob/hemmelig/102.ts',
     ]);
     expect(src.toPrefs(), {'kind': 'xtream', 'server': 'http://iptv.example:8080', 'user': 'bob', 'password': 'hemmelig'});
   });

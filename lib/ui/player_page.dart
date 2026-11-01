@@ -11,6 +11,7 @@ import '../core/failure.dart';
 import '../core/models.dart';
 import '../core/names.dart';
 import '../core/picture.dart';
+import '../core/public_streams.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../l10n/tr.dart';
@@ -1262,6 +1263,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     final t = _target;
     if (t == null) return '';
     final url = t.urls[math.min(_url, t.urls.length - 1)];
+    if (isPublicStream(url)) return tr('HLS rett fra NRK');
     if (url.contains('.m3u8')) return tr('HLS rett fra leverandøren');
     if (url.contains('.ts')) return tr('MPEG-TS rett fra leverandøren');
     return tr('rett fra leverandøren');

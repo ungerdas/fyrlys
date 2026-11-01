@@ -12,7 +12,8 @@ Ikke bland inn endringer der herfra. Repoet er **offentlig** (åpnet 26.10, så 
 GitHub), og appen skal kunne deles med andre (eieren 26.10: «Fyrlys på windows er noe jeg vil dele, så der kan det ikke
 være noe personlig»; appen og serverversjonen skal være helt adskilt). Hold appen, koden, testene, commit-meldingene,
 filinfoen i exe-en og disse notatene fri for navn, hjemmenett, maskinnavn, leverandør, brukernavn, hemmeligheter og
-e-postadresser (eksempeladresser som 192.168.1.10 er greit), og ikke vis til serverversjonen i koden. Noen gamle
+e-postadresser (eksempeladresser som 192.168.1.10 er greit), og ikke vis til serverversjonen i koden. Unntak (eierens
+valg 1.11, «Bygget inn for alle»): NRK sine egne direktesendinger i `core/public_streams.dart`. Noen gamle
 commits har en lokal adresse og et maskinnavn; historikken skrives ikke om. Repo-innstillinger (beskrivelse, emner)
 kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under «About» på GitHub.
 `README.md` er forsiden på GitHub: skrevet for andre brukere, uten utviklernotater (de står her).
@@ -69,6 +70,14 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`); byggnummeret (`--build-number`) er `github.run_number`. Kjøringer kan avbrytes med `gh run cancel <id> --repo ungerdas/fyrlys`.
 
 ## Arkitektur (`lib/`)
+- NRK fra NRK (2.1.27, eieren 1.11: «Fyrlys skal kun bruke disse m3u8 fra NRK», og valgte å bygge dem inn for alle):
+  `core/public_streams.dart` (`publicStreams`: nrk1/nrk2/nrk3/nrksuper → `…/muxed.m3u8` på NRK sitt CDN;
+  `publicStreamKey(navn)` tar bort land foran («NO: », «|NO|», «[NO]»), kvalitet («HD», «FHD», «(1080i)», «HEVC») og
+  tegn, og krever at resten er nøyaktig nøkkelen, så regionale NRK1, «NRK Tegnspråk» og «NRK1 +1» ikke byttes;
+  `isPublicStream`). `XtreamSource.open`/`M3uSource.open` setter NRK sin adresse først og leverandørens etter (reserve
+  før bildet har startet, og i Chromecast/multiview som ellers). Guide, logo, favoritter og arkiv er leverandørens.
+  Infoen i spilleren: «HLS rett fra NRK». Testet i `public_streams_test.dart` og kildetestene; om adressene virker
+  (geoblokkering, CORS for Chromecast) er ikke prøvd herfra (de svarer ikke til økta). Apple TV-appen er ikke endret.
 - Android (2.1.26): `platform.dart` (`isAndroid`, kan settes i testene; testene kjører på Linux). `core/android_host.dart`
   (`AndroidHost`: `device`, `multicast`, `casting(tekst|null)`, `install(sti)`, `openUrl`, `share`; gjør ingenting
   utenfor Android, og feil fra kanalen logges). `main.dart` hopper over én-Fyrlys, window_manager og `WindowMemory`, og
@@ -469,6 +478,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   hva som er galt (base64, passord eller alias) og tåler linjeskift, certutil-linjer og base64url. Kjøringen ble startet
   for hånd (`workflow_dispatch` på main lager også releasen). `Fyrlys-android.apk` (ca. 60 MB) ligger i v2.1.26.
   Ikke prøvd på telefonen hans ennå.
+- 1.11.2026: 2.1.27: NRK1–3 og NRK Super fra NRK sine egne strømmer (se Arkitektur). Leverandørens strøm er reserven
+  (eieren sa «kun», men uten reserve blir kanalen svart om NRK sin ikke virker; han kan be om å fjerne den).
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

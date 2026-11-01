@@ -27,6 +27,7 @@ const enPlayer = <String, String>{
   // programinfo og teknisk info
   'Deretter {time}: {title}': 'Next at {time}: {title}',
   'Så {time}  {title}': 'Next {time}  {title}',
+  'HLS rett fra NRK': 'HLS directly from NRK',
   'HLS rett fra leverandøren': 'HLS directly from the provider',
   'MPEG-TS rett fra leverandøren': 'MPEG-TS directly from the provider',
   'rett fra leverandøren': 'directly from the provider',
