@@ -479,7 +479,7 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   for hånd (`workflow_dispatch` på main lager også releasen). `Fyrlys-android.apk` (ca. 60 MB) ligger i v2.1.26.
   Ikke prøvd på telefonen hans ennå.
 - 1.11.2026: 2.1.27: NRK1–3 og NRK Super fra NRK sine egne strømmer (se Arkitektur). Leverandørens strøm er reserven
-  (eieren sa «kun», men uten reserve blir kanalen svart om NRK sin ikke virker; han kan be om å fjerne den).
+  (eieren 1.11: «IPTV skal være reserve. vil bruke strømmen fra NRK»).
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
