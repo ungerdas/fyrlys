@@ -24,8 +24,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   og la GitHub Actions analysere, teste og bygge: `gh run list --repo ungerdas/fyrlys`,
   `gh run view <id> --repo ungerdas/fyrlys --log-failed`, `gh run watch <id> --repo ungerdas/fyrlys`.
   Advarsler fra `flutter analyze` stopper bygget (info gjør ikke det), f.eks. ubrukte importer.
-  Loggene og artefaktene kan **ikke** lastes ned herfra (de ligger i blob-lagring som er stengt). Når et steg
-  feiler, legger workflowen slutten av loggen som merknad; les den med
+  Artefaktene kan **ikke** lastes ned herfra (blob-lagring som er stengt). Loggene kunne heller ikke før, men
+  `gh run view <id> --repo ungerdas/fyrlys --log` virket 2.11 (f.eks. `| grep "Sjekk avspilleren"` for libmpv-sjekken).
+  Når et steg feiler, legger workflowen også slutten av loggen som merknad; les den med
   `gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations` (jobb-id fra `gh run view <id> --json jobs`).
 - Android-mappen lages av `flutter create … --platforms=android` i Android-jobben (2.1.26). I repoet ligger bare
   `android/app/src/main/AndroidManifest.xml` (tillatelser, `CastService`, `ApkProvider`, http), Kotlin-filene i
@@ -531,7 +532,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 1.11.2026: 2.1.31: eieren: «Fjerne striper på windows appen fungerer heller ikke, video blir bare speedet opp». mpv
   sin egen deinterlacing gir alltid ett bilde per halvbilde (`f_auto_filters.c`: bwdif `send_field`, d3d11vpp med
   felter), altså 50 bilder/s fra 25i; tolket som at det så ut til å gå fortere. Nå ett bilde per bilde i TV (se
-  `ui/playback.dart`). Om bildet faktisk gikk fortere enn lyden, er ikke avklart (spurt).
+  `ui/playback.dart`). CI med ekte libmpv (mpv v0.41.0-1308, testfil 25i): uten deinterlacing 25 bilder/s interlacet,
+  mpv sin egen 50 bilder/s, kjeden 25 bilder/s uten striper. Om bildet faktisk gikk fortere enn lyden, er ikke
+  avklart (spurt).
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
