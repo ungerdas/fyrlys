@@ -274,7 +274,7 @@ class ChromecastCaster extends Caster {
     if (on == _service) return;
     _service = on;
     unawaited(AndroidHost.casting(on
-        ? tr('Caster til {name}. Telefonen sender strømmen videre, så la Fyrlys være på.', {'name': device?.name ?? ''})
+        ? tr('Caster til {name}. Telefonen sender strømmen videre, så la Fyrlys være på.', {'name': device.name})
         : null));
   }
 
