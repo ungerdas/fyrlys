@@ -232,9 +232,14 @@ jobs:
             exit 0
           fi
           ks="$RUNNER_TEMP/fyrlys.jks"
-          # mellomrom og linjeskift (også \r når teksten er limt inn fra Windows) tas bort før den pakkes ut
-          if ! printf '%s' "$KEYSTORE_B64" | tr -d ' \r\n\t' | base64 -d > "$ks" || [ ! -s "$ks" ]; then
-            echo "ANDROID_KEYSTORE_B64 er ikke gyldig base64. Lag den med: base64 -w0 fyrlys.jks > fyrlys.jks.b64"
+          # mellomrom, linjeskift (også \r når teksten er limt inn fra Windows) og linjene «-----BEGIN/END …-----» som
+          # certutil -encode lager, tas bort før den pakkes ut; base64url (- og _) godtas også
+          clean=$(printf '%s' "$KEYSTORE_B64" | sed '/-----/d' | tr -d ' \r\n\t' | tr '_-' '/+')
+          bad=$(printf '%s' "$clean" | tr -d 'A-Za-z0-9+/=' | wc -c)
+          if [ "$bad" -gt 0 ] || ! printf '%s' "$clean" | base64 -d > "$ks" 2>/dev/null || [ ! -s "$ks" ]; then
+            echo "ANDROID_KEYSTORE_B64 er ikke gyldig base64 (${#clean} tegn, $bad av dem hører ikke hjemme i base64)."
+            echo "Lag den med: base64 -w0 fyrlys.jks > fyrlys.jks.b64, og legg den inn med"
+            echo "gh secret set ANDROID_KEYSTORE_B64 -R ungerdas/fyrlys < fyrlys.jks.b64"
             exit 1
           fi
           echo "Nøkkelfila: $(stat -c %s "$ks") byte ($(file -b "$ks" | cut -c1-60))"
