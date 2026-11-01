@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -18,12 +19,24 @@ import 'core/single_instance.dart';
 import 'core/updater.dart';
 import 'l10n/tr.dart';
 import 'platform.dart';
+import 'theme.dart';
 import 'ui/playback.dart';
 import 'ui/window_memory.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _keepLog();
+  try {
+    await _start();
+  } on Object catch (e, stack) {
+    // Noe stoppet før appen kom opp (f.eks. avspilleren, som ikke kan lastes på denne maskinen): vis hva, i stedet
+    // for et tomt vindu.
+    AppLog.instance.add('Feil ved oppstart: $e\n${stack.toString().split('\n').take(8).join('\n')}');
+    runApp(_StartupError(error: '$e'));
+  }
+}
+
+Future<void> _start() async {
   // Språket fra Windows (eller telefonen) til Session har lest det du har valgt, så det oppdateringen sier før det, står på det.
   final systemLanguage = languageOfLocale(WidgetsBinding.instance.platformDispatcher.locale.languageCode);
   appLanguage = systemLanguage;
@@ -70,7 +83,8 @@ Future<void> main() async {
 void _keepLog() {
   final log = AppLog.instance;
   if (isAndroid) {
-    log.add(appBuildLabel);
+    // arkitekturen appen kjører som (android_arm64, android_arm, android_x64)
+    log.add('$appBuildLabel ${Abi.current()}');
     unawaited(AndroidHost.device().then((d) {
       androidDevice = d;
       if (d != null) log.add(d);
@@ -92,6 +106,40 @@ void _keepLog() {
     log.add('Feil: $error\n${stack.toString().split('\n').take(8).join('\n')}');
     return false;
   };
+}
+
+/// Fyrlys kom ikke i gang: hva som stoppet, og loggen (kan markeres og kopieres).
+class _StartupError extends StatelessWidget {
+  const _StartupError({required this.error});
+
+  final String error;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: fyrlysTheme(Brightness.dark),
+        home: Scaffold(
+          body: SafeArea(
+            child: Builder(
+              builder: (context) => ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  Text(tr('Fyrlys kunne ikke starte'), style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: 12),
+                  SelectableText(error),
+                  const SizedBox(height: 24),
+                  Text(tr('Send dette når du melder fra om feilen:'), style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    AppLog.instance.lines.join('\n'),
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 /// Vinduet fram, også når det var minimert.

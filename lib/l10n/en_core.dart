@@ -50,4 +50,8 @@ const enCore = <String, String>{
   'Denne lista har ikke TV-arkiv': "This list doesn't have a TV archive",
   'M3U-lister har ikke filmer i Fyrlys': "M3U lists don't have movies in Fyrlys",
   'M3U-lister har ikke serier i Fyrlys': "M3U lists don't have series in Fyrlys",
+
+  // main.dart
+  'Fyrlys kunne ikke starte': "Fyrlys couldn't start",
+  'Send dette når du melder fra om feilen:': 'Include this when you report the error:',
 };

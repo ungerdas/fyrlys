@@ -50,7 +50,7 @@ If you would rather not install, use [`Fyrlys-windows.zip`](https://github.com/u
 3. New versions: the app tells you, downloads when you tap *Download* and installs with *Install* (the first time you
    have to allow Fyrlys to install apps).
 
-Phones with 64-bit Android 7 or newer (arm64). Turn the phone sideways to watch full screen. When you cast, the phone
+Android 7 or newer, on phones (ARM) and in emulators such as BlueStacks (pick a 64-bit instance there). Turn the phone sideways to watch full screen. When you cast, the phone
 passes the stream on to the TV: a notification shows that Fyrlys is running, also with the screen off. Closing the app
 stops casting.
 

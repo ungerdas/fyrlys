@@ -27,7 +27,8 @@ class MainActivity : FlutterActivity() {
             try {
                 when (call.method) {
                     "device" -> result.success(
-                        "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}"
+                        "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} " +
+                            "${Build.MODEL} · ${Build.SUPPORTED_ABIS.joinToString(",")}"
                     )
                     "multicast" -> {
                         multicast(call.arguments == true)

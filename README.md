@@ -56,7 +56,7 @@ Vil du ikke installere, kan du bruke [`Fyrlys-windows.zip`](https://github.com/u
 3. Nye versjoner: appen sier fra, laster ned når du trykker *Last ned* og installerer med *Installer* (første gang må du
    tillate at Fyrlys installerer apper).
 
-Telefoner med 64-bit Android 7 eller nyere (arm64). Snu telefonen for å se på hele skjermen. Når du caster, sender
+Android 7 eller nyere, på telefoner (ARM) og i emulatorer som BlueStacks (velg en 64-bit-instans der). Snu telefonen for å se på hele skjermen. Når du caster, sender
 telefonen strømmen videre til TV-en: et varsel viser at Fyrlys er i gang, også med skjermen av. Lukker du appen, stopper
 castingen.
 

@@ -1,4 +1,4 @@
-# Analyse og tester ved hver endring, og bygg for Windows og Android (telefon, arm64), med versjon og byggnummer i appen.
+# Analyse og tester ved hver endring, og bygg for Windows og Android (arm64, arm og x86_64), med versjon og byggnummer i appen.
 # Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-oppsett.exe,
 # Fyrlys-windows.zip og Fyrlys-android.apk, faste navn; Windows-appen oppdaterer seg selv fra zip-fila, Android-appen
 # laster ned APK-en), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og byggnummeret står
@@ -213,8 +213,10 @@ jobs:
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
           echo "DEFINES=--build-number=${{ github.run_number }} --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
-      # bare arm64: det har alle telefoner fra de siste årene, og APK-en blir en tredjedel så stor
-      - run: flutter build apk --release --target-platform android-arm64 $DEFINES 2>&1 | tee build.log
+      # Alle tre (arm64, arm og x86_64) i én APK. Avspilleren (libmpv fra media_kit) følger med for alle tre uansett;
+      # med Flutter bare for arm64 valgte Android en av de andre i BlueStacks og på 32-bit-telefoner, og appen ble et
+      # hvitt vindu (2.1.26–2.1.28). x86_64 gjør at den kjører rett i emulatorer som BlueStacks (64-bit).
+      - run: flutter build apk --release $DEFINES 2>&1 | tee build.log
       - name: Signer med Fyrlys-nøkkelen
         id: sign
         env:

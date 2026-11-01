@@ -31,7 +31,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `android/app/src/main/AndroidManifest.xml` (tillatelser, `CastService`, `ApkProvider`, http), Kotlin-filene i
   `android/app/src/main/kotlin/no/fyrlys/fyrlys/` (`MainActivity` med kanalen `fyrlys/android`, `CastService`,
   `ApkProvider`) og ikonene i `res/`; resten (Gradle, styles) lages av malen. applicationId `no.fyrlys.fyrlys`, minSdk
-  24 (Flutter sin), bare arm64. APK-en signeres med apksigner etter bygget med hemmelighetene `ANDROID_KEYSTORE_B64`,
+  24 (Flutter sin), arm64 + arm + x86_64 i én APK (2.1.29: `flutter build apk` uten `--target-platform`; libmpv fra
+  media_kit_libs_android_video følger med for alle tre uansett, fordi Flutters `abiFilters` er alle tre, så med Flutter
+  bare for arm64 valgte Android en ABI uten libflutter i BlueStacks (N32 = x86/armeabi-v7a, 64-bit = x86_64) og på
+  32-bit-telefoner: hvitt vindu). APK-en signeres med apksigner etter bygget med hemmelighetene `ANDROID_KEYSTORE_B64`,
   `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (eieren lager nøkkelen og legger dem inn; de kan ikke settes eller
   leses herfra, proxyen stopper actions/secrets). Uten dem bygges APK-en, men legges ikke i releasen (en advarsel på
   kjøringen), fordi en APK med tilfeldig nøkkel ikke kan oppdateres. Mister han nøkkelen, må appen avinstalleres og
@@ -489,6 +492,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 1.11.2026: 2.1.27: NRK1–3 og NRK Super fra NRK sine egne strømmer (se Arkitektur). Leverandørens strøm er reserven
   (eieren 1.11: «IPTV skal være reserve. vil bruke strømmen fra NRK»). Kjente ikke igjen leverandørens navn med land
   bak («NRK 1 HD NO») og den delte «NRK 3/SUPER»; rettet i 2.1.28 sammen med sammenslåingen.
+- 1.11.2026: 2.1.29: eieren prøvde APK-en i BlueStacks («N32», Nougat 32-bit) og fikk et hvitt vindu: APK-en hadde
+  libflutter bare for arm64, men libmpv for armeabi-v7a/arm64/x86_64, så Android valgte armeabi-v7a uten Flutter. Nå er
+  alle tre med; `main` viser feilen (`_StartupError`) når noe stopper før `runApp`, loggen har `Abi.current()` og
+  `device` har `Build.SUPPORTED_ABIS`. «Får ikke hentet M3U-lista» på Android: venter på hvilken liste og en
+  feilrapport (appen logger ikke årsaken ennå; mulig forbedring: tidsavbrudd/sertifikat/ukjent vert i meldingen).
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

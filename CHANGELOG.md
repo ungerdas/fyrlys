@@ -1,5 +1,13 @@
 # Endringer
 
+## v2.1.29
+
+- **Android: virker i BlueStacks og på 32-bit-telefoner.** APK-en har nå Flutter for 64- og 32-bit ARM og for
+  x86_64. Før fulgte avspilleren med for alle tre, men resten av appen bare for 64-bit ARM, så Android valgte feil i
+  BlueStacks og på eldre telefoner, og appen ble et hvitt vindu. APK-en er derfor større.
+- Stopper noe før appen kommer opp, viser Fyrlys hva som gikk galt (og loggen), i stedet for et tomt vindu.
+- Feilrapporten fra Android viser hvilke arkitekturer telefonen har og hvilken Fyrlys kjører som.
+
 ## v2.1.28
 
 - **NRK1, NRK2, NRK3 og NRK Super er én kanal hver.** Leverandørens varianter (HD, FHD og «NRK 3/SUPER») slås
