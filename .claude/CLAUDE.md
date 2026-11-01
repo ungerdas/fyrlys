@@ -464,8 +464,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   gang) og lagt inn logging av hva TV-en og mellomstasjonen gjør. Leverandørens spilleliste har typen
   `application/x-mpegurl` («mime type is not rfc8216 compliant» fra mpv), som ble kjent igjen også før. Eieren
   rettet også at rapporten sa Windows 10 (han har Windows 11).
-- 1.11.2026: 2.1.26: Android-telefoner tilbake (se Arkitektur), med Chromecast. Venter på at eieren legger inn
-  signeringsnøkkelen (fram til da kommer ingen APK i releasen) og prøver appen på telefonen.
+- 1.11.2026: 2.1.26: Android-telefoner tilbake (se Arkitektur), med Chromecast. Eieren laget nøkkelen (PKCS12, alias
+  `fyrlys`) og la inn hemmelighetene; første forsøk var ikke gyldig base64 (innlimt feil), og signeringssteget sier nå
+  hva som er galt (base64, passord eller alias) og tåler linjeskift, certutil-linjer og base64url. Kjøringen ble startet
+  for hånd (`workflow_dispatch` på main lager også releasen). `Fyrlys-android.apk` (ca. 60 MB) ligger i v2.1.26.
+  Ikke prøvd på telefonen hans ennå.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
