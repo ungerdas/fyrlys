@@ -222,6 +222,8 @@ jobs:
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          # alt også i sign.log (uten hemmelighetene), så det kommer med i merknaden om noe feiler
+          exec > >(tee sign.log) 2>&1
           apk=build/app/outputs/flutter-apk/app-release.apk
           ls -l "$apk"
           if [ -z "$KEYSTORE_B64" ]; then
@@ -229,12 +231,31 @@ jobs:
             echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fyrlys.jks"
+          ks="$RUNNER_TEMP/fyrlys.jks"
+          # mellomrom og linjeskift (også \r når teksten er limt inn fra Windows) tas bort før den pakkes ut
+          if ! printf '%s' "$KEYSTORE_B64" | tr -d ' \r\n\t' | base64 -d > "$ks" || [ ! -s "$ks" ]; then
+            echo "ANDROID_KEYSTORE_B64 er ikke gyldig base64. Lag den med: base64 -w0 fyrlys.jks > fyrlys.jks.b64"
+            exit 1
+          fi
+          echo "Nøkkelfila: $(stat -c %s "$ks") byte ($(file -b "$ks" | cut -c1-60))"
+          if ! keytool -list -keystore "$ks" -storepass:env KS_PASS > "$RUNNER_TEMP/keytool.txt" 2>&1; then
+            echo "Nøkkelfila kunne ikke åpnes med ANDROID_KEYSTORE_PASSWORD (feil passord, eller ikke en nøkkelfil):"
+            grep -iv 'password' "$RUNNER_TEMP/keytool.txt" | head -5
+            exit 1
+          fi
+          alias="${KEY_ALIAS:-fyrlys}"
+          if ! keytool -list -keystore "$ks" -storepass:env KS_PASS -alias "$alias" > /dev/null 2>&1; then
+            echo "Fant ikke nøkkelen ANDROID_KEY_ALIAS i fila. Nøklene som finnes:"
+            grep -i 'PrivateKeyEntry' "$RUNNER_TEMP/keytool.txt" | cut -d, -f1 | sed 's/^/  /'
+            exit 1
+          fi
           bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$bt/apksigner" sign --ks "$RUNNER_TEMP/fyrlys.jks" --ks-pass env:KS_PASS --key-pass env:KS_PASS \
-            --ks-key-alias "${KEY_ALIAS:-fyrlys}" --out Fyrlys-android.apk "$apk" 2>&1 | tee sign.log
-          rm -f "$RUNNER_TEMP/fyrlys.jks"
-          "$bt/apksigner" verify --print-certs Fyrlys-android.apk 2>&1 | grep -i 'SHA-256' | tee -a sign.log
+          echo "apksigner fra $bt"
+          "$bt/apksigner" sign --ks "$ks" --ks-pass env:KS_PASS --key-pass env:KS_PASS \
+            --ks-key-alias "$alias" --out Fyrlys-android.apk "$apk"
+          rm -f "$ks" "$RUNNER_TEMP/keytool.txt"
+          "$bt/apksigner" verify --print-certs Fyrlys-android.apk | grep -i 'SHA-256'
+          ls -l Fyrlys-android.apk
           echo "signed=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
         if: steps.sign.outputs.signed == 'true'
