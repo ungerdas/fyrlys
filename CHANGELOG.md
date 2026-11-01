@@ -1,5 +1,12 @@
 # Endringer
 
+## v2.1.31
+
+- **Fjern striper på PC-en:** bildet ser ikke lenger ut til å gå fortere. Avspilleren laget ett bilde per halvbilde,
+  altså 50 bilder i sekundet fra vanlig interlacet TV. Nå fjernes stripene med ett bilde per bilde (25 i sekundet, som
+  sendingen) i TV-spilleren, multiview og TV-arkivet. Kanaler som ikke er interlacet, vises som før.
+- Infoen i spilleren viser «(fjerner striper)» mens det er på, og «(interlacet)» hvis stripene likevel er der.
+
 ## v2.1.30
 
 - **Chromecast og filmer i MKV:** Googles avspiller på TV-en avviste MKV-filer med en gang, uten å hente noe (filmen

@@ -270,6 +270,13 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   (et spor valgt for hånd står ellers i mpv til neste fil; samme adresse, f.eks. etter spoling, beholder det).
   `tracks()` leser `aid`/`sid` fra mpv (media_kit vet bare om spor valgt via `setAudioTrack`). Bildeundertekster
   (PGS/DVB) vises ikke: media_kit tegner tekstundertekster selv (`sub-visibility=no` uten libass).
+  «Fjern striper» (2.1.31): `setup(live:)` eller `setup(tv:)` (multiview) = TV-bilde (`_tv`), og da setter
+  `setPicture` `deinterlace=no` og `vf` = `MpvPlayback.tvDeinterlace` (`format=fmt=yuv420p` henter maskinvaredekodede
+  bilder fra skjermkortet, så `bwdif=mode=send_frame:deint=interlaced`: ett bilde per bilde, bare interlacede bilder);
+  mpv sin egen (`deinterlace=auto`, ett bilde per halvbilde, 50 fra 1080i50) brukes for filmer og som reserve når `vf`
+  ikke tar imot kjeden. Infoen: «(fjerner striper)», eller «(interlacet)» om bwdif ikke virker. CI-steget «Sjekk
+  avspilleren» spiller en liten interlacet y4m-fil med ekte libmpv og krever 20–30 bilder/s og ikke interlacet med
+  kjeden (leser strengen fra playback.dart); mpv sin egen og uten deinterlacing logges til sammenligning. Ikke på Android.
 - `core/updater.dart` – oppdatering fra siste release (bare bygg med byggnummer), rett fra
   `api.github.com/repos/<repo>/releases/latest` (`_latest`/`_release`; byggnummeret fra `<!-- bygg N -->`; 404 =
   privat repo, feil med forklaring). Blir repoet privat igjen, virker ikke oppdateringen
@@ -521,6 +528,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   skjules der, `setPicture` lar den være), og filmer logget «Failed to create file cache» (nå `cache-on-disk=no` for
   filer). Leverandørens strøm til telefonen brøt én gang («Software caused connection abort», så «Connection refused» i
   noen sekunder) da appen ble lagt bort; forventet uten forgrunnstjeneste.
+- 1.11.2026: 2.1.31: eieren: «Fjerne striper på windows appen fungerer heller ikke, video blir bare speedet opp». mpv
+  sin egen deinterlacing gir alltid ett bilde per halvbilde (`f_auto_filters.c`: bwdif `send_field`, d3d11vpp med
+  felter), altså 50 bilder/s fra 25i; tolket som at det så ut til å gå fortere. Nå ett bilde per bilde i TV (se
+  `ui/playback.dart`). Om bildet faktisk gikk fortere enn lyden, er ikke avklart (spurt).
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

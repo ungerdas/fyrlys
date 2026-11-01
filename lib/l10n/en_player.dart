@@ -92,6 +92,7 @@ const enPlayer = <String, String>{
   'Av': 'Off',
   '{fps} fps (deinterlacet)': '{fps} fps (deinterlaced)',
   '{fps} fps (interlacet)': '{fps} fps (interlaced)',
+  '{fps} fps (fjerner striper)': '{fps} fps (deinterlacing)',
   'programvaredekoding': 'software decoding',
   'maskinvaredekoding ({hwdec})': 'hardware decoding ({hwdec})',
   'jevn bevegelse': 'smooth motion',

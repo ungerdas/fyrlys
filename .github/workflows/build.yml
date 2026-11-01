@@ -163,6 +163,63 @@ jobs:
               say(f"vf add {f}: {r} (et filter som ikke finnes: {control})")
               if f == "bwdif" and control != 0 and r != 0:
                   ok = False
+          # «Fjern striper» i TV: kjeden appen bruker (tvDeinterlace i lib/ui/playback.dart, ett bilde ut per bilde inn)
+          # mot mpv sin egen (ett bilde per halvbilde), med en liten interlacet fil: 25 bilder/s, øverste halvbilde
+          # først, en stripe som flytter seg og står forskjøvet i det andre halvbildet.
+          import re, time
+          chain = re.search(r"tvDeinterlace = '([^']+)'", open("lib/ui/playback.dart", encoding="utf-8").read()).group(1)
+          w, h, n = 160, 120, 100
+          with open("interlacet.y4m", "wb") as f:
+              f.write(f"YUV4MPEG2 W{w} H{h} F25:1 It A1:1 C420jpeg\n".encode())
+              for i in range(n):
+                  f.write(b"FRAME\n")
+                  y = bytearray(b"\x10" * (w * h))
+                  for row in range(h):
+                      x0 = (i * 6 + (row % 2) * 3) % (w - 12)
+                      y[row * w + x0: row * w + x0 + 12] = b"\xeb" * 12
+                  f.write(bytes(y))
+                  f.write(b"\x80" * (w * h // 2))
+          mpv.mpv_wait_event.restype = ctypes.c_void_p
+          mpv.mpv_wait_event.argtypes = [ctypes.c_void_p, ctypes.c_double]
+          mpv.mpv_terminate_destroy.argtypes = [ctypes.c_void_p]
+          def play(vf, deinterlace):
+              m = mpv.mpv_create()
+              for k, v in (("vo", "null"), ("ao", "null"), ("loop-file", "inf"), ("vf", vf), ("deinterlace", deinterlace)):
+                  r = mpv.mpv_set_option_string(m, k.encode(), v.encode())
+                  if r != 0:
+                      say(f"  {k}={v}: {r}")
+              assert mpv.mpv_initialize(m) == 0
+              mpv.mpv_command(m, (ctypes.c_char_p * 3)(b"loadfile", b"interlacet.y4m", None))
+              end = time.time() + 2.5
+              while time.time() < end:
+                  mpv.mpv_wait_event(m, 0.1)
+              def get(name):
+                  p = mpv.mpv_get_property_string(m, name.encode())
+                  if not p:
+                      return None
+                  v = ctypes.string_at(p).decode()
+                  mpv.mpv_free(p)
+                  return v
+              res = {k: get(k) for k in ("estimated-vf-fps", "video-frame-info/interlaced", "deinterlace-active", "vf")}
+              mpv.mpv_terminate_destroy(m)
+              return res
+          def fps(r):
+              try:
+                  return float(r["estimated-vf-fps"])
+              except (TypeError, ValueError):
+                  return 0.0
+          none = play("", "no")
+          own = play("", "auto")
+          ours = play(chain, "no")
+          say("uten deinterlacing:", none)
+          say("mpv sin egen (deinterlace=auto):", own)
+          say("Fyrlys (tvDeinterlace):", ours)
+          if none["video-frame-info/interlaced"] == "yes":
+              if not (20 < fps(ours) < 30 and ours["video-frame-info/interlaced"] == "no"):
+                  say("FEIL: tvDeinterlace ga ikke 25 bilder/s uten striper")
+                  ok = False
+          else:
+              say("ADVARSEL: fila ble ikke sett som interlacet, så tvDeinterlace er ikke prøvd")
           sys.exit(0 if ok else 1)
       - uses: actions/upload-artifact@v7
         with:

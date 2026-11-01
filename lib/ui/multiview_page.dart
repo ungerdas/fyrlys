@@ -195,8 +195,8 @@ class _MultiviewState extends State<_Multiview> {
       ..add(pb.completedStream.listen((done) {
         if (done && slot.started) _ended(slot);
       }));
-    // uten det store bufferet for pause og spoling: det er fire av dem
-    await pb.setup();
+    // uten det store bufferet for pause og spoling: det er fire av dem (TV-bilde: striper fjernes som i spilleren)
+    await pb.setup(tv: true);
     await pb.setLanguages(_session.languages);
     await pb.setPicture(_session.picture);
     await pb.setVolume(0);

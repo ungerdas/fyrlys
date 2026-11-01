@@ -286,12 +286,18 @@ class FakePlayback implements Playback {
   /// [setup] for TV (bufferet for pause og spoling)
   bool live = false;
 
+  /// [setup] for TV-bilde uten bufferet (multiview)
+  bool tv = false;
+
   /// det avspilleren «har tatt vare på» i en direktesending, og hoppene i det
   LiveCache? cache;
   final relativeSeeks = <Duration>[];
 
   @override
-  Future<void> setup({bool live = false}) async => this.live = live;
+  Future<void> setup({bool live = false, bool tv = false}) async {
+    this.live = live;
+    this.tv = tv;
+  }
 
   @override
   Future<LiveCache?> liveCache() async => cache;

@@ -50,8 +50,9 @@ abstract class Playback {
   Future<void> seek(Duration position);
 
   /// Innstillinger før første fil eller kanal åpnes. [live]: TV, der avspilleren tar vare på det siste (på
-  /// disken når det går), så du kan pause og spole tilbake i direktesendingen.
-  Future<void> setup({bool live = false});
+  /// disken når det går), så du kan pause og spole tilbake i direktesendingen. [tv]: TV-bilde uten det bufferet
+  /// (multiview); både [live] og [tv] gjør at striper fjernes med ett bilde per bilde (se [MpvPlayback.tvDeinterlace]).
+  Future<void> setup({bool live = false, bool tv = false});
 
   /// hvor mye av direktesendingen avspilleren har tatt vare på, rundt der du er (null: vet ikke)
   Future<LiveCache?> liveCache();
@@ -169,8 +170,21 @@ class MpvPlayback implements Playback {
   /// mappen avspilleren kan legge bufferet for direktesendinger i (settes i main.dart; null: i minnet)
   static String? cacheDir;
 
+  /// «Fjern striper» i TV og opptak fra TV-arkivet: bwdif med ett bilde ut per bilde inn (25 fra 1080i50), bare for
+  /// bilder som er merket interlacet (de andre går rett gjennom). mpv sin egen deinterlacing gir ett bilde per
+  /// halvbilde (50 fra 1080i50), og da så det ut som om bildet gikk fortere (eieren 1.11). bwdif tar bare bilder i
+  /// minnet, så format henter dem fra skjermkortet først når de er maskinvaredekodet.
+  static const tvDeinterlace = 'format=fmt=yuv420p,bwdif=mode=send_frame:parity=auto:deint=interlaced';
+
+  /// TV-bilde ([setup] med live eller tv): striper fjernes med [tvDeinterlace]
+  bool _tv = false;
+
+  /// [tvDeinterlace] står i vf nå
+  bool _deintChain = false;
+
   @override
-  Future<void> setup({bool live = false}) async {
+  Future<void> setup({bool live = false, bool tv = false}) async {
+    _tv = live || tv;
     final p = _player.platform;
     if (p is! NativePlayer) return;
     // Direktesending over nett: koble til igjen ved korte brudd, og ikke vent evig på en strøm som er død.
@@ -245,6 +259,20 @@ class MpvPlayback implements Playback {
     } on Object {
       // eldre mpv uten innstillingen: spiller likevel
     }
+  }
+
+  /// mpv sin egen deinterlacing (filer, og reserven i TV): auto er bare bilder som er merket interlacet (bwdif i
+  /// programvare, d3d11vpp med maskinvaredekoding, ett bilde per halvbilde). Fyrlys bygges med en full libmpv som kan
+  /// det (se workflowen); en eldre mpv kjenner ikke auto, og får yes.
+  static Future<void> _autoDeinterlace(NativePlayer p) async {
+    await _try(() => p.setProperty('deinterlace', 'auto'));
+    var now = '';
+    try {
+      now = (await p.getProperty('deinterlace')).trim();
+    } on Object {
+      // som under
+    }
+    if (now != 'auto') await _try(() => p.setProperty('deinterlace', 'yes'));
   }
 
   @override
@@ -334,19 +362,33 @@ class MpvPlayback implements Playback {
     if (isAndroid) {
       // telefonen: mpv-en der kjenner ikke deinterlace=auto og har ingen deinterlacer (yadif finnes ikke, og bildet
       // går rett fra maskinvaren til skjermen), så den får være (valget vises ikke på telefonen)
-    } else if (prefs.deinterlace) {
-      // auto: bare bilder som er merket interlacet (bwdif i programvare, d3d11vpp med maskinvaredekoding). Fyrlys
-      // bygges med en full libmpv som kan det (se workflowen); en eldre mpv kjenner ikke auto, og får yes.
-      await _try(() => p.setProperty('deinterlace', 'auto'));
-      var now = '';
-      try {
-        now = (await p.getProperty('deinterlace')).trim();
-      } on Object {
-        // som under
-      }
-      if (now != 'auto') await _try(() => p.setProperty('deinterlace', 'yes'));
-    } else {
+    } else if (prefs.deinterlace && _tv) {
+      // TV: ett bilde per bilde (tvDeinterlace), ikke mpv sin egen
       await _try(() => p.setProperty('deinterlace', 'no'));
+      if (!_deintChain) {
+        await _try(() => p.setProperty('vf', tvDeinterlace));
+        var now = '';
+        try {
+          now = await p.getProperty('vf');
+        } on Object {
+          // som under
+        }
+        _deintChain = now.contains('bwdif');
+        if (!_deintChain) {
+          debugPrint('mpv: bwdif kunne ikke settes opp (vf: $now); bruker mpv sin egen deinterlacing');
+          await _autoDeinterlace(p);
+        }
+      }
+    } else {
+      if (_deintChain) {
+        await _try(() => p.setProperty('vf', ''));
+        _deintChain = false;
+      }
+      if (prefs.deinterlace) {
+        await _autoDeinterlace(p);
+      } else {
+        await _try(() => p.setProperty('deinterlace', 'no'));
+      }
     }
     if (prefs.smooth) {
       // mpv tegner i Flutter og ser ikke skjermen selv, så den får vite frekvensen
@@ -399,12 +441,15 @@ class MpvPlayback implements Playback {
     final sync = _picture.smooth ? await prop('display-sync-active') : '';
     return [
       if (video.isNotEmpty) codecName(video),
+      // med tvDeinterlace er bildet som vises, ikke interlacet (sier den interlacet, virker ikke bwdif)
       if (fps != null && fps > 0)
         deint
             ? tr('{fps} fps (deinterlacet)', {'fps': fps.round()})
             : interlaced
                 ? tr('{fps} fps (interlacet)', {'fps': fps.round()})
-                : '${fps.round()} fps',
+                : _deintChain
+                    ? tr('{fps} fps (fjerner striper)', {'fps': fps.round()})
+                    : '${fps.round()} fps',
       if (video.isNotEmpty && hwdec.isNotEmpty)
         hwdec == 'no' ? tr('programvaredekoding') : tr('maskinvaredekoding ({hwdec})', {'hwdec': hwdec}),
       if (bitrate != null && bitrate > 0) bitrateText(bitrate),
