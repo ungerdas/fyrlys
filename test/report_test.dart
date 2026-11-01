@@ -60,7 +60,8 @@ void main() {
     expect(text, isNot(contains('Kari')));
     expect(text, isNot(contains('hemmelig')));
     expect(text, isNot(contains('iptv.example')));
-    expect(text, contains('\r\n'));
+    // \n på skjermen og ved kopiering; fila får \r\n når den lagres
+    expect(text, isNot(contains('\r')));
   });
 
   test('Windows 11 heter Windows 11 (Windows sier selv «Windows 10» med bygg 22000 og høyere)', () {
@@ -77,9 +78,9 @@ void main() {
     final before = reportDirectory;
     reportDirectory = () async => dir;
     addTearDown(() => reportDirectory = before);
-    final file = await saveReport('innhold', now: DateTime(2026, 10, 26, 21, 4));
+    final file = await saveReport('innhold\nlinje 2', now: DateTime(2026, 10, 26, 21, 4));
     expect(file.path, endsWith('Fyrlys-feilrapport-2026-10-26-2104.txt'));
-    expect(file.readAsStringSync(), 'innhold');
+    expect(file.readAsStringSync(), 'innhold\r\nlinje 2');
   });
 
   testWidgets('innstillingene: «Meld fra om en feil» åpner GitHub', (tester) async {
@@ -100,9 +101,50 @@ void main() {
     await tester.scrollUntilVisible(find.text('Meld fra om en feil'), 200, scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     expect(find.text('HJELP'), findsOneWidget);
-    expect(find.text('Lagre feilrapport'), findsOneWidget);
+    expect(find.text('Feilrapport'), findsOneWidget);
     await tester.tap(find.text('Meld fra om en feil'));
     await tester.pump();
     expect(opened, ['https://github.com/ungerdas/fyrlys/issues/new/choose']);
+  });
+
+  testWidgets('feilrapporten vises hel i appen, og «Kopier» tar med alt', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final copied = <String>[];
+    final before = copyText;
+    copyText = (text) async => copied.add(text);
+    addTearDown(() => copyText = before);
+    AppLog.instance
+      ..clear()
+      ..add('Chromecast: spiller av (BUFFERED, MKV som video/mp4)');
+    addTearDown(AppLog.instance.clear);
+    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
+    final session = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource());
+    await session.restore();
+    await tester.pumpWidget(FyrlysApp(session: session));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Innstillinger'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Feilrapport'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Feilrapport'));
+    await tester.pumpAndSettle();
+
+    final shown = tester.widget<SelectableText>(find.byKey(const ValueKey('report-text'))).data!;
+    expect(shown, startsWith('Fyrlys – feilrapport\n'));
+    expect(shown, contains('## Logg'));
+    expect(shown, contains('Chromecast: spiller av (BUFFERED, MKV som video/mp4)'));
+    // PC-en: lagre som fil (telefonen: del)
+    expect(find.byKey(const ValueKey('report-save')), findsOneWidget);
+    expect(find.byKey(const ValueKey('report-share')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('report-copy')));
+    await tester.pumpAndSettle();
+    expect(copied, [shown]);
+    expect(find.text('Feilrapporten er kopiert. Lim den inn der du melder fra om feilen.'), findsOneWidget);
+    // beskjeden forsvinner av seg selv
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
   });
 }

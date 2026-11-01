@@ -64,8 +64,8 @@ class Poster extends StatelessWidget {
   }
 }
 
-/// Filmen som noe å spille, med plass i «Fortsett å se».
-VodPlayItem? movieItem(Session s, VodItem item) {
+/// Filmen som noe å spille, med plass i «Fortsett å se». [tech]: bildet og lyden, når filmens info er hentet.
+VodPlayItem? movieItem(Session s, VodItem item, {MediaTech tech = const MediaTech()}) {
   final src = s.source;
   if (src == null) return null;
   final clean = cleanTitle(item.name);
@@ -75,6 +75,7 @@ VodPlayItem? movieItem(Session s, VodItem item) {
     title: clean.title,
     subtitle: sub,
     url: src.movieUrl(item),
+    tech: tech,
     continueAs: ContinueItem(
       key: 'film:${item.id}',
       kind: VodKind.movies,
@@ -101,6 +102,7 @@ List<VodPlayItem> seasonItems(Session s, SeriesInfo info, Season season, VodItem
           title: name,
           subtitle: sub,
           url: src.episodeUrl(e),
+          tech: e.tech,
           continueAs: ContinueItem(
             key: 'serie:${series.id}',
             kind: VodKind.series,
@@ -166,6 +168,9 @@ class _VodDetailPageState extends State<VodDetailPage> {
   Future<MovieInfo>? _movie;
   Future<SeriesInfo>? _series;
 
+  /// bildet og lyden i filmen, når infoen er hentet (til Chromecasten)
+  MediaTech _tech = const MediaTech();
+
   /// «Mer fra samme kategori» (filmer), og navnet på kategorien
   Future<({String name, List<VodItem> items})>? _similar;
 
@@ -186,7 +191,11 @@ class _VodDetailPageState extends State<VodDetailPage> {
     if (src == null) return;
     setState(() {
       if (widget.kind == VodKind.movies) {
-        _movie = src.movieInfo(item.id);
+        final movie = src.movieInfo(item.id);
+        _movie = movie;
+        unawaited(movie.then<void>((m) {
+          _tech = m.tech;
+        }, onError: (Object _) {}));
         _similar ??= _loadSimilar();
       } else {
         _series = src.seriesInfo(item.id);
@@ -220,7 +229,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
   }
 
   void _playMovie({required bool resume}) {
-    final item = movieItem(s, widget.item);
+    final item = movieItem(s, widget.item, tech: _tech);
     if (item == null) return;
     unawaited(_play([item], 0, resume: resume));
   }

@@ -1480,10 +1480,12 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
             _ctl(Icons.keyboard_arrow_up, tr('Forrige kanal (↑)'), () => _zap(-1)),
             _ctl(Icons.keyboard_arrow_down, tr('Neste kanal (↓)'), () => _zap(1)),
           ],
+          // beskjeden og «Prøv igjen» i panelet (ikke et kort oppå det)
+          message: status,
+          onRetry: _retry,
           onStop: () => unawaited(appCaster.stop()),
         ),
         _closeButton(),
-        if (status != null) _card(text: status, action: tr('Prøv igjen'), onPressed: _retry),
       ],
     );
   }

@@ -50,6 +50,13 @@ class _FakeChromecast {
   /// LOAD svarer LOAD_FAILED
   bool failLoad = false;
 
+  /// innholdstyper Googles avspiller avviser med en gang, uten å hente noe (IDLE, LOAD_FAILED og IDLE med ERROR,
+  /// slik en ekte gjorde med video/x-matroska)
+  Set<String> reject = {};
+
+  /// innholdstypene i hver LOAD
+  final types = <String>[];
+
   /// etter LOAD: IDLE med ERROR og så ERROR med denne koden (den rekkefølgen kan en ekte sende dem i)
   int? errorCode;
 
@@ -91,8 +98,36 @@ class _FakeChromecast {
         send(nsReceiver, {'type': 'RECEIVER_STATUS', 'requestId': id, 'status': _status()});
       case 'LOAD':
         final media = m.json['media']! as Map;
+        final type = media['contentType']! as String;
+        types.add(type);
+        if (reject.contains(type)) {
+          send(
+            nsMedia,
+            {
+              'type': 'MEDIA_STATUS',
+              'requestId': id,
+              'status': [
+                {'mediaSessionId': 2, 'playerState': 'IDLE', 'currentTime': 0},
+              ],
+            },
+            from: 'web-5',
+          );
+          send(nsMedia, {'type': 'LOAD_FAILED', 'requestId': 0, 'itemId': 1}, from: 'web-5');
+          send(
+            nsMedia,
+            {
+              'type': 'MEDIA_STATUS',
+              'requestId': 0,
+              'status': [
+                {'mediaSessionId': 2, 'playerState': 'IDLE', 'idleReason': 'ERROR', 'currentTime': 0},
+              ],
+            },
+            from: 'web-5',
+          );
+          return;
+        }
         final res = await (await _http.getUrl(Uri.parse(media['contentId']! as String))).close();
-        fetched = await res.transform(utf8.decoder).join();
+        fetched = utf8.decode(await res.fold<List<int>>(<int>[], (all, b) => all..addAll(b)), allowMalformed: true);
         if (failLoad) {
           send(nsMedia, {'type': 'LOAD_FAILED', 'requestId': id}, from: 'web-5');
           return;
@@ -174,6 +209,10 @@ Future<HttpServer> _provider(Map<String, String?> seen) async {
       case '/stream/seg3.ts':
         res.headers.contentType = ContentType('application', 'octet-stream');
         res.add(List.filled(500, 0x47));
+      // en film i MKV
+      case '/movie/u/p/7.mkv':
+        res.headers.contentType = ContentType('video', 'x-matroska');
+        res.write('MKV-FILM');
       default:
         res.statusCode = HttpStatus.notFound;
     }
@@ -264,9 +303,16 @@ void main() {
     expect(live.url, 'http://x/1.m3u8');
     expect(live.isHls, isTrue);
     expect(live.contentType, 'application/x-mpegurl');
+    expect(live.format, 'HLS');
     expect(const CastItem(urls: ['http://x/1.ts'], title: '').contentType, 'video/mp2t');
-    expect(const CastItem(urls: ['http://x/film.mkv'], title: '').contentType, 'video/x-matroska');
+    expect(const CastItem(urls: ['http://x/1.ts'], title: '').format, 'MPEG-TS');
+    // MKV som MP4 først (Googles avspiller avviste video/x-matroska uten å hente noe), så WebM og MKV
+    const mkv = CastItem(urls: ['http://x/film.mkv'], title: '');
+    expect(mkv.contentType, 'video/mp4');
+    expect(mkv.contentTypes, ['video/mp4', 'video/webm', 'video/x-matroska']);
+    expect(mkv.format, 'MKV');
     expect(const CastItem(urls: ['http://x/film.mp4'], title: '').contentType, 'video/mp4');
+    expect(const CastItem(urls: ['http://x/film.mp4'], title: '').contentTypes, hasLength(1));
   });
 
   test('mellomstasjonen: spillelister skrives om, segmenter sendes videre med CORS, ukjente adresser avvises',
@@ -486,6 +532,59 @@ void main() {
       await caster.load(channel());
       await _until(() => caster.state == CastState.failed && (caster.error ?? '').contains('104'));
       expect(caster.error, 'Chromecasten støtter ikke formatet denne kanalen sendes i (kode 104).');
+    });
+
+    CastItem movie() => CastItem(
+          urls: ['http://127.0.0.1:${provider.port}/movie/u/p/7.mkv'],
+          title: 'Fyrlyset',
+          headers: const {'User-Agent': 'VLC/3.0.21'},
+          start: const Duration(seconds: 10),
+          details: '1080p · H.264 · Dolby Digital 5.1',
+          risky: const ['Dolby Digital'],
+        );
+
+    test('avvist uten at noe ble hentet: prøves igjen med neste innholdstype, og spiller', () async {
+      tv.reject = {'video/mp4'};
+      await caster.connect(device);
+      await caster.load(movie());
+      await _until(() => caster.state == CastState.playing);
+      expect(tv.types, ['video/mp4', 'video/webm']);
+      expect(tv.fetched, 'MKV-FILM');
+      final loads = tv.received.where((m) => m.type == 'LOAD').toList();
+      expect(loads, hasLength(2));
+      expect(loads.last.json['currentTime'], 10);
+      expect((loads.last.json['media']! as Map)['streamType'], 'BUFFERED');
+      expect(caster.error, isNull);
+    });
+
+    test('avvist med alle innholdstypene: feilen sier at ingenting ble hentet, og neste forsøk begynner forfra',
+        () async {
+      tv.reject = {'video/mp4', 'video/webm', 'video/x-matroska'};
+      await caster.connect(device);
+      await caster.load(movie());
+      await _until(() => caster.state == CastState.failed);
+      expect(tv.types, ['video/mp4', 'video/webm', 'video/x-matroska']);
+      expect(tv.fetched, isNull);
+      expect(caster.error, 'Chromecasten avviste filen (MKV) uten å hente noe fra PC-en.');
+
+      tv.reject = {};
+      await caster.load(movie());
+      await _until(() => caster.state == CastState.playing);
+      expect(tv.types.last, 'video/mp4');
+      expect(tv.fetched, 'MKV-FILM');
+    });
+
+    test('en fil Chromecasten hentet, men ikke kunne spille: forklaring med det filen har', () async {
+      tv.failLoad = true;
+      await caster.connect(device);
+      await caster.load(movie());
+      await _until(() => caster.state == CastState.failed);
+      expect(tv.types, ['video/mp4']);
+      expect(
+        caster.error,
+        'Chromecasten kunne ikke spille filen (MKV). Den spiller H.264-bilde med AAC- eller MP3-lyd. '
+        'Filen har Dolby Digital, som mange Chromecaster ikke spiller.',
+      );
     });
 
     test('får ikke kontakt: feil med navnet', () async {

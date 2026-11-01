@@ -14,6 +14,7 @@ import '../platform.dart';
 import 'language_dialog.dart';
 import 'login_page.dart';
 import 'motion.dart';
+import 'report_page.dart';
 
 /// «Logg ut av …?» (true: ja)
 Future<bool> confirmLogout(BuildContext context, SavedLogin login) async {
@@ -305,13 +306,15 @@ class _SettingsPageState extends State<SettingsPage> {
         trailing: const Icon(Icons.chevron_right),
         onTap: () => unawaited(showLanguageDialog(context, s)),
       ),
-      SwitchListTile(
-        secondary: const Icon(Icons.deblur_outlined),
-        title: Text(tr('Fjern striper (deinterlacing)')),
-        subtitle: Text(tr('For TV-kanaler som sendes interlacet (1080i). Bør stå på.')),
-        value: picture.deinterlace,
-        onChanged: (v) => s.savePicture(picture.copyWith(deinterlace: v)),
-      ),
+      // telefonen: avspilleren der har ingen deinterlacer
+      if (!isAndroid)
+        SwitchListTile(
+          secondary: const Icon(Icons.deblur_outlined),
+          title: Text(tr('Fjern striper (deinterlacing)')),
+          subtitle: Text(tr('For TV-kanaler som sendes interlacet (1080i). Bør stå på.')),
+          value: picture.deinterlace,
+          onChanged: (v) => s.savePicture(picture.copyWith(deinterlace: v)),
+        ),
       SwitchListTile(
         secondary: const Icon(Icons.motion_photos_on_outlined),
         title: Text(tr('Jevn bevegelse (prøve)')),
@@ -339,38 +342,16 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // ── hjelp ──
 
-  bool _reporting = false;
-
-  Future<void> _saveReport() async {
-    setState(() => _reporting = true);
-    try {
-      final report = await buildReport(s, updater: widget.updater);
-      if (isAndroid) {
-        // telefonen: del den (e-post, meldinger …) i stedet for å lagre en fil du ikke finner igjen
-        await shareReport(report);
-        return;
-      }
-      final file = await saveReport(report);
-      if (!mounted) return;
-      _snack(tr('Feilrapporten er lagret: {name}', {'name': file.uri.pathSegments.last}));
-      unawaited(showInExplorer(file.path));
-    } on Object catch (e) {
-      if (mounted) _snack(tr('Fikk ikke lagret feilrapporten ({error}).', {'error': e}));
-    } finally {
-      if (mounted) setState(() => _reporting = false);
-    }
-  }
-
   List<Widget> _help() => [
         ListTile(
           leading: const Icon(Icons.bug_report_outlined),
-          title: Text(isAndroid ? tr('Del feilrapport') : tr('Lagre feilrapport')),
+          title: Text(tr('Feilrapport')),
           subtitle: Text(tr('Versjonen, innstillingene og loggen, uten passord og leverandør. Legg den ved når du '
               'melder fra om en feil.')),
-          trailing: _reporting
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : null,
-          onTap: _reporting ? null : () => unawaited(_saveReport()),
+          trailing: const Icon(Icons.chevron_right),
+          // rapporten vises først (hele teksten), med Kopier og Del (telefonen) eller Lagre (PC-en)
+          onTap: () => unawaited(Navigator.of(context)
+              .push(fadeRoute<void>((_) => ReportPage(session: s, updater: widget.updater)))),
         ),
         ListTile(
           leading: const Icon(Icons.open_in_new),

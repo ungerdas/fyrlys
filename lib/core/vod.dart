@@ -162,6 +162,41 @@ class MediaTech {
           'Stereo',
         if (audioCodec.isNotEmpty && audioCodec.toLowerCase() != 'aac') codecLabel(audioCodec),
       ];
+
+  /// «1080p · H.264 · Dolby Digital 5.1» (til loggen; tom når leverandøren ikke sier noe)
+  String get summary {
+    final audio = [
+      if (audioCodec.isNotEmpty) codecLabel(audioCodec),
+      if (channels >= 8)
+        '7.1'
+      else if (channels >= 6)
+        '5.1'
+      else if (channels == 2)
+        'stereo'
+      else if (channels == 1)
+        'mono',
+    ].join(' ');
+    return [
+      if (height > 0) '${height}p',
+      if (hdr) 'HDR',
+      if (videoCodec.isNotEmpty) codecLabel(videoCodec),
+      if (audio.isNotEmpty) audio,
+    ].join(' · ');
+  }
+
+  /// Det i filen mange Chromecaster ikke spiller: bilde i H.265/HEVC (bare Chromecast Ultra og de med Google TV), AV1,
+  /// VP9, MPEG-2, MPEG-4 Part 2 og VC-1, og lyd i Dolby Digital (+), TrueHD, DTS og MP2 (sendes bare videre til en TV
+  /// eller forsterker som kan det).
+  List<String> get castRisks {
+    const video = {'hevc', 'h265', 'av1', 'vp9', 'mpeg2video', 'mpeg4', 'msmpeg4v3', 'vc1', 'wmv3'};
+    const audio = {'ac3', 'eac3', 'dts', 'truehd', 'mp2'};
+    final v = videoCodec.trim().toLowerCase();
+    final a = audioCodec.trim().toLowerCase();
+    return [
+      if (video.contains(v)) codecLabel(v),
+      if (audio.contains(a)) codecLabel(a),
+    ];
+  }
 }
 
 /// Kodeknavn slik folk kjenner dem.
@@ -272,6 +307,7 @@ class Episode {
     this.plot = '',
     this.duration = '',
     this.seconds = 0,
+    this.tech = const MediaTech(),
   });
 
   final String id;
@@ -282,6 +318,9 @@ class Episode {
   final String plot;
   final String duration;
   final int seconds;
+
+  /// bildet og lyden, når leverandøren oppgir det
+  final MediaTech tech;
 }
 
 class Season {

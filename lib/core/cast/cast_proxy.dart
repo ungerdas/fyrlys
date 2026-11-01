@@ -114,12 +114,34 @@ class _Entry {
   /// siste del av adressen Chromecasten får («strom.m3u8»)
   final String name;
 
+  /// det Chromecasten fikk i LOAD (ikke et segment eller en variant fra en spilleliste)
+  bool main = false;
+
   /// en spilleliste: skrives om hver gang, uansett hva leverandøren kaller den
   bool playlist = false;
 
   /// det som er logget om spillelista (logges igjen bare når det endrer seg vesentlig)
   bool described = false;
   bool ended = false;
+
+  /// forespørsler etter en fil (film, episode) som er logget
+  int logged = 0;
+}
+
+/// «1,9 GB», «640 kB»
+String _size(int bytes) => bytes >= 1e9
+    ? '${(bytes / 1e9).toStringAsFixed(1)} GB'
+    : bytes >= 1e6
+        ? '${(bytes / 1e6).toStringAsFixed(1)} MB'
+        : '${(bytes / 1e3).round()} kB';
+
+/// «bytes=1048576-» → «fra 1,0 MB»; ingen Range → «hele»
+String _rangeText(String? range) {
+  final m = RegExp(r'bytes=(\d+)-(\d*)').firstMatch(range ?? '');
+  if (m == null) return range == null ? 'hele' : 'Range ${range.length > 40 ? range.substring(0, 40) : range}';
+  final from = int.parse(m[1]!);
+  final to = int.tryParse(m[2]!);
+  return to == null ? 'fra ${_size(from)}' : '${_size(from)}–${_size(to)}';
 }
 
 /// Mellomstasjonen på PC-en som Chromecasten henter strømmen fra.
@@ -188,13 +210,16 @@ class CastProxy {
     _statsTimer = Timer.periodic(statsEvery, (_) => _report());
   }
 
-  /// Adressen Chromecasten skal hente [url] fra.
-  String add(String url, Map<String, String> headers) {
+  /// Adressen Chromecasten skal hente [url] fra. [main]: det Chromecasten får i LOAD (en fil logges da litt mer om).
+  String add(String url, Map<String, String> headers, {bool main = false}) {
     final known = _ids[url];
     final existing = known == null ? null : _entries[known];
-    if (existing != null) return _local(existing);
+    if (existing != null) {
+      if (main) existing.main = true;
+      return _local(existing);
+    }
     final id = (_next++).toRadixString(36);
-    final entry = _Entry(id, url, headers, _nameFor(url));
+    final entry = _Entry(id, url, headers, _nameFor(url))..main = main;
     _entries[id] = entry;
     _ids[url] = id;
     while (_entries.length > maxEntries) {
@@ -214,7 +239,7 @@ class CastProxy {
     return 'strom$safe';
   }
 
-  String _local(_Entry e) => 'http://$_host:$port/$_token/${e.id}/${e.name}';
+  String _local(_Entry e) => 'http://${_host.contains(':') ? '[$_host]' : _host}:$port/$_token/${e.id}/${e.name}';
 
   /// Logger [text], men samme slags beskjed ([key]) høyst hvert 10. sekund (med hvor mange som ble holdt tilbake).
   void _note(String key, String text) {
@@ -387,23 +412,56 @@ class CastProxy {
         final value = upRes.headers.value(name);
         if (value != null) res.headers.set(name, value);
       }
+      // en fil (film, episode): hvor i fila Chromecasten ber om, og hva leverandøren svarte (de første gangene)
+      if (entry.main && entry.logged < 12) {
+        entry.logged++;
+        final length = upRes.headers.contentLength;
+        debugPrint('Chromecast-mellomstasjonen: fil ${entry.id}: ${req.method} ${_rangeText(range)} → '
+            '${upRes.statusCode} (${type.isEmpty ? 'uten type' : type}${length >= 0 ? ', ${_size(length)}' : ''})');
+      }
       if (req.method == 'HEAD') {
         await res.close();
         return;
       }
+      var sent = 0;
+      Object? upstreamError;
       Stream<List<int>> rest() async* {
         if (head.isNotEmpty) {
           _bytes += head.length;
+          sent += head.length;
           yield head;
         }
-        while (await input.moveNext()) {
-          _bytes += input.current.length;
-          yield input.current;
+        try {
+          while (await input.moveNext()) {
+            _bytes += input.current.length;
+            sent += input.current.length;
+            yield input.current;
+          }
+        } on Object catch (e) {
+          upstreamError = e;
+          rethrow;
         }
       }
 
-      await res.addStream(rest());
-      await res.close();
+      try {
+        await res.addStream(rest());
+        await res.close();
+      } on Object {
+        final broken = upstreamError;
+        if (broken != null) {
+          _errors++;
+          _note('brudd', 'leverandøren brøt forbindelsen etter ${_size(sent)}: ${_safeError(broken)}');
+        } else if (entry.main) {
+          // Chromecasten lukker selv når den spoler eller har nok (ingen feil)
+          _note('lukket', 'Chromecasten lukket forbindelsen etter ${_size(sent)}');
+        }
+        try {
+          await res.close();
+        } on Object {
+          // forbindelsen er alt borte
+        }
+        return;
+      }
       if (ok) _segments++;
     } finally {
       await input.cancel();

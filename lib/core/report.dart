@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../build_info.dart';
@@ -76,8 +77,9 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
       ..writeln('## ${tr('Oppdateringsloggen')}')
       ..writeln(log.trimRight());
   }
-  // en gang til over alt, også det som ikke kom fra loggen (feilmeldinger fra leverandøren o.l.)
-  return scrub(out.toString()).replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
+  // en gang til over alt, også det som ikke kom fra loggen (feilmeldinger fra leverandøren o.l.); linjeskift som \n
+  // (fila på PC-en får \r\n når den lagres)
+  return scrub(out.toString()).replaceAll('\r\n', '\n');
 }
 
 /// Telefonen Fyrlys kjører på («Android 15 (API 35) · Google Pixel 8»), satt ved oppstart på Android.
@@ -135,13 +137,17 @@ Future<void> Function(String url) openUrl = (url) async {
 /// Android: deler rapporten med en app du velger (e-post, meldinger …) i stedet for å lagre den (byttes ut i testene).
 Future<void> Function(String text) shareReport = (text) => AndroidHost.share(text, subject: tr('Fyrlys – feilrapport'));
 
-/// Lagrer rapporten som «Fyrlys-feilrapport-2026-10-26-2114.txt» og gir fila.
+/// Legger teksten på utklippstavla (byttes ut i testene).
+Future<void> Function(String text) copyText = (text) => Clipboard.setData(ClipboardData(text: text));
+
+/// Lagrer rapporten som «Fyrlys-feilrapport-2026-10-26-2114.txt» (med \r\n, så Notisblokk viser linjene) og gir
+/// fila.
 Future<File> saveReport(String text, {DateTime? now}) async {
   final t = now ?? DateTime.now();
   String two(int n) => n.toString().padLeft(2, '0');
   final dir = await reportDirectory();
   final name = 'Fyrlys-${tr('feilrapport')}-${t.year}-${two(t.month)}-${two(t.day)}-${two(t.hour)}${two(t.minute)}.txt';
   final file = File('${dir.path}${Platform.pathSeparator}$name');
-  await file.writeAsString(text, flush: true);
+  await file.writeAsString(text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'), flush: true);
   return file;
 }

@@ -136,7 +136,8 @@ bool castIsPlaying(Caster caster) => caster.state == CastState.playing || caster
 
 /// Det spilleren viser i stedet for bildet mens det castes: hvor det spilles, hva, og knapper for pause, volumet på
 /// TV-en og «Stopp casting». [leading] (f.eks. forrige/neste kanal) står før pauseknappen, [progress] (tidslinja for
-/// en film) over knappene.
+/// en film) over knappene. [message] (fra spilleren: «Kanalen stoppet …», feilen) står i stedet for tilstanden, og når
+/// noe har gått galt, er «Prøv igjen» ([onRetry]) der pauseknappen ellers står.
 class CastPanel extends StatefulWidget {
   const CastPanel({
     super.key,
@@ -146,6 +147,8 @@ class CastPanel extends StatefulWidget {
     this.leading = const [],
     this.progress,
     this.compact = false,
+    this.message,
+    this.onRetry,
     required this.onStop,
   });
 
@@ -155,6 +158,8 @@ class CastPanel extends StatefulWidget {
   final List<Widget> leading;
   final Widget? progress;
   final bool compact;
+  final String? message;
+  final VoidCallback? onRetry;
   final VoidCallback onStop;
 
   @override
@@ -172,12 +177,15 @@ class _CastPanelState extends State<CastPanel> {
       listenable: widget.caster,
       builder: (context, _) {
         final c = widget.caster;
-        final state = castStateText(c);
-        final failed = c.state == CastState.failed;
-        final busy = c.state == CastState.connecting ||
-            c.state == CastState.ready ||
-            c.state == CastState.loading ||
-            c.state == CastState.buffering;
+        final message = widget.message;
+        final state = message ?? castStateText(c);
+        final failed = message != null || c.state == CastState.failed;
+        final retry = failed ? widget.onRetry : null;
+        final busy = !failed &&
+            (c.state == CastState.connecting ||
+                c.state == CastState.ready ||
+                c.state == CastState.loading ||
+                c.state == CastState.buffering);
         final volume = _volume ?? (c.muted ? 0.0 : c.volume);
         final compact = widget.compact;
         return DecoratedBox(
@@ -263,16 +271,28 @@ class _CastPanelState extends State<CastPanel> {
                       runSpacing: 4,
                       children: [
                         ...widget.leading,
-                        IconButton(
-                          key: const ValueKey('cast-play'),
-                          tooltip: castIsPlaying(c) ? tr('Pause (mellomrom)') : tr('Spill av (mellomrom)'),
-                          iconSize: 34,
-                          color: Colors.white,
-                          icon: Icon(castIsPlaying(c) ? Icons.pause_circle_filled : Icons.play_circle_filled),
-                          onPressed: c.state == CastState.connecting
-                              ? null
-                              : () => unawaited(castIsPlaying(c) ? c.pause() : c.play()),
-                        ),
+                        if (retry != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: FilledButton.icon(
+                              key: const ValueKey('cast-retry'),
+                              autofocus: true,
+                              onPressed: retry,
+                              icon: const Icon(Icons.refresh),
+                              label: Text(tr('Prøv igjen')),
+                            ),
+                          )
+                        else
+                          IconButton(
+                            key: const ValueKey('cast-play'),
+                            tooltip: castIsPlaying(c) ? tr('Pause (mellomrom)') : tr('Spill av (mellomrom)'),
+                            iconSize: 34,
+                            color: Colors.white,
+                            icon: Icon(castIsPlaying(c) ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                            onPressed: c.state == CastState.connecting
+                                ? null
+                                : () => unawaited(castIsPlaying(c) ? c.pause() : c.play()),
+                          ),
                         IconButton(
                           tooltip: c.muted ? tr('Lyd på (M)') : tr('Lyd av (M)'),
                           color: Colors.white,

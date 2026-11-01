@@ -36,6 +36,7 @@ class VodPlayItem {
     this.subtitle = '',
     this.continueAs,
     this.archive,
+    this.tech = const MediaTech(),
   });
 
   /// for «fortsett der du slapp», f.eks. «film:123», «episode:456» eller «arkiv:101:1793041200»
@@ -49,6 +50,9 @@ class VodPlayItem {
 
   /// et program i TV-arkivet: adressen lages fra der i programmet du er (i stedet for [url])
   final ArchiveClip? archive;
+
+  /// bildet og lyden slik leverandøren oppgir dem (til Chromecasten: loggen og forklaringen når det ikke går)
+  final MediaTech tech;
 }
 
 /// Spilleren for filmer, episoder og TV-arkivet: tidslinje med spoling, ±10 sekunder, neste og forrige episode (eller
@@ -465,6 +469,8 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
         subtitle: item.subtitle,
         headers: src?.httpHeaders ?? const {},
         start: start,
+        details: item.tech.summary,
+        risky: item.tech.castRisks,
       ));
     } on Object catch (e) {
       debugPrint('Chromecast: $e');
@@ -1057,6 +1063,9 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
               _ctl(Icons.skip_next, _clip != null ? tr('Neste program (N)') : tr('Neste episode (N)'),
                   _hasNext ? () => _go(_index + 1) : null),
           ],
+          // beskjeden og «Prøv igjen» i panelet (ikke et kort oppå det)
+          message: status,
+          onRetry: _retry,
           onStop: () => unawaited(appCaster.stop()),
         ),
         Positioned(
@@ -1077,7 +1086,6 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
             ),
           ),
         ),
-        if (status != null) _card(status),
       ],
     );
   }

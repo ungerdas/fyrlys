@@ -6,6 +6,7 @@ import '../core/languages.dart';
 import '../core/picture.dart';
 import '../core/session.dart';
 import '../l10n/tr.dart';
+import '../platform.dart';
 import 'picture_dialogs.dart';
 import 'playback.dart';
 
@@ -184,11 +185,13 @@ class TracksButton extends StatelessWidget {
         PopupMenuItem<Object>(value: _languages, child: Text(tr('Foretrukne språk …'))),
         const PopupMenuDivider(),
         PopupMenuItem<Object>(enabled: false, child: Text(tr('Bilde'))),
-        CheckedPopupMenuItem<Object>(
-          value: _deinterlace,
-          checked: picture.deinterlace,
-          child: Text(tr('Fjern striper (deinterlacing)')),
-        ),
+        // telefonen: avspilleren der har ingen deinterlacer
+        if (!isAndroid)
+          CheckedPopupMenuItem<Object>(
+            value: _deinterlace,
+            checked: picture.deinterlace,
+            child: Text(tr('Fjern striper (deinterlacing)')),
+          ),
         CheckedPopupMenuItem<Object>(
           value: _smooth,
           checked: picture.smooth,

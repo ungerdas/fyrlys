@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/core/cast/caster.dart';
 import 'package:fyrlys/core/cast/chromecast.dart';
 import 'package:fyrlys/core/session.dart';
+import 'package:fyrlys/core/vod.dart';
 import 'package:fyrlys/theme.dart';
 import 'package:fyrlys/ui/cast_ui.dart';
 import 'package:fyrlys/ui/player_page.dart';
@@ -131,10 +132,54 @@ void main() {
     await _castToStue(tester);
     fake.fail('Chromecasten kunne ikke spille dette.');
     await _settle(tester);
-    expect(find.text('Chromecasten kunne ikke spille dette.'), findsWidgets);
-    await tester.tap(find.text('Prøv igjen'));
+    // én gang, i panelet (ikke også i et kort oppå det), med «Prøv igjen» der pauseknappen sto
+    expect(find.text('Chromecasten kunne ikke spille dette.'), findsOneWidget);
+    expect(_inPanel(find.text('Chromecasten kunne ikke spille dette.')), findsOneWidget);
+    expect(find.byKey(const ValueKey('cast-play')), findsNothing);
+    await tester.tap(_inPanel(find.byKey(const ValueKey('cast-retry'))));
     await _settle(tester);
     expect(fake.loads, hasLength(2));
+    expect(playback.urls, hasLength(1));
+    expect(find.byKey(const ValueKey('cast-retry')), findsNothing);
+    expect(find.byKey(const ValueKey('cast-play')), findsOneWidget);
+    await _close(tester);
+  });
+
+  testWidgets('film: Chromecasten kan ikke spille filen – beskjeden én gang i panelet, «Prøv igjen» der du var',
+      (tester) async {
+    _size(tester);
+    final fake = _fakeCaster();
+    final session = await _session();
+    final playback = FakePlayback()..length = const Duration(minutes: 100);
+    await tester.pumpWidget(MaterialApp(
+      home: VodPlayerPage(
+        session: session,
+        items: const [
+          VodPlayItem(
+            key: 'film:7',
+            title: 'Fyrlyset',
+            url: 'http://example/movie/7.mkv',
+            tech: MediaTech(height: 1080, videoCodec: 'h264', audioCodec: 'eac3', channels: 6),
+          ),
+        ],
+        playback: () => playback,
+      ),
+    ));
+    await _settle(tester);
+    playback.moveTo(const Duration(seconds: 30));
+    await _settle(tester);
+    await _castToStue(tester);
+    expect(fake.loads.single.contentType, 'video/mp4');
+    expect(fake.loads.single.details, '1080p · H.264 · Dolby Digital+ 5.1');
+    expect(fake.loads.single.risky, ['Dolby Digital+']);
+
+    fake.fail('Chromecasten kunne ikke spille filen (MKV).');
+    await _settle(tester);
+    expect(find.text('Chromecasten kunne ikke spille filen (MKV).'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('cast-retry')));
+    await _settle(tester);
+    expect(fake.loads, hasLength(2));
+    expect(fake.loads.last.start, const Duration(seconds: 30));
     expect(playback.urls, hasLength(1));
     await _close(tester);
   });

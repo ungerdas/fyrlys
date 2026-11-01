@@ -37,7 +37,7 @@ The app is in English or Norwegian (it follows Windows or the phone; change it u
 2. Sign in with the M3U link or the Xtream Codes login from your provider. It is stored encrypted, only on your PC.
 3. Settings are under the gear at the top.
 
-Something not working? Save an error report (gear → Help) and [let us know](https://github.com/ungerdas/fyrlys/issues/new/choose).
+Something not working? Open the error report (gear → Help → Error report), copy it and [let us know](https://github.com/ungerdas/fyrlys/issues/new/choose).
 
 If you would rather not install, use [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip) instead.
 

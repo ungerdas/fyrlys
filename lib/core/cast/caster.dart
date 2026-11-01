@@ -46,6 +46,8 @@ class CastItem {
     this.live = false,
     this.headers = const {},
     this.start = Duration.zero,
+    this.details = '',
+    this.risky = const [],
   });
 
   /// adressene hos leverandøren (HLS foretrekkes, det spiller Chromecasten best)
@@ -65,20 +67,44 @@ class CastItem {
   /// hvor i filmen det skal begynne
   final Duration start;
 
+  /// det som er kjent om bildet og lyden («H.264 · Dolby Digital 5.1»), til loggen
+  final String details;
+
+  /// det i filen mange Chromecaster ikke spiller («H.265», «DTS»), til forklaringen når det ikke går
+  final List<String> risky;
+
   /// Adressen som castes: HLS først, ellers den første.
   String get url => urls.firstWhere(isHlsUrl, orElse: () => urls.first);
 
   bool get isHls => isHlsUrl(url);
 
-  /// Det Chromecasten får vite om innholdet.
-  String get contentType {
-    final path = (Uri.tryParse(url)?.path ?? url).toLowerCase();
-    if (isHls) return 'application/x-mpegurl';
-    if (path.endsWith('.ts')) return 'video/mp2t';
-    if (path.endsWith('.mkv')) return 'video/x-matroska';
-    if (path.endsWith('.webm')) return 'video/webm';
-    if (path.endsWith('.mp3')) return 'audio/mpeg';
-    return 'video/mp4';
+  String get _path => (Uri.tryParse(url)?.path ?? url).toLowerCase();
+
+  /// Det Chromecasten får vite om innholdet, i den rekkefølgen det prøves: avviser Googles avspiller typen uten å
+  /// hente noe, prøves den neste. Avspilleren sjekker typen før den henter noe, og avviste video/x-matroska (en
+  /// feilrapport 1.11: LOAD_FAILED med en gang, ingen forespørsler); en MKV-fil sendes derfor som MP4 (fila leses
+  /// som det den er).
+  List<String> get contentTypes {
+    final path = _path;
+    if (isHls) return const ['application/x-mpegurl', 'application/vnd.apple.mpegurl'];
+    if (path.endsWith('.ts')) return const ['video/mp2t'];
+    if (path.endsWith('.mkv')) return const ['video/mp4', 'video/webm', 'video/x-matroska'];
+    if (path.endsWith('.webm')) return const ['video/webm'];
+    if (path.endsWith('.mp3')) return const ['audio/mpeg'];
+    return const ['video/mp4'];
+  }
+
+  /// Typen som prøves først.
+  String get contentType => contentTypes.first;
+
+  /// «HLS», «MKV», «MP4», «MPEG-TS» … (i loggen og forklaringene)
+  String get format {
+    if (isHls) return 'HLS';
+    final path = _path;
+    final dot = path.lastIndexOf('.');
+    final ext = dot >= 0 ? path.substring(dot + 1) : '';
+    if (ext == 'ts') return 'MPEG-TS';
+    return RegExp(r'^[a-z0-9]{2,5}$').hasMatch(ext) ? ext.toUpperCase() : 'MP4';
   }
 }
 

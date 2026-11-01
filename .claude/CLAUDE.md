@@ -306,8 +306,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `username=`/`password=`, e-post og `C:\Users\<navn>`), `core/report.dart` (`buildReport`: versjon, Windows, antall og
   slag innlogginger (ikke navnene), abonnementet, listene, innstillingene, loggen og slutten av oppdateringsloggen;
   `saveReport` i Nedlastinger, `showInExplorer`, `openUrl` byttes ut i testene; `windowsName` (2.1.25): Windows 11 sier
-  selv «Windows 10» i `Platform.operatingSystemVersion`, så bygg ≥ 22000 gir «Windows 11»). Innstillinger → Hjelp. Skjemaene for
-  GitHub-saker ligger i `.github/ISSUE_TEMPLATE` (feil, ønske).
+  selv «Windows 10» i `Platform.operatingSystemVersion`, så bygg ≥ 22000 gir «Windows 11»). Innstillinger → Hjelp →
+  «Feilrapport» åpner `ui/report_page.dart` (2.1.30): hele teksten (`SelectableText`, nøkkel `report-text`), «Kopier»
+  (`copyText`, byttes ut i testene) og «Del feilrapport» (Android) / «Lagre feilrapport» (PC). Rapporten har `\n`;
+  `saveReport` skriver `\r\n` (Notisblokk). Grunnen (feilrapport 1.11): delt fra telefonen kom bare begynnelsen fram,
+  og resten uten linjeskift. Skjemaene for GitHub-saker ligger i `.github/ISSUE_TEMPLATE` (feil, ønske).
 - Chromecast (2.1.24, eierens ønske «Lag en egen versjon ja!»): `core/cast/` – `mdns.dart` (`discoverCastDevices`:
   PTR-spørsmål etter `_googlecast._tcp.local` fra en tilfeldig port på hvert nettverkskort og en lytter på 5353,
   `parseCastResponse` med navnepekere, TXT `fn`/`md`/`id`, SRV-porten, A-posten eller avsenderen), `cast_protocol.dart`
@@ -344,6 +347,21 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   socket) og `cast_ui_test.dart` (spillerne og linja med `FakeCaster`). Ikke prøvd mot en ekte Chromecast:
   oppdagelsen på Windows (5353 og brannmuren), om Googles avspiller godtar http fra PC-en, `hlsSegmentFormat`, og
   hvilke kanaler den faktisk spiller.
+  2.1.30 (feilrapport fra telefonen 1.11: en MKV-film ga IDLE, LOAD_FAILED og IDLE (ERROR) i samme sekund, uten kode og
+  uten én forespørsel til mellomstasjonen, tre ganger på rad; på TV-en: «feil i strømmen»): `CastItem.contentTypes` i
+  den rekkefølgen de prøves (MKV: `video/mp4`, `video/webm`, `video/x-matroska`; HLS: `application/x-mpegurl`, så
+  `application/vnd.apple.mpegurl`), `format` («MKV», «HLS»), `details`/`risky` fra `MediaTech.summary`/`castRisks`
+  (`VodPlayItem.tech`: filmens fra `movieInfo` på detaljsiden, episodenes fra get_series_info). `ChromecastCaster`:
+  `_sendLoad` (LOAD med `nextRequestId()`, `_loadId`, `_awaitingLoad` til et svar med det requestId-et kommer; feil
+  imens hører til en LOAD som er gitt opp), `_attemptFailed` (LOAD_FAILED, INVALID_REQUEST på `_loadId`, IDLE med
+  ERROR): ingen forespørsler og ikke spilt → neste type, ellers `failed` med `_failureText` (koden; ellers «avviste … uten
+  å hente noe», «kunne ikke spille filen (MKV) …» + «Filen har {codecs} …», «stoppet avspillingen» når den hadde
+  spilt; `_unreachableText` bare når LOAD ikke svarer). IDLE oppdaterer ikke posisjonen (0), så «Prøv igjen» begynner
+  der du var. Feilmeldingene logges hele (`_brief`). Mellomstasjonen: `add(main: true)` for det som er i LOAD; for en fil
+  logges de 12 første forespørslene («fil 0: GET fra 1,2 GB → 206 (video/x-matroska, 812 MB)»), og om leverandøren
+  brøt forbindelsen eller Chromecasten lukket den. `CastPanel(message:, onRetry:)`: beskjeden står i panelet og «Prøv
+  igjen» (`cast-retry`) i stedet for pauseknappen; spillerne legger ikke lenger et kort oppå panelet (eieren 1.11:
+  skjermbilde der de lå oppå hverandre). Om MP4-typen får Chromecasten til å spille MKV-filer, er ikke prøvd.
 - Språk (grunnlaget i 2.1.20, engelsk i 2.1.21): `l10n/tr.dart` (`tr('norsk tekst', {'navn': verdi})` slår opp i
   `english` når `appLanguage` er 'en'; norsken er nøkkelen). `english` i `l10n/en.dart` slår sammen `en_core`,
   `en_home`, `en_player`, `en_settings` og `en_vod` (etter hvor teksten står; samme nøkkel i flere filer må ha samme
@@ -497,11 +515,18 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   alle tre med; `main` viser feilen (`_StartupError`) når noe stopper før `runApp`, loggen har `Abi.current()` og
   `device` har `Build.SUPPORTED_ABIS`. «Får ikke hentet M3U-lista» på Android: venter på hvilken liste og en
   feilrapport (appen logger ikke årsaken ennå; mulig forbedring: tidsavbrudd/sertifikat/ukjent vert i meldingen).
+- 1.11.2026: 2.1.30: Chromecast fra telefonen med en film i MKV feilet (se Chromecast under Arkitektur), og boksen med
+  feilen lå oppå panelet. Feilrapporten fra telefonen kom bare delvis fram når den ble delt; nå vises den i appen
+  med «Kopier». Samme rapport: mpv på Android kjenner ikke `deinterlace=auto` og har ikke `yadif` («Fjern striper»
+  skjules der, `setPicture` lar den være), og filmer logget «Failed to create file cache» (nå `cache-on-disk=no` for
+  filer). Leverandørens strøm til telefonen brøt én gang («Software caused connection abort», så «Connection refused» i
+  noen sekunder) da appen ble lagt bort; forventet uten forgrunnstjeneste.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
   `probesize`, `demuxer-lavf-probe-info=nostreams`). Når den kommer: velg det raskeste som neste versjon.
-  Chromecast: venter på hva TV-en viste i første forsøk og en ny feilrapport fra 2.1.25.
+  Chromecast: venter på om MKV-filmen spiller med 2.1.30 (ellers en ny feilrapport, kopiert), og om en TV-kanal
+  (HLS) kan castes fra telefonen og PC-en.
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

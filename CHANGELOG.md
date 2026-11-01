@@ -1,5 +1,24 @@
 # Endringer
 
+## v2.1.30
+
+- **Chromecast og filmer i MKV:** Googles avspiller på TV-en avviste MKV-filer med en gang, uten å hente noe (filmen
+  stoppet med «feil i strømmen»). De sendes nå som MP4; avspilleren leser fila som det den er. Avviser Chromecasten
+  likevel en type uten å hente noe, prøver Fyrlys selv den neste (MP4, WebM, MKV).
+- Når Chromecasten ikke kan spille noe, står det mer presist hvorfor: om den avviste det uten å hente noe, eller hentet
+  det og ikke kunne spille det. For filmer og episoder står det også hva filen har som mange Chromecaster ikke spiller
+  (f.eks. H.265, Dolby Digital eller DTS).
+- Beskjeden og *Prøv igjen* står i panelet mens det castes, ikke i en boks oppå det. *Prøv igjen* på en film begynner
+  der du var.
+- **Feilrapporten vises i appen** (tannhjulet → Hjelp → Feilrapport): hele teksten, med *Kopier* og *Del
+  feilrapport* på telefonen eller *Lagre feilrapport* på PC-en. Noen apper tar bare med begynnelsen av en lang tekst
+  som deles; kopier den heller og lim den inn. Den kopierte og delte rapporten har vanlige linjeskift (før ble den
+  én lang linje i noen apper).
+- Loggen sier mer om casting: hele feilmeldingene fra TV-en, og for filmer hvor i fila Chromecasten ber om data og
+  hva leverandøren svarte.
+- Android: *Fjern striper* er borte (avspilleren på telefonen har ingen deinterlacer), og filmer prøver ikke lenger å
+  lage et buffer på disk.
+
 ## v2.1.29
 
 - **Android: virker i BlueStacks og på 32-bit-telefoner.** APK-en har nå Flutter for 64- og 32-bit ARM og for

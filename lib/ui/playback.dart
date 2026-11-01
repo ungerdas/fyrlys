@@ -179,7 +179,11 @@ class MpvPlayback implements Playback {
           'stream-lavf-o',
           'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5',
         ));
-    if (!live) return;
+    if (!live) {
+      // filer: bufferet i minnet (ellers prøver mpv på telefonen å lage et på disk uten mappe, og logger at det feilet)
+      await _try(() => p.setProperty('cache-on-disk', 'no'));
+      return;
+    }
     // TV: det som er hentet, tas vare på (og det går an å hoppe i det, selv om strømmen selv ikke kan spoles).
     // På disken holder det til omtrent en halvtime på PC; ellers i minnet, og mindre.
     final dir = cacheDir;
@@ -327,7 +331,10 @@ class MpvPlayback implements Playback {
     _picture = prefs;
     final p = _player.platform;
     if (p is! NativePlayer) return;
-    if (prefs.deinterlace) {
+    if (isAndroid) {
+      // telefonen: mpv-en der kjenner ikke deinterlace=auto og har ingen deinterlacer (yadif finnes ikke, og bildet
+      // går rett fra maskinvaren til skjermen), så den får være (valget vises ikke på telefonen)
+    } else if (prefs.deinterlace) {
       // auto: bare bilder som er merket interlacet (bwdif i programvare, d3d11vpp med maskinvaredekoding). Fyrlys
       // bygges med en full libmpv som kan det (se workflowen); en eldre mpv kjenner ikke auto, og får yes.
       await _try(() => p.setProperty('deinterlace', 'auto'));

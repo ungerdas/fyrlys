@@ -60,6 +60,14 @@ const enSettings = <String, String>{
       'The version, settings and log, without passwords or provider. Attach it when you report a problem.',
   'Feilrapporten er lagret: {name}': 'Error report saved: {name}',
   'Fikk ikke lagret feilrapporten ({error}).': "Couldn't save the error report ({error}).",
+  'Feilrapport': 'Error report',
+  'Kopier': 'Copy',
+  'Dette er hele rapporten. Passord, brukernavn, adresser og navnet på leverandøren er tatt bort.':
+      "This is the whole report. Passwords, user names, addresses and the provider's name have been removed.",
+  'Feilrapporten er kopiert. Lim den inn der du melder fra om feilen.':
+      'The error report has been copied. Paste it where you report the problem.',
+  'Fikk ikke kopiert feilrapporten ({error}).': "Couldn't copy the error report ({error}).",
+  'Fikk ikke laget feilrapporten ({error}).': "Couldn't create the error report ({error}).",
   'Meld fra om en feil': 'Report a problem',
   'På GitHub (krever en konto der)': 'On GitHub (requires an account there)',
 

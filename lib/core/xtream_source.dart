@@ -157,6 +157,7 @@ SeriesInfo parseSeriesInfo(Object? d) {
                 plot: e['info'] is Map ? _text((e['info'] as Map)['plot']) : '',
                 duration: e['info'] is Map ? _text((e['info'] as Map)['duration']) : '',
                 seconds: e['info'] is Map ? (_number((e['info'] as Map)['duration_secs'])?.toInt() ?? 0) : 0,
+                tech: e['info'] is Map ? mediaTech(e['info'] as Map) : const MediaTech(),
               ),
         ],
       ));

@@ -43,7 +43,7 @@ Appen er på norsk eller engelsk (som Windows eller telefonen; byttes under tann
 2. Logg inn med M3U-lenken eller Xtream-innloggingen fra leverandøren. Den lagres kryptert, bare på PC-en.
 3. Innstillingene ligger under tannhjulet øverst.
 
-Noe som ikke virker? Lagre en feilrapport (tannhjulet → Hjelp) og [meld fra](https://github.com/ungerdas/fyrlys/issues/new/choose).
+Noe som ikke virker? Åpne feilrapporten (tannhjulet → Hjelp → Feilrapport), kopier den og [meld fra](https://github.com/ungerdas/fyrlys/issues/new/choose).
 
 Vil du ikke installere, kan du bruke [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip) i stedet.
 
