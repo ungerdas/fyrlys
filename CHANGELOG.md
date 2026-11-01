@@ -1,5 +1,17 @@
 # Endringer
 
+## v2.1.26
+
+- **Fyrlys for Android-telefoner:** samme app som på Windows, med TV, TV-guide, TV-arkiv, filmer og serier,
+  favoritter og flere innlogginger. Last ned `Fyrlys-android.apk` fra releasen og installer den (appen ligger ikke i
+  Google Play). Den sier fra om nye versjoner, og *Installer* oppdaterer den.
+- På telefonen: snu den for å se på hele skjermen, eller trykk på fullskjerm. Kanalen stopper når du legger bort appen
+  (så tilkoblingen blir ledig), og starter igjen når du kommer tilbake. Filmer settes på pause.
+- **Chromecast fra telefonen:** *Cast til TV* under bildet. Telefonen sender strømmen videre til TV-en, og et varsel
+  viser at Fyrlys er i gang, også med skjermen av eller i en annen app. Lukker du appen, stopper castingen.
+- Feilrapporten deles fra telefonen (e-post, meldinger …) i stedet for å lagres.
+- Windows: i et smalt vindu står *Cast til TV* under bildet.
+
 ## v2.1.25
 
 - **Chromecast:** direktesendinger begynner nå der sendingen er. Før ba Fyrlys TV-en begynne ved det eldste stykket i

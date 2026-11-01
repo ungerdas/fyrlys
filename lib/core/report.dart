@@ -4,6 +4,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../build_info.dart';
 import '../l10n/tr.dart';
+import '../platform.dart';
+import 'android_host.dart';
 import 'app_log.dart';
 import 'session.dart';
 import 'updater.dart';
@@ -19,7 +21,9 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
     ..writeln('${tr('Laget')}: ${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}')
     ..writeln('${tr('Versjon')}: $appBuildLabel'
         '${appBuild.isEmpty ? '' : ' (${tr('bygg')} $appBuild${appCommit.isEmpty ? '' : ', ${_short(appCommit)}'})'}')
-    ..writeln('Windows: ${windowsName(windows ?? Platform.operatingSystemVersion)}')
+    ..writeln(isAndroid
+        ? 'Android: ${(androidDevice ?? '?').replaceFirst('Android ', '')}'
+        : 'Windows: ${windowsName(windows ?? Platform.operatingSystemVersion)}')
     ..writeln('${tr('Språk')}: $appLanguage');
 
   out.writeln();
@@ -76,6 +80,9 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
   return scrub(out.toString()).replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
 }
 
+/// Telefonen Fyrlys kjører på («Android 15 (API 35) · Google Pixel 8»), satt ved oppstart på Android.
+String? androidDevice;
+
 /// Windows-utgaven slik Dart gir den («"Windows 10 Pro" 10.0 (Build 26100)»), med riktig navn: Windows 11 heter
 /// fortsatt «Windows 10» i registeret Dart leser fra, men har byggnummer 22000 og høyere.
 String windowsName(String version) {
@@ -116,6 +123,7 @@ Future<void> Function(String path) showInExplorer = (path) async {
 
 /// Åpner en nettadresse i nettleseren (byttes ut i testene).
 Future<void> Function(String url) openUrl = (url) async {
+  if (isAndroid) return AndroidHost.openUrl(url);
   if (!Platform.isWindows) return;
   try {
     await Process.start('explorer.exe', [url]);
@@ -123,6 +131,9 @@ Future<void> Function(String url) openUrl = (url) async {
     // ingen nettleser
   }
 };
+
+/// Android: deler rapporten med en app du velger (e-post, meldinger …) i stedet for å lagre den (byttes ut i testene).
+Future<void> Function(String text) shareReport = (text) => AndroidHost.share(text, subject: tr('Fyrlys – feilrapport'));
 
 /// Lagrer rapporten som «Fyrlys-feilrapport-2026-10-26-2114.txt» og gir fila.
 Future<File> saveReport(String text, {DateTime? now}) async {

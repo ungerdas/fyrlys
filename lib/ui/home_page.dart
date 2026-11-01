@@ -401,6 +401,12 @@ class _HomePageState extends State<HomePage> {
                 {'version': version, 'percent': percent, 'size': (info.size / 1048576).round()})
             : tr('Laster ned {version} … {percent} %', {'version': version, 'percent': percent});
         progress = u.progress;
+      case UpdateState.ready when u.isApk:
+        // Android: første gang må Fyrlys få lov til å installere apper (Android åpner den innstillingen)
+        text = tr('{version} er lastet ned. Trykk Installer, så spør Android om du vil oppdatere.',
+            {'version': info?.label ?? tr('En ny versjon')});
+        if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
+        actions.add(FilledButton(onPressed: () => unawaited(u.install()), child: Text(tr('Installer'))));
       case UpdateState.ready:
         text = tr('{version} er lastet ned og legges inn når du lukker Fyrlys.',
             {'version': info?.label ?? tr('En ny versjon')});

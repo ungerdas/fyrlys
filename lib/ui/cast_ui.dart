@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/cast/caster.dart';
 import '../core/names.dart';
 import '../l10n/tr.dart';
+import '../platform.dart';
 
 /// Velg en Chromecast: de som svarer, vises etter hvert. Null når du avbryter.
 Future<CastDevice?> pickCastDevice(BuildContext context, {Caster? caster}) => showDialog<CastDevice>(
@@ -92,8 +93,10 @@ class _CastPickerState extends State<_CastPicker> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                 child: Text(
-                  tr('Fant ingen Chromecast. Den må være på samme nettverk som PC-en, og Windows-brannmuren må slippe '
-                      'Fyrlys gjennom på private nettverk.'),
+                  isAndroid
+                      ? tr('Fant ingen Chromecast. Den må være på samme wifi som telefonen.')
+                      : tr('Fant ingen Chromecast. Den må være på samme nettverk som PC-en, og Windows-brannmuren må '
+                          'slippe Fyrlys gjennom på private nettverk.'),
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               ),
@@ -101,7 +104,10 @@ class _CastPickerState extends State<_CastPicker> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
                 child: Text(
-                  tr('PC-en sender strømmen videre til TV-en, så den må stå på mens du caster.'),
+                  isAndroid
+                      ? tr('Telefonen sender strømmen videre til TV-en, så Fyrlys må være på (også med skjermen av) '
+                          'mens du caster.')
+                      : tr('PC-en sender strømmen videre til TV-en, så den må stå på mens du caster.'),
                   style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5),
                 ),
               ),

@@ -4,16 +4,18 @@
 
 <h1 align="center">Fyrlys</h1>
 
-<p align="center">IPTV player for Windows: live TV, TV guide, catch-up, movies and series.</p>
+<p align="center">IPTV player for Windows and Android phones: live TV, TV guide, catch-up, movies and series.</p>
 
 <p align="center">
   <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-oppsett.exe"><b>Download for Windows</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-android.apk"><b>Android</b></a>
   &nbsp;·&nbsp;
   <a href="README.md">Norsk</a>
 </p>
 
 Fyrlys plays your subscription from an IPTV provider, using an M3U link or Xtream Codes. It has no channels of its own.
-The app is in English or Norwegian (it follows Windows; change it under the gear → Appearance).
+The app is in English or Norwegian (it follows Windows or the phone; change it under the gear → Appearance).
 
 ## Features
 
@@ -23,8 +25,8 @@ The app is in English or Norwegian (it follows Windows; change it under the gear
 - Movies and series with “Continue watching” (Xtream Codes)
 - Several logins, each with its own favorites, and multiview with a channel from each subscription
 - mpv as the player: most formats, audio tracks and subtitles
-- Mini player that stays on top, picture format and audio delay per channel
-- Cast to a TV with Chromecast (the PC has to stay on while you cast)
+- Mini player that stays on top (Windows), picture format and audio delay per channel
+- Cast to a TV with Chromecast (the PC or the phone passes the stream on, so Fyrlys has to keep running while you cast)
 - Updates itself
 
 ## Getting started
@@ -37,6 +39,19 @@ The app is in English or Norwegian (it follows Windows; change it under the gear
 Something not working? Save an error report (gear → Help) and [let us know](https://github.com/ungerdas/fyrlys/issues/new/choose).
 
 If you would rather not install, use [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip) instead.
+
+### Android
+
+1. Download [`Fyrlys-android.apk`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-android.apk) on
+   the phone and open it. The first time, Android asks whether the browser (or file manager) may install apps: allow it.
+   The app is not on Google Play.
+2. Sign in as on the PC. The login is stored only in the app on the phone.
+3. New versions: the app tells you, downloads when you tap *Download* and installs with *Install* (the first time you
+   have to allow Fyrlys to install apps).
+
+Phones with 64-bit Android 7 or newer (arm64). Turn the phone sideways to watch full screen. When you cast, the phone
+passes the stream on to the TV: a notification shows that Fyrlys is running, also with the screen off. Closing the app
+stops casting.
 
 <details>
 <summary>Keys</summary>
@@ -63,7 +78,7 @@ Made with Flutter, [media_kit](https://github.com/media-kit/media-kit) and [mpv]
 [GitHub Actions](.github/workflows/build.yml).
 
 ```bash
-flutter create --org no.fyrlys --project-name fyrlys --platforms=windows .
+flutter create --org no.fyrlys --project-name fyrlys --platforms=windows,android .
 flutter run
 ```
 

@@ -10,6 +10,7 @@ import '../core/source.dart';
 import '../core/updater.dart';
 import '../l10n/dates.dart';
 import '../l10n/tr.dart';
+import '../platform.dart';
 import 'language_dialog.dart';
 import 'login_page.dart';
 import 'motion.dart';
@@ -21,8 +22,11 @@ Future<bool> confirmLogout(BuildContext context, SavedLogin login) async {
     builder: (context) => AlertDialog(
       title: Text(tr('Logg ut av {name}?', {'name': login.name})),
       content: Text(
-        tr('Innloggingen slettes fra Fyrlys på denne PC-en. Favorittene og det du har sett, kommer tilbake hvis du '
-            'logger inn igjen.'),
+        isAndroid
+            ? tr('Innloggingen slettes fra Fyrlys på denne telefonen. Favorittene og det du har sett, kommer tilbake '
+                'hvis du logger inn igjen.')
+            : tr('Innloggingen slettes fra Fyrlys på denne PC-en. Favorittene og det du har sett, kommer tilbake hvis '
+                'du logger inn igjen.'),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(tr('Avbryt'))),
@@ -142,9 +146,13 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       _snack(info == null
           ? tr('Du har siste versjon ({version}).', {'version': appBuildLabel})
-          : u.state == UpdateState.ready
-              ? tr('{version} er lastet ned og legges inn når du lukker Fyrlys.', {'version': info.label})
-              : tr('Fant {version}. Den lastes ned nå.', {'version': info.label}));
+          : u.isApk
+              ? (u.state == UpdateState.ready
+                  ? tr('{version} er lastet ned. Trykk Installer.', {'version': info.label})
+                  : tr('Fant {version}. Trykk Last ned.', {'version': info.label}))
+              : u.state == UpdateState.ready
+                  ? tr('{version} er lastet ned og legges inn når du lukker Fyrlys.', {'version': info.label})
+                  : tr('Fant {version}. Den lastes ned nå.', {'version': info.label}));
     } on UpdateException catch (e) {
       if (mounted) _snack(tr('Fikk ikke sjekket oppdateringer: {error}', {'error': e.message}));
     }
@@ -252,7 +260,8 @@ class _SettingsPageState extends State<SettingsPage> {
             child: SegmentedButton<ThemeMode>(
               showSelectedIcon: false,
               segments: [
-                ButtonSegment(value: ThemeMode.system, label: Text(tr('Som Windows'))),
+                ButtonSegment(
+                    value: ThemeMode.system, label: Text(isAndroid ? tr('Som telefonen') : tr('Som Windows'))),
                 ButtonSegment(value: ThemeMode.dark, label: Text(tr('Mørkt'))),
                 ButtonSegment(value: ThemeMode.light, label: Text(tr('Lyst'))),
               ],
@@ -274,7 +283,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: SegmentedButton<String>(
               showSelectedIcon: false,
               segments: [
-                ButtonSegment(value: 'auto', label: Text(tr('Som Windows'))),
+                ButtonSegment(value: 'auto', label: Text(isAndroid ? tr('Som telefonen') : tr('Som Windows'))),
                 const ButtonSegment(value: 'no', label: Text('Norsk')),
                 const ButtonSegment(value: 'en', label: Text('English')),
               ],
@@ -335,7 +344,13 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _saveReport() async {
     setState(() => _reporting = true);
     try {
-      final file = await saveReport(await buildReport(s, updater: widget.updater));
+      final report = await buildReport(s, updater: widget.updater);
+      if (isAndroid) {
+        // telefonen: del den (e-post, meldinger …) i stedet for å lagre en fil du ikke finner igjen
+        await shareReport(report);
+        return;
+      }
+      final file = await saveReport(report);
       if (!mounted) return;
       _snack(tr('Feilrapporten er lagret: {name}', {'name': file.uri.pathSegments.last}));
       unawaited(showInExplorer(file.path));
@@ -349,7 +364,7 @@ class _SettingsPageState extends State<SettingsPage> {
   List<Widget> _help() => [
         ListTile(
           leading: const Icon(Icons.bug_report_outlined),
-          title: Text(tr('Lagre feilrapport')),
+          title: Text(isAndroid ? tr('Del feilrapport') : tr('Lagre feilrapport')),
           subtitle: Text(tr('Versjonen, innstillingene og loggen, uten passord og leverandør. Legg den ved når du '
               'melder fra om en feil.')),
           trailing: _reporting
@@ -372,6 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
       UpdateState.available => tr('Ny versjon: {version}', {'version': label ?? ''}),
       UpdateState.downloading => tr('Laster ned {version} … {percent} %',
           {'version': label ?? tr('ny versjon'), 'percent': (u.progress * 100).round()}),
+      UpdateState.ready when u.isApk => tr('{version} er klar til å installeres', {'version': label ?? tr('En ny versjon')}),
       UpdateState.ready => label == null
           ? tr('En ny versjon legges inn når du lukker Fyrlys')
           : tr('{version} legges inn når du lukker Fyrlys', {'version': label}),
@@ -382,9 +398,14 @@ class _SettingsPageState extends State<SettingsPage> {
       leading: const Icon(Icons.system_update_alt),
       title: Text(tr('Se etter oppdateringer')),
       subtitle: Text(subtitle),
-      trailing: u.state == UpdateState.ready
-          ? FilledButton(onPressed: () => unawaited(u.restartNow()), child: Text(tr('Start på nytt nå')))
-          : null,
+      trailing: switch (u.state) {
+        UpdateState.ready when u.isApk =>
+          FilledButton(onPressed: () => unawaited(u.install()), child: Text(tr('Installer'))),
+        UpdateState.ready => FilledButton(onPressed: () => unawaited(u.restartNow()), child: Text(tr('Start på nytt nå'))),
+        UpdateState.available when u.isApk =>
+          FilledButton(onPressed: () => unawaited(u.download()), child: Text(tr('Last ned'))),
+        _ => null,
+      },
       onTap: u.state == UpdateState.checking || u.state == UpdateState.downloading
           ? null
           : () => unawaited(_checkUpdates(u)),

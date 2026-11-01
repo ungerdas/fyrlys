@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 
 import '../build_info.dart';
 import '../l10n/tr.dart';
+import '../platform.dart';
+import 'android_host.dart';
 
 class UpdateException implements Exception {
   const UpdateException(this.message);
@@ -69,9 +71,10 @@ UpdateInfo? parseRelease(Object? json, String suffix, {Uri? base}) {
 enum UpdateState { idle, checking, available, downloading, ready, failed }
 
 /// Oppdaterer appen fra siste release på GitHub (CI lager en for hver versjon på main).
-/// Ser etter nye bygg ved oppstart og hver 6. time, laster ned i bakgrunnen og legger inn når appen lukkes
-/// (eller med «Start på nytt nå»). Ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
-/// starter. Bare på Windows, og bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
+/// Ser etter nye bygg ved oppstart og hver 6. time og laster ned i bakgrunnen. På Windows legges den inn når appen
+/// lukkes (eller med «Start på nytt nå»); ble appen ikke lukket som vanlig, legges oppdateringen inn neste gang den
+/// starter. På Android lastes APK-en ned, og «Installer» åpner Android sin installering (Android spør deg først).
+/// Bare for bygg fra GitHub Actions (egne bygg har ikke byggnummer).
 class Updater extends ChangeNotifier {
   Updater({
     http.Client? client,
@@ -80,14 +83,17 @@ class Updater extends ChangeNotifier {
     String? workDir,
     bool? canInstall,
     String? repo,
+    Future<bool> Function(String path)? installApk,
   })  : _client = client ?? http.Client(),
         currentBuild = currentBuild ?? int.tryParse(appBuild),
-        assetSuffix = assetSuffix ?? (Platform.isWindows ? '-windows.zip' : null),
-        canInstall = canInstall ?? Platform.isWindows,
+        assetSuffix = assetSuffix ?? (isAndroid ? '-android.apk' : (Platform.isWindows ? '-windows.zip' : null)),
+        canInstall = canInstall ?? (Platform.isWindows || isAndroid),
         repo = repo ?? appRepo,
-        workDir = workDir ?? _defaultWorkDir();
+        workDir = workDir ?? _defaultWorkDir(),
+        _installApk = installApk ?? AndroidHost.install;
 
   final http.Client _client;
+  final Future<bool> Function(String path) _installApk;
 
   /// bygget som kjører (null for egne bygg, som ikke oppdateres)
   final int? currentBuild;
@@ -95,11 +101,11 @@ class Updater extends ChangeNotifier {
   /// slutten på filnavnet for denne plattformen, f.eks. «-windows.zip» (null: ingen oppdatering her)
   final String? assetSuffix;
 
-  /// kan legge inn oppdateringen selv (Windows)
+  /// kan legge inn oppdateringen selv (Windows), eller laste den ned og åpne installeringen (Android)
   final bool canInstall;
   final String repo;
 
-  /// nedlastinger og skriptet, i %LOCALAPPDATA%\Fyrlys\oppdatering
+  /// nedlastinger og skriptet, i %LOCALAPPDATA%\Fyrlys\oppdatering (Android: i appens egen mappe)
   final String workDir;
 
   UpdateState state = UpdateState.idle;
@@ -123,6 +129,12 @@ class Updater extends ChangeNotifier {
   Timer? _timer;
 
   bool get enabled => currentBuild != null && assetSuffix != null;
+
+  /// Android: en APK som du installerer selv (med «Installer»), ikke en pakke som legges inn når appen lukkes
+  bool get isApk => assetSuffix?.endsWith('.apk') ?? false;
+
+  /// fila nedlastingen lagres som
+  String get _fileName => isApk ? 'Fyrlys.apk' : 'Fyrlys.zip';
 
   static String _defaultWorkDir() {
     final sep = Platform.pathSeparator;
@@ -155,7 +167,7 @@ class Updater extends ChangeNotifier {
     _timer = Timer.periodic(const Duration(hours: 6), (_) => unawaited(check()));
   }
 
-  /// Spør GitHub etter siste versjon. Er den nyere, lastes den ned med en gang (Windows).
+  /// Spør GitHub etter siste versjon. Er den nyere, lastes den ned med en gang (Windows; på Android når du ber om det).
   /// Med [manual] kastes en [UpdateException] med forklaringen når det ikke går; ellers prøves det igjen senere.
   Future<UpdateInfo?> check({bool manual = false}) async {
     if (!enabled || state == UpdateState.checking || state == UpdateState.downloading) return available;
@@ -175,7 +187,8 @@ class Updater extends ChangeNotifier {
         _set(UpdateState.ready);
       } else {
         _set(UpdateState.available);
-        if (canInstall) unawaited(download());
+        // Android: lastes ned når du ber om det (APK-en er stor, og telefonen er kanskje på mobildata)
+        if (canInstall && !isApk) unawaited(download());
       }
       return info;
     } on Object catch (e) {
@@ -229,7 +242,7 @@ class Updater extends ChangeNotifier {
       final sep = Platform.pathSeparator;
       final dir = Directory(_path('bygg-${info.build}'));
       await dir.create(recursive: true);
-      final part = File('${dir.path}${sep}Fyrlys.zip.part');
+      final part = File('${dir.path}$sep$_fileName.part');
       final request = http.Request('GET', Uri.parse(info.url))..headers['User-Agent'] = 'Fyrlys';
       final response = await _client.send(request).timeout(const Duration(seconds: 30));
       if (response.statusCode != 200) {
@@ -253,7 +266,7 @@ class Updater extends ChangeNotifier {
         await sink.close();
       }
       if (info.size > 0 && got != info.size) throw UpdateException(tr('nedlastingen ble ikke fullført'));
-      final zip = await part.rename('${dir.path}${sep}Fyrlys.zip');
+      final zip = await part.rename('${dir.path}$sep$_fileName');
       await File(_path('klar.json')).writeAsString(
         jsonEncode({'build': info.build, 'title': info.title, 'zip': zip.path, 'size': got}),
       );
@@ -267,7 +280,7 @@ class Updater extends ChangeNotifier {
 
   /// Fyrlys må ligge i en mappe du kan skrive til (ikke Programfiler) for å kunne oppdatere seg selv.
   Future<void> _checkWritable() async {
-    if (!canInstall) return;
+    if (!canInstall || isApk) return;
     final dir = File(Platform.resolvedExecutable).parent;
     final probe = File('${dir.path}${Platform.pathSeparator}.fyrlys-skrivetest');
     try {
@@ -286,7 +299,7 @@ class Updater extends ChangeNotifier {
   /// klar.json slettes før skriptet startes, så en oppdatering som feiler aldri gir en løkke.
   Future<bool> apply({required bool restart}) async {
     final current = currentBuild;
-    if (!canInstall || current == null) return false;
+    if (!canInstall || current == null || isApk) return false;
     final ready = File(_path('klar.json'));
     try {
       if (!await ready.exists()) return false;
@@ -351,8 +364,37 @@ class Updater extends ChangeNotifier {
   }
 
   /// «Start på nytt nå»: legger inn oppdateringen og avslutter, så starter den nye utgaven av seg selv.
+  /// På Android: «Installer».
   Future<void> restartNow() async {
+    if (isApk) {
+      await install();
+      return;
+    }
     if (await apply(restart: true)) exit(0);
+  }
+
+  /// Android: åpner installeringen av APK-en som er lastet ned (Android spør deg, og Fyrlys starter på nytt når den
+  /// er lagt inn). false: ingen klar, eller Fyrlys har ikke fått lov til å installere apper ennå (innstillingen for
+  /// det er åpnet, så du kan trykke Installer igjen etterpå).
+  Future<bool> install() async {
+    if (!isApk) return false;
+    try {
+      final j = jsonDecode(await File(_path('klar.json')).readAsString());
+      if (j is! Map) return false;
+      final apk = File('${j['zip']}');
+      if (!await apk.exists() || await apk.length() != j['size']) {
+        // borte eller ødelagt: last den ned på nytt
+        await File(_path('klar.json')).delete();
+        _set(UpdateState.available);
+        unawaited(download());
+        return false;
+      }
+      return await _installApk(apk.path);
+    } on Object catch (e) {
+      error = tr('Oppdateringen ble ikke lagt inn: {error}', {'error': _describe(e)});
+      _set(UpdateState.failed);
+      return false;
+    }
   }
 
   /// Før appen vises. true betyr at den skal avslutte med en gang: enten legges en oppdatering inn nå (en
@@ -361,6 +403,24 @@ class Updater extends ChangeNotifier {
   Future<bool> beforeStart() async {
     final current = currentBuild;
     if (!canInstall || current == null) return false;
+    if (isApk) {
+      // Android: er APK-en som ble lastet ned, nå installert, sier banneret fra; gamle nedlastinger ryddes
+      try {
+        final ready = File(_path('klar.json'));
+        if (await ready.exists()) {
+          final j = jsonDecode(await ready.readAsString());
+          final build = j is Map ? j['build'] : null;
+          if (build is! int || build <= current) {
+            if (build == current) _updatedTo = current;
+            await ready.delete();
+          }
+        }
+        await _cleanUp(current);
+      } on Object {
+        // oppdateringen skal aldri hindre appen i å starte
+      }
+      return false;
+    }
     try {
       final busy = File(_path('i-gang.txt'));
       if (await busy.exists()) {

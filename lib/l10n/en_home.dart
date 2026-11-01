@@ -111,4 +111,9 @@ const enHome = <String, String>{
   'Fikk ikke hentet kanalene.': "Couldn't load the channels.",
   'Kanal {n}': 'Channel {n}',
   'Avbryt': 'Cancel',
+
+  // Android (telefonen)
+  '{version} er lastet ned. Trykk Installer, så spør Android om du vil oppdatere.':
+      '{version} is downloaded. Tap Install, and Android asks whether you want to update.',
+  'Installer': 'Install',
 };

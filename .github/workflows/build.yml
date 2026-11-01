@@ -1,10 +1,13 @@
-# Analyse og tester ved hver endring, og bygg for Windows, med versjon og byggnummer i appen. Fyrlys er bare for
-# Windows (fra 2.1.12; Android- og Linux-byggene finnes i historikken).
-# Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-oppsett.exe og
-# Fyrlys-windows.zip, faste navn; appen oppdaterer seg selv fra zip-fila), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og
-# byggnummeret står skjult i den (<!-- bygg N -->); Fyrlys på Windows ser etter nye versjoner der og oppdaterer seg selv.
+# Analyse og tester ved hver endring, og bygg for Windows og Android (telefon, arm64), med versjon og byggnummer i appen.
+# Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-oppsett.exe,
+# Fyrlys-windows.zip og Fyrlys-android.apk, faste navn; Windows-appen oppdaterer seg selv fra zip-fila, Android-appen
+# laster ned APK-en), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og byggnummeret står
+# skjult i den (<!-- bygg N -->); appen ser etter nye versjoner der.
 # Er versjonen ikke endret, byttes filene i releasen den har fra før.
-# Windows-mappen lages av «flutter create» her; i repoet ligger bare ikonet, og det skrives ikke over.
+# APK-en signeres med Fyrlys-nøkkelen (hemmelighetene ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD og
+# ANDROID_KEY_ALIAS), så nye versjoner kan installeres oppå de gamle. Uten nøkkelen bygges den, men legges ikke ut.
+# Windows- og Android-mappene lages av «flutter create» her; i repoet ligger bare det som er tilpasset (ikonene,
+# installasjonsprogrammet, Android-manifestet og Kotlin-filene), og det skrives ikke over.
 # Feiler et steg, legges slutten av loggen som merknad på kjøringen (kan leses med
 # «gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations»).
 name: Bygg
@@ -188,10 +191,70 @@ jobs:
             echo "::error title=$f::$msg"
           done
 
+  android:
+    name: Android
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.sign.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Lag resten av Android-oppsettet
+        run: flutter create --org no.fyrlys --project-name fyrlys --platforms=android . 2>&1 | tee create.log
+      - name: Versjon og byggnummer til appen (vises i menyen)
+        run: |
+          version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+          echo "DEFINES=--build-number=${{ github.run_number }} --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}" | tee -a "$GITHUB_ENV"
+      # bare arm64: det har alle telefoner fra de siste årene, og APK-en blir en tredjedel så stor
+      - run: flutter build apk --release --target-platform android-arm64 $DEFINES 2>&1 | tee build.log
+      - name: Signer med Fyrlys-nøkkelen
+        id: sign
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          ls -l "$apk"
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning title=Android::Ingen Fyrlys-nøkkel (hemmeligheten ANDROID_KEYSTORE_B64), så APK-en legges ikke i releasen"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fyrlys.jks"
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$bt/apksigner" sign --ks "$RUNNER_TEMP/fyrlys.jks" --ks-pass env:KS_PASS --key-pass env:KS_PASS \
+            --ks-key-alias "${KEY_ALIAS:-fyrlys}" --out Fyrlys-android.apk "$apk" 2>&1 | tee sign.log
+          rm -f "$RUNNER_TEMP/fyrlys.jks"
+          "$bt/apksigner" verify --print-certs Fyrlys-android.apk 2>&1 | grep -i 'SHA-256' | tee -a sign.log
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        if: steps.sign.outputs.signed == 'true'
+        with:
+          name: Fyrlys-android
+          path: Fyrlys-android.apk
+      - name: Vis feilen som merknad
+        if: failure()
+        run: |
+          for f in *.log; do
+            [ -f "$f" ] || continue
+            msg=$(tail -n 60 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=$f::$msg"
+          done
+
   release:
     name: Release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [windows]
+    # også når kjøringen startes for hånd på main (f.eks. for å få APK-en med etter at signeringsnøkkelen er lagt inn)
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [windows, android]
     runs-on: ubuntu-latest
     # to pusher rett etter hverandre skal ikke oppdatere releasene samtidig
     concurrency:
@@ -210,6 +273,11 @@ jobs:
         with:
           name: Fyrlys-oppsett
           path: dist/Fyrlys-oppsett
+      - uses: actions/download-artifact@v8
+        if: needs.android.outputs.signed == 'true'
+        with:
+          name: Fyrlys-android
+          path: dist/Fyrlys-android
       - name: Pakk filene og skriv teksten
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
@@ -218,6 +286,8 @@ jobs:
           mkdir -p out
           (cd dist/Fyrlys-windows && zip -qr ../../out/Fyrlys-windows.zip .)
           cp dist/Fyrlys-oppsett/Fyrlys-oppsett.exe out/
+          # APK-en bare når den er signert med Fyrlys-nøkkelen (ellers kan den ikke oppdateres senere)
+          if [ -f dist/Fyrlys-android/Fyrlys-android.apk ]; then cp dist/Fyrlys-android/Fyrlys-android.apk out/; fi
           ls -la out
           awk -v v="## v${version}" 'index($0, v) == 1 {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > changes.md || true
           [ -s changes.md ] || echo "Fyrlys ${version}" > changes.md
@@ -230,7 +300,7 @@ jobs:
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
             # Samme versjon på nytt: filer med andre navn fjernes først (appen tar den første fila som slutter på
-            # «-windows.zip», og den skal ikke være et gammelt bygg).
+            # «-windows.zip» eller «-android.apk», og den skal ikke være et gammelt bygg).
             gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r a; do
               [ -f "out/$a" ] || gh release delete-asset "$TAG" "$a" -y
             done

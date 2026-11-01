@@ -115,6 +115,64 @@ void main() {
       await expectLater(u.check(manual: true), throwsA(isA<UpdateException>()));
     });
 
+    test('Android: APK-en lastes ned når du ber om det, «Installer» åpner installeringen, og etterpå står det at '
+        'Fyrlys er oppdatert', () async {
+      final apkRelease = {
+        ..._release(7, size: 6),
+        'assets': [
+          {'name': 'Fyrlys-windows.zip', 'browser_download_url': 'https://example/w.zip', 'size': 4},
+          {'name': 'Fyrlys-android.apk', 'browser_download_url': 'https://example/a.apk', 'size': 6},
+        ],
+      };
+      var downloads = 0;
+      final client = MockClient((r) async {
+        if (r.url.host == 'api.github.com') return http.Response(jsonEncode(apkRelease), 200, headers: _json);
+        expect(r.url.path, '/a.apk');
+        downloads++;
+        return http.Response.bytes([1, 2, 3, 4, 5, 6], 200);
+      });
+      final installed = <String>[];
+      var allowed = false;
+      Updater android(int current) => Updater(
+            client: client,
+            currentBuild: current,
+            assetSuffix: '-android.apk',
+            workDir: dir.path,
+            canInstall: true,
+            repo: 'ungerdas/fyrlys',
+            installApk: (path) async {
+              // første gang: Fyrlys har ikke lov til å installere apper (Android åpner innstillingen)
+              if (!allowed) return false;
+              installed.add(path);
+              return true;
+            },
+          );
+      final u = android(5);
+      expect(u.isApk, isTrue);
+      await u.check();
+      // ikke av seg selv på telefonen (mobildata)
+      expect(u.state, UpdateState.available);
+      expect(downloads, 0);
+      await u.download();
+      expect(u.state, UpdateState.ready);
+      expect(downloads, 1);
+      expect(await u.apply(restart: false), isFalse, reason: 'APK-en legges ikke inn når appen lukkes');
+
+      expect(await u.install(), isFalse);
+      expect(installed, isEmpty);
+      allowed = true;
+      expect(await u.install(), isTrue);
+      expect(installed.single, endsWith('Fyrlys.apk'));
+      expect(File(installed.single).lengthSync(), 6);
+
+      // Android starter den nye utgaven: banneret sier fra, og nedlastingen ryddes bort
+      final after = android(7);
+      expect(await after.beforeStart(), isFalse);
+      expect(after.notice, 'Fyrlys er oppdatert til bygg 7.');
+      expect(File('${dir.path}/klar.json').existsSync(), isFalse);
+      expect(Directory('${dir.path}/bygg-7').existsSync(), isFalse);
+    });
+
     test('egne bygg (uten byggnummer) ser ikke etter oppdateringer', () async {
       final u = updater(null, MockClient((r) async => fail('skal ikke spørre GitHub')));
       expect(u.enabled, isFalse);

@@ -14,6 +14,7 @@ import '../core/picture.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../l10n/tr.dart';
+import '../platform.dart';
 import '../theme.dart';
 import 'archive_page.dart';
 import 'cast_ui.dart';
@@ -79,7 +80,7 @@ class _Player extends StatefulWidget {
   State<_Player> createState() => _PlayerState();
 }
 
-class _PlayerState extends State<_Player> {
+class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   late final Playback _pb = (widget.page.playback ?? playbackFactory)();
   final FocusNode _focus = FocusNode(debugLabel: 'spiller');
   final FocusNode _searchFocus = FocusNode(debugLabel: 'søk i kanallista');
@@ -120,8 +121,18 @@ class _PlayerState extends State<_Player> {
   /// du har valgt fullskjerm (bare bildet)
   bool _full = false;
 
-  /// fullskjerm nå (satt i build)
+  /// fullskjerm nå, også når telefonen holdes på tvers (satt i build)
   bool _fullNow = false;
+
+  /// telefonen holdes på tvers: bare bildet, som i fullskjerm, til den snus tilbake (satt i build)
+  bool _autoFull = false;
+
+  /// bildet er smalt: noen knapper står under bildet i stedet (satt i build)
+  bool _compactNow = false;
+
+  /// Android: appen er lagt bort, så kanalen er stoppet (tilkoblingen er ledig) og startes igjen når du kommer
+  /// tilbake. Ikke mens det castes: da sender telefonen strømmen videre.
+  bool _suspended = false;
 
   /// det vinduet sist ble satt til
   bool? _shownFull;
@@ -129,7 +140,7 @@ class _PlayerState extends State<_Player> {
   /// kanallista over bildet i fullskjerm
   bool _sideOpen = false;
   bool _controls = true;
-  PointerDeviceKind _pointer = PointerDeviceKind.mouse;
+  PointerDeviceKind _pointer = isAndroid ? PointerDeviceKind.touch : PointerDeviceKind.mouse;
   String? _status;
   List<EpgEntry> _epg = const [];
   int? _height;
@@ -203,6 +214,7 @@ class _PlayerState extends State<_Player> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _session.addListener(_onSession);
     appCaster.addListener(_onCast);
     _subs
@@ -231,6 +243,7 @@ class _PlayerState extends State<_Player> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _session.removeListener(_onSession);
     appCaster.removeListener(_onCast);
     for (final s in _subs) {
@@ -251,6 +264,7 @@ class _PlayerState extends State<_Player> {
     _sideFocus.dispose();
     if (_shownFull == true) unawaited(_windowFull(false));
     if (_mini) unawaited(MiniWindow.instance.set(false));
+    unawaited(landscape(null));
     super.dispose();
   }
 
@@ -260,6 +274,33 @@ class _PlayerState extends State<_Player> {
 
   /// favoritter og «sist sett» er endret
   void _onSession() => _set(() {});
+
+  /// appen er lagt bort (telefonen)
+  static bool get _inBackground {
+    final life = WidgetsBinding.instance.lifecycleState;
+    return life == AppLifecycleState.paused || life == AppLifecycleState.hidden;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!isAndroid) return;
+    if (state == AppLifecycleState.paused && !_suspended && !_casting && !_visiting) {
+      // Telefonen: appen er lagt bort. Gi fra deg tilkoblingen, og start kanalen igjen når du kommer tilbake.
+      _suspended = true;
+      _seq++;
+      _zapTimer?.cancel();
+      _pendingZap = null;
+      _shiftTimer?.cancel();
+      _probeTimer?.cancel();
+      _target = null;
+      unawaited(_pb.stop());
+    } else if (state == AppLifecycleState.resumed && _suspended) {
+      _suspended = false;
+      _retries.clear();
+      _openTries = 0;
+      unawaited(_open());
+    }
+  }
 
   // ── avspilling ──
 
@@ -273,7 +314,13 @@ class _PlayerState extends State<_Player> {
 
   Future<void> _open() async {
     final src = _source;
-    if (src == null || !mounted) return;
+    // lagt bort (telefonen) mens noe var på vei: startes igjen når du kommer tilbake
+    if (src == null || !mounted || _suspended) return;
+    // telefonen: castingen stoppet mens appen var lagt bort; ikke spill her i bakgrunnen
+    if (isAndroid && !_casting && _inBackground) {
+      _suspended = true;
+      return;
+    }
     final my = ++_seq;
     final ch = _channel;
     _opened = ch;
@@ -649,17 +696,21 @@ class _PlayerState extends State<_Player> {
       unawaited(_setMini(false));
       return;
     }
+    // telefonen holdes på tvers: snu den tilbake for å se kanallista
+    if (_autoFull && !_full) return;
     setState(() {
       _full = !_full;
       if (!_full) _sideOpen = false;
     });
+    // telefonen: fullskjerm på tvers, og tilbake på høykant
+    unawaited(landscape(_full));
     _focus.requestFocus();
     _wake();
   }
 
   /// Minispilleren (I): vinduet blir lite og står øverst, med bare bildet. Fra fullskjerm går det rett dit.
   Future<void> _setMini(bool on) async {
-    if (on == _mini || !mounted) return;
+    if (on == _mini || !mounted || !MiniWindow.supported) return;
     setState(() {
       _mini = on;
       if (on) {
@@ -867,7 +918,7 @@ class _PlayerState extends State<_Player> {
       // fikk ikke kontakt: videre her, med hvorfor
       _connecting = false;
       if (!mounted) return;
-      _snack(appCaster.error ?? tr('Fikk ikke kontakt med {name}. Er den på og på samme nettverk som PC-en?', {'name': device.name}));
+      _snack(appCaster.error ?? castNoContact(device.name));
       _retries.clear();
       _openTries = 0;
       unawaited(_open());
@@ -1220,9 +1271,12 @@ class _PlayerState extends State<_Player> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final pad = MediaQuery.paddingOf(context);
-    final full = _full;
+    // telefon på tvers: bare bildet, som i fullskjerm
+    final autoFull = isAndroid && size.width > size.height && size.height < 500;
+    _autoFull = autoFull;
+    final full = _full || autoFull;
     _fullNow = full;
-    // ute av fullskjerm: kanallista over bildet finnes ikke lenger
+    // ute av fullskjerm (eller telefonen snudd tilbake): kanallista over bildet finnes ikke lenger
     if (!full) _sideOpen = false;
     if (_shownFull != full) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1232,6 +1286,7 @@ class _PlayerState extends State<_Player> {
     final wide = size.width >= 860;
     final stageWidth =
         full || _mini ? size.width : (wide ? size.width - 404 - pad.horizontal : size.width - pad.horizontal);
+    _compactNow = stageWidth < 680;
     final stage = KeyedSubtree(
       key: _stageKey,
       child: _stage(full: full, compact: stageWidth < 680),
@@ -1574,15 +1629,18 @@ class _PlayerState extends State<_Player> {
                   if (_session.canMultiview && (!compact || full))
                     _ctl(Icons.grid_view_outlined, tr('Multiview (V)'), () => unawaited(_openMultiview())),
                   _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
-                  if (!compact) _volumeSlider(volume),
+                  // telefonen: volumknappene på siden
+                  if (!compact && !isAndroid) _volumeSlider(volume),
                   if (full) _ctl(Icons.list, tr('Kanaler (C)'), _toggleSide, on: _sideOpen),
                   _tracksButton(),
                   if (!compact || full)
                     _ctl(Icons.cast, tr('Cast til TV (Chromecast)'), () => unawaited(_startCast())),
-                  if (!compact || full)
+                  if (MiniWindow.supported && (!compact || full))
                     _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
-                  _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen,
-                      full ? tr('Avslutt fullskjerm (F)') : tr('Fullskjerm (F)'), _toggleFull),
+                  // telefonen på tvers: snus den tilbake, går den ut av fullskjerm
+                  if (!_autoFull || _full)
+                    _ctl(full ? Icons.fullscreen_exit : Icons.fullscreen,
+                        full ? tr('Avslutt fullskjerm (F)') : tr('Fullskjerm (F)'), _toggleFull),
                 ],
               ),
             ],
@@ -2033,13 +2091,20 @@ class _PlayerState extends State<_Player> {
                 style: const TextStyle(color: _ink2, fontSize: 14),
               ),
             ),
-          if (_hasArchive || _session.canMultiview)
+          if (_hasArchive || _session.canMultiview || _compactNow)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: [
+                  // smalt bilde (telefonen): castingen startes herfra
+                  if (_compactNow && !_casting)
+                    OutlinedButton.icon(
+                      onPressed: () => unawaited(_startCast()),
+                      icon: const Icon(Icons.cast, size: 18),
+                      label: Text(tr('Cast til TV')),
+                    ),
                   if (_hasArchive) ...[
                     OutlinedButton.icon(
                       onPressed: _startable == null ? null : () => unawaited(_startOver()),

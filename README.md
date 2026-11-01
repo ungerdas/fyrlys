@@ -4,10 +4,12 @@
 
 <h1 align="center">Fyrlys</h1>
 
-<p align="center">IPTV-spiller for Windows: TV, TV-guide, TV-arkiv, filmer og serier.</p>
+<p align="center">IPTV-spiller for Windows og Android-telefoner: TV, TV-guide, TV-arkiv, filmer og serier.</p>
 
 <p align="center">
   <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-oppsett.exe"><b>Last ned for Windows</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-android.apk"><b>Android</b></a>
   &nbsp;·&nbsp;
   <a href="CHANGELOG.md">Hva er nytt</a>
   &nbsp;·&nbsp;
@@ -19,7 +21,7 @@
 </p>
 
 Fyrlys spiller abonnementet ditt hos en IPTV-leverandør, med M3U-lenke eller Xtream Codes. Den har ingen kanaler selv.
-Appen er på norsk eller engelsk (som Windows; byttes under tannhjulet → Utseende).
+Appen er på norsk eller engelsk (som Windows eller telefonen; byttes under tannhjulet → Utseende).
 
 ## Funksjoner
 
@@ -29,8 +31,8 @@ Appen er på norsk eller engelsk (som Windows; byttes under tannhjulet → Utsee
 - Filmer og serier med «Fortsett å se» (Xtream Codes)
 - Flere innlogginger, hver med sine egne favoritter, og multiview med en kanal fra hvert abonnement
 - mpv som avspiller: de fleste formater, lydspor og undertekster
-- Minispiller som ligger øverst, bildeformat og lydforsinkelse per kanal
-- Cast til TV med Chromecast (PC-en må stå på mens du caster)
+- Minispiller som ligger øverst (Windows), bildeformat og lydforsinkelse per kanal
+- Cast til TV med Chromecast (PC-en eller telefonen sender strømmen videre, så Fyrlys må være på mens du caster)
 - Oppdaterer seg selv
 
 ## Kom i gang
@@ -43,6 +45,19 @@ Appen er på norsk eller engelsk (som Windows; byttes under tannhjulet → Utsee
 Noe som ikke virker? Lagre en feilrapport (tannhjulet → Hjelp) og [meld fra](https://github.com/ungerdas/fyrlys/issues/new/choose).
 
 Vil du ikke installere, kan du bruke [`Fyrlys-windows.zip`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-windows.zip) i stedet.
+
+### Android
+
+1. Last ned [`Fyrlys-android.apk`](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-android.apk) på
+   telefonen og åpne den. Første gang spør Android om nettleseren (eller filbehandleren) får installere apper: tillat det.
+   Appen ligger ikke i Google Play.
+2. Logg inn som på PC-en. Innloggingen lagres bare i appen på telefonen.
+3. Nye versjoner: appen sier fra, laster ned når du trykker *Last ned* og installerer med *Installer* (første gang må du
+   tillate at Fyrlys installerer apper).
+
+Telefoner med 64-bit Android 7 eller nyere (arm64). Snu telefonen for å se på hele skjermen. Når du caster, sender
+telefonen strømmen videre til TV-en: et varsel viser at Fyrlys er i gang, også med skjermen av. Lukker du appen, stopper
+castingen.
 
 <details>
 <summary>Taster</summary>
@@ -69,7 +84,7 @@ Laget i Flutter, med [media_kit](https://github.com/media-kit/media-kit) og [mpv
 [GitHub Actions](.github/workflows/build.yml).
 
 ```bash
-flutter create --org no.fyrlys --project-name fyrlys --platforms=windows .
+flutter create --org no.fyrlys --project-name fyrlys --platforms=windows,android .
 flutter run
 ```
 

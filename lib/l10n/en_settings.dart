@@ -184,4 +184,16 @@ const enSettings = <String, String>{
 
   // build_info.dart
   '(eget bygg)': '(own build)',
+
+  // Android (telefonen)
+  'Del feilrapport': 'Share error report',
+  'Fant {version}. Trykk Last ned.': 'Found {version}. Tap Download.',
+  'Innloggingen slettes fra Fyrlys på denne telefonen. Favorittene og det du har sett, kommer tilbake hvis du logger '
+          'inn igjen.':
+      'The login is removed from Fyrlys on this phone. Your favorites and what you have watched come back if you '
+          'log in again.',
+  'Installer': 'Install',
+  'Som telefonen': 'Same as the phone',
+  '{version} er klar til å installeres': '{version} is ready to install',
+  '{version} er lastet ned. Trykk Installer.': '{version} is downloaded. Tap Install.',
 };

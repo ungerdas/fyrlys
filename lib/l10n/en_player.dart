@@ -141,4 +141,22 @@ const enPlayer = <String, String>{
   'Chromecasten fikk ikke hentet strømmen via PC-en (kode {code}). Prøv igjen, eller se om kanalen spilles på PC-en.':
       "The Chromecast couldn't fetch the stream through the PC (code {code}). Try again, or check whether the channel "
           'plays on the PC.',
+
+  // Android (telefonen)
+  'Caster til {name}. Telefonen sender strømmen videre, så la Fyrlys være på.':
+      'Casting to {name}. The phone passes the stream on, so keep Fyrlys running.',
+  'Chromecasten fikk ikke hentet strømmen fra telefonen. Er telefonen og Chromecasten på samme wifi? Prøv igjen.':
+      "The Chromecast couldn't fetch the stream from the phone. Are the phone and the Chromecast on the same Wi-Fi? "
+          'Try again.',
+  'Chromecasten fikk ikke hentet strømmen via telefonen (kode {code}). Prøv igjen, eller se om kanalen spilles på '
+          'telefonen.':
+      "The Chromecast couldn't fetch the stream through the phone (code {code}). Try again, or check whether the "
+          'channel plays on the phone.',
+  'Fant ingen Chromecast. Den må være på samme wifi som telefonen.':
+      'No Chromecast found. It has to be on the same Wi-Fi as the phone.',
+  'Fikk ikke kontakt med {name}. Er den på og på samme wifi som telefonen?':
+      "Couldn't reach {name}. Is it on, and on the same Wi-Fi as the phone?",
+  'Telefonen sender strømmen videre til TV-en, så Fyrlys må være på (også med skjermen av) mens du caster.':
+      'The phone passes the stream on to the TV, so Fyrlys has to keep running (the screen can be off) while you '
+          'cast.',
 };

@@ -1,9 +1,16 @@
 import 'package:flutter/foundation.dart';
 
+import '../../l10n/tr.dart';
+import '../../platform.dart';
 import 'chromecast.dart';
 import 'mdns.dart';
 
 export 'mdns.dart' show CastDevice;
+
+/// Fikk ikke kontakt med Chromecasten [name].
+String castNoContact(String name) => isAndroid
+    ? tr('Fikk ikke kontakt med {name}. Er den på og på samme wifi som telefonen?', {'name': name})
+    : tr('Fikk ikke kontakt med {name}. Er den på og på samme nettverk som PC-en?', {'name': name});
 
 /// Hvor Chromecasten er.
 enum CastState {

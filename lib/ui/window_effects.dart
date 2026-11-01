@@ -3,8 +3,11 @@ import 'dart:io';
 import 'dart:ui' show Offset, Rect, Size;
 
 import 'package:ffi/ffi.dart';
+import 'package:flutter/services.dart' show DeviceOrientation, SystemChrome, SystemUiMode;
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
+
+import '../platform.dart';
 
 // Windows: animasjonene når vinduet maksimeres og gjenopprettes slås av mens Fyrlys går inn og ut av fullskjerm.
 // Et maksimert vindu må gjøres vanlig før fullskjerm (se WindowFullscreen nederst), og uten dette krymper
@@ -82,6 +85,8 @@ Future<void> withoutWindowAnimations(Future<void> Function() action) async {
 /// Fullskjerm for vinduet på PC, felles for TV- og filmspilleren. window_manager (0.5.x) gjør et maksimert vindu
 /// bare like stort som skjermen, med tittellinja igjen og bunnen bak oppgavelinja. Derfor gjøres vinduet vanlig
 /// først, så fullskjerm, og det maksimeres igjen etterpå, uten animasjonene. Ett steg om gangen.
+/// På Android: systemlinjene skjules (de kommer fram med et sveip), og telefonen holdes ikke på tvers her
+/// (det gjør spilleren med [landscape]).
 class WindowFullscreen {
   WindowFullscreen._();
 
@@ -97,6 +102,15 @@ class WindowFullscreen {
   Future<void> set(bool on) {
     if (on == _on) return _queue;
     _on = on;
+    if (isAndroid) {
+      return _queue = _queue.then((_) async {
+        try {
+          await SystemChrome.setEnabledSystemUIMode(on ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge);
+        } on Object {
+          // ikke tilgjengelig her
+        }
+      });
+    }
     Future<void> step() async {
       try {
         if (on) {
@@ -119,12 +133,29 @@ class WindowFullscreen {
   }
 }
 
+/// Android: hold telefonen på tvers ([on]), eller helst på høykant (false), eller som den holdes (null).
+Future<void> landscape(bool? on) async {
+  if (!isAndroid) return;
+  try {
+    await SystemChrome.setPreferredOrientations(switch (on) {
+      true => const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
+      false => const [DeviceOrientation.portraitUp],
+      null => const [],
+    });
+  } on Object {
+    // ikke tilgjengelig her
+  }
+}
+
 /// Minispilleren: vinduet blir lite, uten tittellinje, nederst til høyre på skjermen det står på, og alltid øverst.
 /// Størrelsen og plassen fra før (og om det var maksimert) kommer tilbake etterpå. Ett steg om gangen.
 class MiniWindow {
   MiniWindow._();
 
   static final instance = MiniWindow._();
+
+  /// bare på PC (en telefon har ikke vinduer)
+  static bool get supported => !isAndroid;
 
   static const size = Size(480, 270);
   static const _margin = 24.0;
@@ -138,7 +169,7 @@ class MiniWindow {
   Future<void> _queue = Future.value();
 
   Future<void> set(bool on) {
-    if (on == _on) return _queue;
+    if (on == _on || !supported) return _queue;
     _on = on;
     Future<void> step() async {
       try {
@@ -188,6 +219,7 @@ class MiniWindow {
 
 /// Flytter vinduet med musa (minispilleren har ingen tittellinje).
 void dragWindow() {
+  if (isAndroid) return;
   try {
     windowManager.startDragging().ignore();
   } on Object {

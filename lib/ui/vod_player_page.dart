@@ -13,6 +13,7 @@ import '../core/session.dart';
 import '../core/source.dart';
 import '../core/vod.dart';
 import '../l10n/tr.dart';
+import '../platform.dart';
 import '../theme.dart';
 import 'cast_ui.dart';
 import 'language_dialog.dart';
@@ -92,7 +93,7 @@ class _VodPlayer extends StatefulWidget {
   State<_VodPlayer> createState() => _VodPlayerState();
 }
 
-class _VodPlayerState extends State<_VodPlayer> {
+class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   late final Playback _pb = (widget.page.playback ?? playbackFactory)();
   final FocusNode _focus = FocusNode(debugLabel: 'filmspiller');
   final List<StreamSubscription<Object?>> _subs = [];
@@ -106,12 +107,13 @@ class _VodPlayerState extends State<_VodPlayer> {
   bool _ending = false;
   String? _status;
   bool _controls = true;
-  late bool _full = widget.page.startFull;
+  /// fullskjerm (PC); på telefonen fyller spilleren alltid skjermen
+  late bool _full = widget.page.startFull && !isAndroid;
   double? _seekValue;
   bool _dragging = false;
   late double _volume = _session.volume;
   late bool _muted = _session.muted;
-  PointerDeviceKind _pointer = PointerDeviceKind.mouse;
+  PointerDeviceKind _pointer = isAndroid ? PointerDeviceKind.touch : PointerDeviceKind.mouse;
   String? _flash;
   Timer? _flashTimer;
   Timer? _hideTimer;
@@ -198,6 +200,9 @@ class _VodPlayerState extends State<_VodPlayer> {
         }
       }));
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
+    WidgetsBinding.instance.addObserver(this);
+    // telefonen: hele skjermen, uten systemlinjene (de kommer fram med et sveip)
+    if (isAndroid) unawaited(WindowFullscreen.instance.set(true));
     appCaster.addListener(_onCast);
     if (_casting) _startCastTimer();
     unawaited(_start());
@@ -207,6 +212,7 @@ class _VodPlayerState extends State<_VodPlayer> {
   @override
   void dispose() {
     _save();
+    WidgetsBinding.instance.removeObserver(this);
     appCaster.removeListener(_onCast);
     _castTimer?.cancel();
     for (final s in _subs) {
@@ -222,8 +228,27 @@ class _VodPlayerState extends State<_VodPlayer> {
     _focus.dispose();
     // åpnet fra TV-spilleren i fullskjerm: den fortsetter i fullskjerm, så vinduet blir der
     if (_full && !widget.page.startFull) unawaited(WindowFullscreen.instance.set(false));
+    // telefonen: systemlinjene tilbake, med mindre TV-spilleren under er i fullskjerm
+    if (isAndroid && !widget.page.startFull) unawaited(WindowFullscreen.instance.set(false));
     if (_mini) unawaited(MiniWindow.instance.set(false));
     super.dispose();
+  }
+
+  /// telefonen: castingen stoppet mens appen var lagt bort, så filmen fortsetter her først når du kommer tilbake
+  bool _suspended = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!isAndroid) return;
+    // lagt bort → pause (og husk hvor du var); ikke mens det castes
+    if (state == AppLifecycleState.paused && _playing && !_casting) {
+      _save();
+      unawaited(_pb.playOrPause());
+    } else if (state == AppLifecycleState.resumed && _suspended) {
+      _suspended = false;
+      _openTries = 0;
+      unawaited(_open());
+    }
   }
 
   void _set(VoidCallback fn) {
@@ -478,7 +503,7 @@ class _VodPlayerState extends State<_VodPlayer> {
       // fikk ikke kontakt: videre her, med hvorfor
       _connecting = false;
       if (!mounted) return;
-      _snack(appCaster.error ?? tr('Fikk ikke kontakt med {name}. Er den på og på samme nettverk som PC-en?', {'name': device.name}));
+      _snack(appCaster.error ?? castNoContact(device.name));
       _openTries = 0;
       unawaited(_open());
       return;
@@ -513,7 +538,13 @@ class _VodPlayerState extends State<_VodPlayer> {
         if (!_connecting) {
           _save();
           _openTries = 0;
-          unawaited(_open());
+          final life = WidgetsBinding.instance.lifecycleState;
+          if (isAndroid && (life == AppLifecycleState.paused || life == AppLifecycleState.hidden)) {
+            // telefonen: ikke spill her i bakgrunnen; fortsetter når du kommer tilbake
+            _suspended = true;
+          } else {
+            unawaited(_open());
+          }
         }
       }
       _set(() {});
@@ -782,7 +813,7 @@ class _VodPlayerState extends State<_VodPlayer> {
 
   /// Minispilleren (I). Fra fullskjerm går det rett dit.
   Future<void> _setMini(bool on) async {
-    if (on == _mini || !mounted || (on && _casting)) return;
+    if (on == _mini || !mounted || (on && _casting) || !MiniWindow.supported) return;
     setState(() {
       _mini = on;
       if (on) _full = false;
@@ -821,6 +852,8 @@ class _VodPlayerState extends State<_VodPlayer> {
       unawaited(_setMini(false));
       return;
     }
+    // telefonen: spilleren fyller alltid skjermen
+    if (isAndroid) return;
     setState(() => _full = !_full);
     unawaited(WindowFullscreen.instance.set(_full));
     _wake();
@@ -1188,14 +1221,18 @@ class _VodPlayerState extends State<_VodPlayer> {
                         _hasNext ? () => _go(_index + 1) : null),
                   ],
                   const Spacer(),
-                  _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
-                  if (!compact) _volumeSlider(volume),
+                  // telefonen: volumknappene på siden (i et smalt bilde er det ikke plass til lyd av)
+                  if (!(isAndroid && compact))
+                    _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
+                  if (!compact && !isAndroid) _volumeSlider(volume),
                   _tracksButton(),
-                  if (!compact) _ctl(Icons.cast, tr('Cast til TV (Chromecast)'), () => unawaited(_startCast())),
-                  if (!compact)
+                  if (!compact || isAndroid)
+                    _ctl(Icons.cast, tr('Cast til TV (Chromecast)'), () => unawaited(_startCast())),
+                  if (!compact && MiniWindow.supported)
                     _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
-                  _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen,
-                      _full ? tr('Avslutt fullskjerm (F)') : tr('Fullskjerm (F)'), _toggleFull),
+                  if (!isAndroid)
+                    _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen,
+                        _full ? tr('Avslutt fullskjerm (F)') : tr('Fullskjerm (F)'), _toggleFull),
                 ],
               ),
             ],

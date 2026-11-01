@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../../l10n/tr.dart';
+import '../../platform.dart';
+import '../android_host.dart';
 import 'cast_protocol.dart';
 import 'cast_proxy.dart';
 import 'caster.dart';
@@ -244,13 +246,36 @@ class ChromecastCaster extends Caster {
   @override
   bool get muted => _muted;
 
+  /// Android: wifi slipper multicast gjennom (svarene fra Chromecastene) bare så lenge det letes.
   @override
-  Stream<CastDevice> discover() => _discovery();
+  Stream<CastDevice> discover() async* {
+    await AndroidHost.multicast(true);
+    try {
+      yield* _discovery();
+    } finally {
+      await AndroidHost.multicast(false);
+    }
+  }
+
+  /// Android: varselet og tjenesten som holder appen og wifi i gang mens det castes (telefonen sender strømmen
+  /// videre), også når skjermen er av eller du er i en annen app
+  bool _service = false;
 
   void _set(CastState state, {String? error}) {
     _state = state;
     _error = error;
+    _syncService();
     notifyListeners();
+  }
+
+  void _syncService() {
+    final device = _device;
+    final on = device != null && _state != CastState.connecting;
+    if (on == _service) return;
+    _service = on;
+    unawaited(AndroidHost.casting(on
+        ? tr('Caster til {name}. Telefonen sender strømmen videre, så la Fyrlys være på.', {'name': device?.name ?? ''})
+        : null));
   }
 
   @override
@@ -300,8 +325,7 @@ class ChromecastCaster extends Caster {
       debugPrint('Chromecast: kunne ikke koble til ($e)');
       await _disconnect(stopApp: false);
       _device = null;
-      _set(CastState.off, error: tr('Fikk ikke kontakt med {name}. Er den på og på samme nettverk som PC-en?',
-          {'name': device.name}));
+      _set(CastState.off, error: castNoContact(device.name));
       rethrow;
     }
   }
@@ -381,8 +405,11 @@ class ChromecastCaster extends Caster {
 
   String _loadError(CastProxy proxy, int before, {int? code}) {
     if (proxy.requests == before) {
-      return tr('Chromecasten fikk ikke hentet strømmen fra PC-en. Har Windows-brannmuren stoppet Fyrlys? '
-          'Tillat Fyrlys på private nettverk, og prøv igjen.');
+      return isAndroid
+          ? tr('Chromecasten fikk ikke hentet strømmen fra telefonen. Er telefonen og Chromecasten på samme wifi? '
+              'Prøv igjen.')
+          : tr('Chromecasten fikk ikke hentet strømmen fra PC-en. Har Windows-brannmuren stoppet Fyrlys? '
+              'Tillat Fyrlys på private nettverk, og prøv igjen.');
     }
     return _errorText(code) ??
         tr('Chromecasten kunne ikke spille dette. Den spiller HLS med H.264 og AAC; noen kanaler sendes på en måte '
@@ -400,6 +427,8 @@ class ChromecastCaster extends Caster {
         102 || 110 => tr('Chromecasten klarte ikke å vise denne kanalen (feil i bildet eller lyden, kode {code}). Den '
             'spiller H.264 og AAC; kanalen sendes trolig med noe annet.', {'code': code}),
         104 || 316 => tr('Chromecasten støtter ikke formatet denne kanalen sendes i (kode {code}).', {'code': code}),
+        103 || 300 || 301 || 311 || 312 || 315 when isAndroid => tr('Chromecasten fikk ikke hentet strømmen via '
+            'telefonen (kode {code}). Prøv igjen, eller se om kanalen spilles på telefonen.', {'code': code}),
         103 || 300 || 301 || 311 || 312 || 315 => tr('Chromecasten fikk ikke hentet strømmen via PC-en (kode {code}). '
             'Prøv igjen, eller se om kanalen spilles på PC-en.', {'code': code}),
         _ => tr('Chromecasten stoppet avspillingen (feil i strømmen, kode {code}).', {'code': code}),

@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'build_info.dart';
+import 'core/android_host.dart';
 import 'core/app_log.dart';
 import 'core/cache.dart';
 import 'core/report.dart';
@@ -16,26 +17,30 @@ import 'core/session.dart';
 import 'core/single_instance.dart';
 import 'core/updater.dart';
 import 'l10n/tr.dart';
+import 'platform.dart';
 import 'ui/playback.dart';
 import 'ui/window_memory.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _keepLog();
-  // Språket fra Windows til Session har lest det du har valgt, så det oppdateringen sier før det, står på det.
+  // Språket fra Windows (eller telefonen) til Session har lest det du har valgt, så det oppdateringen sier før det, står på det.
   final systemLanguage = languageOfLocale(WidgetsBinding.instance.platformDispatcher.locale.languageCode);
   appLanguage = systemLanguage;
   // En oppdatering som ble lastet ned, men ikke lagt inn da appen ble lukket, legges inn før appen vises;
   // den nye utgaven starter av seg selv.
-  final updater = Updater();
+  // Android: nedlastingene i appens egen mappe (APK-en installeres derfra)
+  final updater = isAndroid
+      ? Updater(workDir: '${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}oppdatering')
+      : Updater();
   if (await updater.beforeStart()) exit(0);
   // Bare én Fyrlys: starter du den en gang til, kommer vinduet som er åpent fram (før noe ryddes på disken).
-  if (await SingleInstance.isSecond(onShow: () => unawaited(_bringToFront()))) exit(0);
+  if (!isAndroid && await SingleInstance.isSecond(onShow: () => unawaited(_bringToFront()))) exit(0);
   MediaKit.ensureInitialized();
-  await windowManager.ensureInitialized();
+  if (!isAndroid) await windowManager.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   // samme størrelse og plass som sist, før vinduet vises
-  await WindowMemory.restore(prefs);
+  if (!isAndroid) await WindowMemory.restore(prefs);
   // kanallista fra sist og bildene på disk, så appen er klar med en gang (uten mapper: hentes hver gang)
   ListCache? lists;
   try {
@@ -63,7 +68,16 @@ Future<void> main() async {
 
 /// Loggen til feilrapporten: alt som skrives med debugPrint, og feil ingen tok seg av.
 void _keepLog() {
-  final log = AppLog.instance..add('$appBuildLabel ${windowsName(Platform.operatingSystemVersion)}');
+  final log = AppLog.instance;
+  if (isAndroid) {
+    log.add(appBuildLabel);
+    unawaited(AndroidHost.device().then((d) {
+      androidDevice = d;
+      if (d != null) log.add(d);
+    }));
+  } else {
+    log.add('$appBuildLabel ${windowsName(Platform.operatingSystemVersion)}');
+  }
   final original = debugPrint;
   debugPrint = (message, {wrapWidth}) {
     if (message != null) log.add(message);

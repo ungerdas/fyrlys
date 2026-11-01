@@ -1,8 +1,9 @@
 # Fyrlys-appen – arbeidsnotater for Claude
 
-Egen app for Fyrlys, en IPTV-spiller: Flutter med media_kit (mpv) som avspiller, **bare for Windows**
-(eieren 26.10: «vi kjører kun Windows, fjerner alt Linux og Android»; i 2.1.12 er Android-bygget, `android/`,
-telefon-/TV-koden og et Linux-forsøk som aldri ble lagt ut, fjernet; det finnes i historikken). Den kommer **i tillegg til** Docker-versjonen
+Egen app for Fyrlys, en IPTV-spiller: Flutter med media_kit (mpv) som avspiller, for **Windows og Android-telefoner**
+(eieren 26.10: «vi kjører kun Windows», så Android ble fjernet i 2.1.12; 1.11 ville han ha den tilbake: «Kan du lage
+android mobil versjon? med Chromecast», i samme app og som APK fra GitHub, 2.1.26; Android TV og Linux er ikke med).
+Den kommer **i tillegg til** Docker-versjonen
 (nettside + server med ffmpeg) i et eget, privat repo.
 Fra 2.1.6 (eieren 26.10: «Fyrlys server dropper vi») logger appen inn med M3U-lenke eller Xtream Codes og henter
 alt rett fra leverandøren, og oppdateringene rett fra GitHub (fra 2.1.11 uten valg av oppdateringsserver); appen
@@ -25,6 +26,16 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   Loggene og artefaktene kan **ikke** lastes ned herfra (de ligger i blob-lagring som er stengt). Når et steg
   feiler, legger workflowen slutten av loggen som merknad; les den med
   `gh api repos/ungerdas/fyrlys/check-runs/<jobb-id>/annotations` (jobb-id fra `gh run view <id> --json jobs`).
+- Android-mappen lages av `flutter create … --platforms=android` i Android-jobben (2.1.26). I repoet ligger bare
+  `android/app/src/main/AndroidManifest.xml` (tillatelser, `CastService`, `ApkProvider`, http), Kotlin-filene i
+  `android/app/src/main/kotlin/no/fyrlys/fyrlys/` (`MainActivity` med kanalen `fyrlys/android`, `CastService`,
+  `ApkProvider`) og ikonene i `res/`; resten (Gradle, styles) lages av malen. applicationId `no.fyrlys.fyrlys`, minSdk
+  24 (Flutter sin), bare arm64. APK-en signeres med apksigner etter bygget med hemmelighetene `ANDROID_KEYSTORE_B64`,
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (eieren lager nøkkelen og legger dem inn; de kan ikke settes eller
+  leses herfra, proxyen stopper actions/secrets). Uten dem bygges APK-en, men legges ikke i releasen (en advarsel på
+  kjøringen), fordi en APK med tilfeldig nøkkel ikke kan oppdateres. Mister han nøkkelen, må appen avinstalleres og
+  installeres på nytt (innloggingen og favorittene forsvinner). Kotlin kan heller ikke kompileres her: feil kommer i
+  Android-jobben (merknad fra build.log).
 - Windows-mappen lages av `flutter create --org no.fyrlys --project-name fyrlys --platforms=windows` i hvert bygg. I
   repoet ligger bare `windows/runner/resources/app_icon.ico` og `windows/installer/fyrlys.iss` (2.1.13, Inno Setup:
   `Fyrlys-oppsett.exe`, per bruker uten administrator i `{autopf}` = `%LOCALAPPDATA%\Programs\Fyrlys`, snarveier,
@@ -45,8 +56,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   byggnummer eller commit (eieren 26.10: «bygg 30 sånt kan du droppe»). Skriv avsnittet `## vX.Y.Z` i
   `CHANGELOG.md` før push: det blir teksten i releasen.
 - **Releaser** (eieren 26.10: «vi er ferdige med testbygg»): jobben `release` legger hver versjon ut som en vanlig
-  GitHub-release `vX.Y.Z` («Fyrlys X.Y.Z», blir «Latest»), med `Fyrlys-oppsett.exe` og `Fyrlys-windows.zip` (faste
-  navn, så `releases/latest/download/<fil>` alltid er siste versjon; appen oppdaterer seg fra zip-fila; v2.1.10–
+  GitHub-release `vX.Y.Z` («Fyrlys X.Y.Z», blir «Latest»), med `Fyrlys-oppsett.exe`, `Fyrlys-windows.zip` og (når den
+  er signert) `Fyrlys-android.apk` (faste navn, så `releases/latest/download/<fil>` alltid er siste versjon; appen
+  oppdaterer seg fra zip-fila eller APK-en; releasen venter på både Windows- og Android-jobben; v2.1.10–
   v2.1.11 har også APK-er; artefaktene hentes med navn, actions checkout@v7, upload-artifact@v7, download-artifact@v8), teksten fra CHANGELOG.md og
   byggnummeret skjult som `<!-- bygg N -->` (appen leser det). Finnes releasen alt (samme versjon på nytt), byttes
   filene (andre filnavn slettes først) og teksten. Appen spør `releases/latest`. (Fram til 2.1.9 lå versjonene i
@@ -57,6 +69,27 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   FYRLYS_VERSION/BUILD/COMMIT/REPO, `lib/build_info.dart`); byggnummeret (`--build-number`) er `github.run_number`. Kjøringer kan avbrytes med `gh run cancel <id> --repo ungerdas/fyrlys`.
 
 ## Arkitektur (`lib/`)
+- Android (2.1.26): `platform.dart` (`isAndroid`, kan settes i testene; testene kjører på Linux). `core/android_host.dart`
+  (`AndroidHost`: `device`, `multicast`, `casting(tekst|null)`, `install(sti)`, `openUrl`, `share`; gjør ingenting
+  utenfor Android, og feil fra kanalen logges). `main.dart` hopper over én-Fyrlys, window_manager og `WindowMemory`, og
+  gir `Updater` mappen `getApplicationSupportDirectory()/oppdatering` (den `ApkProvider` leser fra). `WindowFullscreen`
+  = systemlinjene (immersiveSticky/edgeToEdge), `landscape(bool?)` holder telefonen på tvers/høykant, `MiniWindow.supported`
+  er false. TV-spilleren: på tvers (`_autoFull`, høyde < 500) = fullskjerm uten knapp for å gå ut; fullskjerm-knappen
+  snur telefonen (`landscape`), ut igjen = høykant til spilleren lukkes; «Cast til TV» som knapp under bildet når bildet
+  er smalt (`_compactNow`, også på Windows); ingen volumglidebryter; lagt bort (`paused`, ikke mens det castes eller
+  arkivet/multiview er over) = `_suspended`, strømmen stoppes og åpnes igjen ved `resumed`; stopper castingen mens appen
+  er borte, spilles det ikke her før du kommer tilbake (`_inBackground`). Filmspilleren: alltid hele skjermen
+  (`_full` false, ingen fullskjerm-knapp), cast-knappen også smalt, «Lyd av» bort når det er smalt, pause når den legges
+  bort. mpv-bufferet er mindre (600/300 MiB på disk). `Updater` på Android: `-android.apk`, lastes ned først når du
+  trykker «Last ned» (mobildata), `install()` åpner installeringen (første gang åpner Android innstillingen for å
+  installere apper, og den må trykkes igjen), `beforeStart` ser at den er installert (`klar.json` med samme bygg →
+  «Fyrlys er oppdatert») og rydder. Feilrapporten deles (`shareReport`), systemlinja er «Android: 15 (API 35) · modell».
+  Tekster som sier PC/Windows har egne for telefonen (`castNoContact` i `caster.dart`, brannmuren, «Som telefonen»).
+  Chromecast: `ChromecastCaster.discover` holder multicast-låsen mens det letes; `_syncService` starter `CastService`
+  (forgrunnstjeneste, mediaPlayback, varsel, wifi- og wake-lås, `stopWithTask`) når den er koblet til, og stopper den når
+  castingen stopper. Innloggingen lagres ukryptert i appens egne innstillinger på Android (`NoSecretCodec`).
+  Testet i `test/android_test.dart` (spillerne på høykant/tvers, livssyklus, casting i bakgrunnen) og
+  `updater_test.dart`; ikke prøvd på en ekte telefon: Kotlin-delen, varselet, multicast, installeringen, mpv på Android.
 - `core/source.dart` – `TvSource` (`kind` `xtream`/`m3u`, `hasVod`): kilde til kanaler, EPG, strømadresser og
   favoritter. `PlayTarget(urls, localShift:)`. Begge kildene spiller rett fra leverandøren (`localShift: true`).
   TV-arkivet (2.1.14): `archive(channel)` (programmene, `EpgEntry.inArchive`) og `archiveClip(channel, program)` →
@@ -431,6 +464,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   gang) og lagt inn logging av hva TV-en og mellomstasjonen gjør. Leverandørens spilleliste har typen
   `application/x-mpegurl` («mime type is not rfc8216 compliant» fra mpv), som ble kjent igjen også før. Eieren
   rettet også at rapporten sa Windows 10 (han har Windows 11).
+- 1.11.2026: 2.1.26: Android-telefoner tilbake (se Arkitektur), med Chromecast. Venter på at eieren legger inn
+  signeringsnøkkelen (fram til da kommer ingen APK i releasen) og prøver appen på telefonen.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

@@ -9,6 +9,7 @@ import '../core/languages.dart';
 import '../core/names.dart';
 import '../core/picture.dart';
 import '../l10n/tr.dart';
+import '../platform.dart';
 
 /// Et lydspor eller en undertekst man kan velge i spilleren.
 class TrackChoice {
@@ -189,8 +190,10 @@ class MpvPlayback implements Playback {
       await _try(() => p.setProperty('cache-on-disk', 'yes'));
     }
     final disk = dir != null;
-    await _try(() => p.setProperty('demuxer-max-back-bytes', disk ? '2000MiB' : '400MiB'));
-    await _try(() => p.setProperty('demuxer-max-bytes', disk ? '1000MiB' : '200MiB'));
+    // telefonen: mindre (lagringsplass og minne)
+    final phone = isAndroid;
+    await _try(() => p.setProperty('demuxer-max-back-bytes', disk ? (phone ? '600MiB' : '2000MiB') : (phone ? '120MiB' : '400MiB')));
+    await _try(() => p.setProperty('demuxer-max-bytes', disk ? (phone ? '300MiB' : '1000MiB') : (phone ? '60MiB' : '200MiB')));
   }
 
   @override
