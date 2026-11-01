@@ -1,5 +1,13 @@
 # Endringer
 
+## v2.1.28
+
+- **NRK1, NRK2, NRK3 og NRK Super er én kanal hver.** Leverandørens varianter (HD, FHD og «NRK 3/SUPER») slås
+  sammen, og spilles fra NRK. NRK3 og NRK Super blir to kanaler, også når leverandøren har dem som én. Guiden, logoen
+  og arkivet kommer fra den beste varianten (FHD), og favoritter på en av variantene blir den samlede kanalen.
+- NRK-kanalene kjennes nå igjen også når landet står bak navnet («NRK 1 HD NO»); i 2.1.27 gjorde de ikke det.
+- NRK 2 Lydtekst og de regionale NRK-kanalene står som før, fra leverandøren.
+
 ## v2.1.27
 
 - **NRK fra NRK:** NRK1, NRK2, NRK3 og NRK Super spilles (og castes) fra NRK sine egne direktesendinger i stedet for

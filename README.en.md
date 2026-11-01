@@ -22,7 +22,7 @@ The app is in English or Norwegian (it follows Windows or the phone; change it u
 - Live TV with favorites, categories, search and channel numbers
 - TV guide, and catch-up (TV archive) when the provider has it
 - Pause and rewind live TV
-- NRK1, NRK2, NRK3 and NRK Super from NRK's own live streams (the provider's stream is the fallback)
+- NRK1, NRK2, NRK3 and NRK Super from NRK's own live streams, one channel each (the provider's stream is the fallback)
 - Movies and series with “Continue watching” (Xtream Codes)
 - Several logins, each with its own favorites, and multiview with a channel from each subscription
 - mpv as the player: most formats, audio tracks and subtitles

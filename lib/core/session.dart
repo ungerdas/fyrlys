@@ -12,6 +12,7 @@ import 'm3u_source.dart';
 import 'models.dart';
 import 'names.dart';
 import 'picture.dart';
+import 'public_streams.dart';
 import 'secrets.dart';
 import 'source.dart';
 import 'vod.dart';
@@ -502,7 +503,9 @@ class Session extends ChangeNotifier {
     }
   }
 
-  void _applyLists(List<Category> cats, List<Channel> chans) {
+  void _applyLists(List<Category> cats, List<Channel> all) {
+    // leverandørens varianter av NRK1, NRK2, NRK3 og NRK Super blir én kanal hver (spilles fra NRK)
+    final chans = mergePublicChannels(all);
     final counts = <String, int>{};
     for (final c in chans) {
       counts[c.categoryId] = (counts[c.categoryId] ?? 0) + 1;
@@ -513,8 +516,26 @@ class Session extends ChangeNotifier {
     categoryCounts = counts;
     _byId = {for (final c in chans) c.id: c};
     _filtered.clear();
-    favorites = [for (final f in favorites) _byId[f.id] ?? f];
-    recent = [for (final r in recent) _byId[r.id] ?? r];
+    favorites = _current(favorites);
+    recent = _current(recent);
+  }
+
+  /// Kanalene slik de er i lista nå. En variant som er slått sammen (favoritten «NRK 1 HD» fra før) blir den
+  /// samlede (NRK1), én gang.
+  List<Channel> _current(List<Channel> list) {
+    final byKey = <String, Channel>{};
+    for (final c in channels) {
+      final k = publicStreamKey(c.name);
+      if (k != null) byKey.putIfAbsent(k, () => c);
+    }
+    final seen = <String>{};
+    final out = <Channel>[];
+    for (final f in list) {
+      final keys = publicStreamKeys(f.name);
+      final c = _byId[f.id] ?? (keys.isEmpty ? null : byKey[keys.first]) ?? f;
+      if (seen.add(c.id)) out.add(c);
+    }
+    return out;
   }
 
   /// Programinfo for favorittene og det du har sett sist hentes med en gang, så startsiden er fylt ut når den

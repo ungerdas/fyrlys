@@ -382,7 +382,7 @@ class M3uSource implements TvSource {
   @override
   Future<List<EpgEntry>> epg(String channelId, {int limit = 6}) async {
     await _ensure();
-    final e = _entries[channelId];
+    final e = _entries[providerChannelId(channelId)];
     if (e == null || epgUrls.isEmpty) return const [];
     final guide = await _loadGuide();
     if (guide == null) return const [];
@@ -403,7 +403,7 @@ class M3uSource implements TvSource {
   @override
   Future<PlayTarget> open(Channel channel) async {
     await _ensure();
-    final e = _entries[channel.id];
+    final e = _entries[providerChannelId(channel.id)];
     if (e == null) throw SourceException(tr('Fant ikke kanalen i lista. Hent listene på nytt i innstillingene.'));
     // NRK-kanalene fra NRK selv (leverandørens adresse er reserven)
     final public = publicStreamFor(channel.name);

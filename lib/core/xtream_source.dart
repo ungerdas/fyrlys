@@ -391,7 +391,7 @@ class XtreamSource implements TvSource {
 
   @override
   Future<List<EpgEntry>> epg(String channelId, {int limit = 6}) async {
-    final d = await _api('get_short_epg', {'stream_id': channelId, 'limit': '${limit < 8 ? 8 : limit}'});
+    final d = await _api('get_short_epg', {'stream_id': providerChannelId(channelId), 'limit': '${limit < 8 ? 8 : limit}'});
     final listings = d is Map ? d['epg_listings'] : null;
     final now = DateTime.now();
     final out = <EpgEntry>[];
@@ -419,7 +419,7 @@ class XtreamSource implements TvSource {
   @override
   Future<PlayTarget> open(Channel channel) async {
     // HLS fra leverandøren starter ved direktepunktet; MPEG-TS er reserven
-    final base = '$server/live/$_creds/${channel.id}';
+    final base = '$server/live/$_creds/${providerChannelId(channel.id)}';
     // NRK-kanalene fra NRK selv (leverandørens adresser er reserven)
     final public = publicStreamFor(channel.name);
     // rett fra leverandøren: avspilleren tar vare på det siste selv, så det går an å pause og spole tilbake
@@ -431,7 +431,7 @@ class XtreamSource implements TvSource {
   @override
   Future<List<EpgEntry>> archive(Channel channel) async {
     if (!channel.hasArchive) return const [];
-    final d = await _api('get_simple_data_table', {'stream_id': channel.id});
+    final d = await _api('get_simple_data_table', {'stream_id': providerChannelId(channel.id)});
     return parseArchive(d, now: DateTime.now(), days: channel.archiveDays);
   }
 
@@ -460,7 +460,8 @@ class XtreamSource implements TvSource {
         final ms = program.start.add(from < Duration.zero ? Duration.zero : from).millisecondsSinceEpoch;
         final at = DateTime.fromMillisecondsSinceEpoch(ms - ms % 60000);
         final minutes = math.max(1, (program.stop.difference(at).inSeconds / 60).ceil());
-        final base = '$server/timeshift/$_creds/$minutes/${xtreamTime(at, archiveOffset(at, clock))}/${channel.id}';
+        final base =
+            '$server/timeshift/$_creds/$minutes/${xtreamTime(at, archiveOffset(at, clock))}/${providerChannelId(channel.id)}';
         return (urls: ['$base.m3u8', '$base.ts'], from: at.difference(program.start));
       },
     );

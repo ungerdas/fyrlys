@@ -72,9 +72,17 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 ## Arkitektur (`lib/`)
 - NRK fra NRK (2.1.27, eieren 1.11: «Fyrlys skal kun bruke disse m3u8 fra NRK», og valgte å bygge dem inn for alle):
   `core/public_streams.dart` (`publicStreams`: nrk1/nrk2/nrk3/nrksuper → `…/muxed.m3u8` på NRK sitt CDN;
-  `publicStreamKey(navn)` tar bort land foran («NO: », «|NO|», «[NO]»), kvalitet («HD», «FHD», «(1080i)», «HEVC») og
-  tegn, og krever at resten er nøyaktig nøkkelen, så regionale NRK1, «NRK Tegnspråk» og «NRK1 +1» ikke byttes;
-  `isPublicStream`). `XtreamSource.open`/`M3uSource.open` setter NRK sin adresse først og leverandørens etter (reserve
+  `publicStreamKeys(navn)` tar bort land foran og bak («NO: », «|NO|», «[NO]», « NO»), kvalitet («HD», «FHD»,
+  «(1080i)», «HEVC») og tegn, og krever at resten er nøyaktig nøkkelen (eller den delte «nrk3super» → nrk3 og
+  nrksuper), så regionale NRK1, «NRK 2 Lydtekst», «NRK Tegnspråk» og «NRK1 +1» ikke byttes; `publicStreamKey` = én
+  nøkkel; `isPublicStream`). 2.1.28 (eieren: «Burde vi slå sammen da, NRK er en, NRK 2 er en, og NRK 3 er en og NRK
+  Super er en?»; leverandøren hans har «NRK 1 HD NO», «NRK 1 FHD NO», «NRK 3/SUPER NO/HD/FHD»): `mergePublicChannels`
+  i `Session._applyLists` gjør variantene til én kanal hver der den første sto (NRK Super rett etter NRK3), navn fra
+  `publicNames`, id/logo/guide/arkiv fra den beste varianten (FHD > HD > resten > SD, delt sist) som ikke er tatt (NRK3
+  og NRK Super får hver sin variant av «NRK 3/SUPER»; er det bare én, får NRK Super `<id>~nrksuper`, og kildene bruker
+  `providerChannelId` i open/epg/archive/archiveClip), nummeret fra den første. Én variant som ikke er delt, står
+  uendret. Kan kjøres på en sammenslått liste (lista fra sist). Favoritter og «sist sett» på en variant blir den
+  samlede (`Session._current`). `XtreamSource.open`/`M3uSource.open` setter NRK sin adresse først og leverandørens etter (reserve
   før bildet har startet, og i Chromecast/multiview som ellers). Guide, logo, favoritter og arkiv er leverandørens.
   Infoen i spilleren: «HLS rett fra NRK». Testet i `public_streams_test.dart` og kildetestene; om adressene virker
   (geoblokkering, CORS for Chromecast) er ikke prøvd herfra (de svarer ikke til økta). Apple TV-appen er ikke endret.
@@ -479,7 +487,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   for hånd (`workflow_dispatch` på main lager også releasen). `Fyrlys-android.apk` (ca. 60 MB) ligger i v2.1.26.
   Ikke prøvd på telefonen hans ennå.
 - 1.11.2026: 2.1.27: NRK1–3 og NRK Super fra NRK sine egne strømmer (se Arkitektur). Leverandørens strøm er reserven
-  (eieren 1.11: «IPTV skal være reserve. vil bruke strømmen fra NRK»).
+  (eieren 1.11: «IPTV skal være reserve. vil bruke strømmen fra NRK»). Kjente ikke igjen leverandørens navn med land
+  bak («NRK 1 HD NO») og den delte «NRK 3/SUPER»; rettet i 2.1.28 sammen med sammenslåingen.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
