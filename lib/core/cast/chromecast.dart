@@ -10,6 +10,7 @@ import '../android_host.dart';
 import 'cast_protocol.dart';
 import 'cast_proxy.dart';
 import 'caster.dart';
+import 'local_address.dart';
 import 'mdns.dart';
 
 class _Pending {
@@ -25,17 +26,29 @@ class _Pending {
       m.namespace == namespace && (until != null ? until!(m) : m.requestId == id);
 }
 
-/// Åpner forbindelsen til en Chromecast (testene bruker en vanlig socket).
-typedef CastSocketFactory = Future<Socket> Function(String host, int port);
+/// Åpner forbindelsen til en Chromecast fra [source] (testene bruker en vanlig socket).
+typedef CastSocketFactory = Future<Socket> Function(String host, int port, InternetAddress? source);
 
-/// TLS til Chromecasten: den har et selvsignert sertifikat.
-Future<Socket> chromecastSocket(String host, int port) =>
-    SecureSocket.connect(host, port, onBadCertificate: (_) => true, timeout: const Duration(seconds: 8));
+/// TLS til Chromecasten (den har et selvsignert sertifikat), fra [source]: adressen mellomstasjonen gir Chromecasten,
+/// så kontakten går samme vei. Går det ikke derfra, velger systemet.
+Future<Socket> chromecastSocket(String host, int port, InternetAddress? source) async {
+  const timeout = Duration(seconds: 8);
+  Socket raw;
+  try {
+    raw = await Socket.connect(host, port, sourceAddress: source, timeout: timeout);
+  } on SocketException catch (e) {
+    if (source == null) rethrow;
+    debugPrint('Chromecast: fikk ikke koble til fra adressen på samme nett (${e.osError?.message ?? e.message}); '
+        'lar systemet velge');
+    raw = await Socket.connect(host, port, timeout: timeout);
+  }
+  return SecureSocket.secure(raw, onBadCertificate: (_) => true);
+}
 
 /// Forbindelsen til én Chromecast: TLS til port 8009 (Chromecasten har et selvsignert sertifikat), meldinger fram
 /// og tilbake, og hjerteslag hvert femte sekund. Kommer det ingenting på 20 sekunder, regnes den som borte.
 class CastConnection {
-  CastConnection._(this._socket) {
+  CastConnection._(this._socket, this.localAddress) {
     _socket.listen(_onData, onDone: _onDone, onError: (Object _) => _onDone(), cancelOnError: true);
     // skriving til en forbindelse Chromecasten har brutt, feiler her (og ellers som en uventet feil i appen)
     unawaited(_socket.done.then<void>((_) {}, onError: (Object _) => _onDone()));
@@ -49,8 +62,10 @@ class CastConnection {
     });
   }
 
-  static Future<CastConnection> open(String host, int port, {CastSocketFactory? connect}) async =>
-      CastConnection._(await (connect ?? chromecastSocket)(host, port));
+  /// Kobler til fra [local] (se [localAddressFor]).
+  static Future<CastConnection> open(String host, int port,
+          {CastSocketFactory? connect, required InternetAddress local}) async =>
+      CastConnection._(await (connect ?? chromecastSocket)(host, port, local), local);
 
   /// avsenderen i meldingene våre
   static const sender = 'sender-fyrlys';
@@ -69,8 +84,9 @@ class CastConnection {
   /// forbindelsen ble brutt (ikke når [close] kalles)
   void Function()? onLost;
 
-  /// PC-ens adresse slik Chromecasten ser den (der mellomstasjonen lytter)
-  InternetAddress get localAddress => _socket.address;
+  /// PC-ens (telefonens) adresse slik Chromecasten ser den, der mellomstasjonen lytter. Ikke `_socket.address`: for
+  /// en socket vi har åpnet, er det adressen det ble koblet til, altså Chromecastens.
+  final InternetAddress localAddress;
 
   bool get closed => _closed;
 
@@ -185,12 +201,19 @@ class CastConnection {
 
 /// Google Cast til en Chromecast, med Googles egen avspiller og mellomstasjonen på PC-en.
 class ChromecastCaster extends Caster {
-  ChromecastCaster({Stream<CastDevice> Function()? discovery, CastSocketFactory? socket})
-      : _discovery = discovery ?? discoverCastDevices,
-        _socket = socket ?? chromecastSocket;
+  ChromecastCaster({
+    Stream<CastDevice> Function()? discovery,
+    CastSocketFactory? socket,
+    Future<InternetAddress?> Function(String host)? localAddress,
+  })  : _discovery = discovery ?? discoverCastDevices,
+        _socket = socket ?? chromecastSocket,
+        _localAddress = localAddress ?? localAddressFor;
 
   final Stream<CastDevice> Function() _discovery;
   final CastSocketFactory _socket;
+
+  /// adressen her som Chromecasten kan nå (testene velger selv)
+  final Future<InternetAddress?> Function(String host) _localAddress;
 
   CastConnection? _conn;
   CastProxy? _proxy;
@@ -301,7 +324,9 @@ class ChromecastCaster extends Caster {
     _item = null;
     _set(CastState.connecting);
     try {
-      final conn = await CastConnection.open(device.host, device.port, connect: _socket);
+      final local = await _localAddress(device.host);
+      if (local == null) throw StateError('fant ingen adresse her på samme nett som Chromecasten');
+      final conn = await CastConnection.open(device.host, device.port, connect: _socket, local: local);
       if (seq != _connectSeq) {
         await conn.close();
         return;
@@ -333,7 +358,11 @@ class ChromecastCaster extends Caster {
         return;
       }
       _proxy = proxy;
-      debugPrint('Chromecast: koblet til ${device.model} (mellomstasjon på port ${proxy.port})');
+      // adressene vaskes bort i loggen; hvor mye de har felles, sier om mellomstasjonen er på samme nett
+      final target = InternetAddress.tryParse(device.host);
+      final common = target == null ? null : commonPrefixBits(conn.localAddress, target);
+      debugPrint('Chromecast: koblet til ${device.model} (mellomstasjon på port ${proxy.port}'
+          '${common == null ? '' : ', adressen har $common bit felles med Chromecasten'})');
       _set(CastState.ready);
     } on Object catch (e) {
       if (seq != _connectSeq) return;
@@ -461,16 +490,8 @@ class ChromecastCaster extends Caster {
         : '';
     final coded = _errorText(code, live: item.live);
     if (coded != null) return '$coded$risk';
-    if (!fetched) {
-      if (item.live) {
-        return isAndroid
-            ? tr('Chromecasten avviste kanalen uten å hente noe fra telefonen.')
-            : tr('Chromecasten avviste kanalen uten å hente noe fra PC-en.');
-      }
-      return isAndroid
-          ? tr('Chromecasten avviste filen ({format}) uten å hente noe fra telefonen.', {'format': item.format})
-          : tr('Chromecasten avviste filen ({format}) uten å hente noe fra PC-en.', {'format': item.format});
-    }
+    // hentet ingenting med noen av typene: den kom ikke fram hit (brannmuren, eller et annet nett)
+    if (!fetched) return _unreachableText();
     if (_played) return tr('Chromecasten stoppet avspillingen (feil i strømmen).');
     if (item.live) {
       return tr('Chromecasten kunne ikke spille dette. Den spiller HLS med H.264 og AAC; noen kanaler sendes på en måte '

@@ -370,6 +370,16 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   brøt forbindelsen eller Chromecasten lukket den. `CastPanel(message:, onRetry:)`: beskjeden står i panelet og «Prøv
   igjen» (`cast-retry`) i stedet for pauseknappen; spillerne legger ikke lenger et kort oppå panelet (eieren 1.11:
   skjermbilde der de lå oppå hverandre). Om MP4-typen får Chromecasten til å spille MKV-filer, er ikke prøvd.
+  2.1.32, den egentlige feilen (feilrapport 2.11: en TV-kanal fra telefonen ga LOAD_FAILED etter 3 s, igjen uten én
+  forespørsel): `CastConnection.localAddress` var `_socket.address`, og for en socket vi åpner selv er det adressen det
+  ble koblet *til* (Dart: `_NativeSocket.normal(address)` med den oppslåtte fjernadressen), altså Chromecastens. URL-ene
+  til mellomstasjonen pekte på Chromecasten selv. Nå `local_address.dart`: `localAddressFor(host)` velger blant
+  `NetworkInterface.list` den adressen som har flest bits felles med Chromecastens (`pickLocalAddress`,
+  `commonPrefixBits`; ikke loopback, link-local bare mot link-local), `chromecastSocket(host, port, source)` kobler til
+  fra den (`Socket.connect(sourceAddress:)` + `SecureSocket.secure`; går det ikke, velger systemet), og loggen sier hvor
+  mange bits den har felles med Chromecasten (adressene vaskes bort). `ChromecastCaster(localAddress:)` i testene;
+  testen «Chromecasten får adressen her …» bruker 127.0.0.2. Hentet den ingenting med noen av typene, vises
+  `_unreachableText` (brannmuren på PC-en, samme wifi på telefonen). Ikke prøvd mot en ekte Chromecast.
 - Språk (grunnlaget i 2.1.20, engelsk i 2.1.21): `l10n/tr.dart` (`tr('norsk tekst', {'navn': verdi})` slår opp i
   `english` når `appLanguage` er 'en'; norsken er nøkkelen). `english` i `l10n/en.dart` slår sammen `en_core`,
   `en_home`, `en_player`, `en_settings` og `en_vod` (etter hvor teksten står; samme nøkkel i flere filer må ha samme
@@ -535,12 +545,15 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `ui/playback.dart`). CI med ekte libmpv (mpv v0.41.0-1308, testfil 25i): uten deinterlacing 25 bilder/s interlacet,
   mpv sin egen 50 bilder/s, kjeden 25 bilder/s uten striper. Om bildet faktisk gikk fortere enn lyden, er ikke
   avklart (spurt).
+- 2.11.2026: 2.1.32: Chromecast fikk Chromecastens egen adresse til mellomstasjonen (se Chromecast under Arkitektur);
+  det forklarer alle forsøkene fra 2.1.24 (PC) og 2.1.26 (telefonen). Telefonen hans hadde fortsatt 2.1.28 (2.1.31
+  tilgjengelig, ikke installert).
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
   `probesize`, `demuxer-lavf-probe-info=nostreams`). Når den kommer: velg det raskeste som neste versjon.
-  Chromecast: venter på om MKV-filmen spiller med 2.1.30 (ellers en ny feilrapport, kopiert), og om en TV-kanal
-  (HLS) kan castes fra telefonen og PC-en.
+  Chromecast: venter på om TV-kanaler og filmer spiller med 2.1.32 fra telefonen og PC-en (ellers en ny feilrapport,
+  kopiert).
 - Ideer senere (lista fra 26.10, han valgte 1 og 12): søk i programmene, påminnelser, sortere favorittkanalene, skjule
   kategorier/kanaler, minispiller (alltid øverst), medietaster og Windows sin medieboks (SMTC), bildeformat og
   lydforsinkelse, sove-timer, bildeundertekster (DVB/PGS) med libass, sikkerhetskopi av favoritter og innstillinger,

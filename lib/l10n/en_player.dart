@@ -143,10 +143,6 @@ const enPlayer = <String, String>{
   'Chromecasten fikk ikke hentet strømmen via PC-en (kode {code}). Prøv igjen, eller se om kanalen spilles på PC-en.':
       "The Chromecast couldn't fetch the stream through the PC (code {code}). Try again, or check whether the channel "
           'plays on the PC.',
-  'Chromecasten avviste kanalen uten å hente noe fra PC-en.':
-      'The Chromecast rejected the channel without fetching anything from the PC.',
-  'Chromecasten avviste filen ({format}) uten å hente noe fra PC-en.':
-      'The Chromecast rejected the file ({format}) without fetching anything from the PC.',
   'Chromecasten kunne ikke spille filen ({format}). Den spiller H.264-bilde med AAC- eller MP3-lyd.':
       "The Chromecast couldn't play the file ({format}). It plays H.264 video with AAC or MP3 audio.",
   'Filen har {codecs}, som mange Chromecaster ikke spiller.': "The file has {codecs}, which many Chromecasts can't play.",
@@ -177,10 +173,6 @@ const enPlayer = <String, String>{
   'Telefonen sender strømmen videre til TV-en, så Fyrlys må være på (også med skjermen av) mens du caster.':
       'The phone passes the stream on to the TV, so Fyrlys has to keep running (the screen can be off) while you '
           'cast.',
-  'Chromecasten avviste kanalen uten å hente noe fra telefonen.':
-      'The Chromecast rejected the channel without fetching anything from the phone.',
-  'Chromecasten avviste filen ({format}) uten å hente noe fra telefonen.':
-      'The Chromecast rejected the file ({format}) without fetching anything from the phone.',
   'Chromecasten fikk ikke hentet filen via telefonen (kode {code}). Prøv igjen, eller se om den spilles på telefonen.':
       "The Chromecast couldn't fetch the file through the phone (code {code}). Try again, or check whether it plays "
           'on the phone.',

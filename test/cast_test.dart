@@ -9,6 +9,7 @@ import 'package:fyrlys/core/cast/cast_protocol.dart';
 import 'package:fyrlys/core/cast/cast_proxy.dart';
 import 'package:fyrlys/core/cast/caster.dart';
 import 'package:fyrlys/core/cast/chromecast.dart';
+import 'package:fyrlys/core/cast/local_address.dart';
 import 'package:fyrlys/core/cast/mdns.dart';
 
 // ── hjelp til DNS-pakkene ──
@@ -430,6 +431,32 @@ void main() {
     expect((await get(local.replaceFirst(RegExp(r'strom\.m3u8$'), 'seg3.ts'))).code, 404);
   });
 
+  test('adressen Chromecasten henter fra: den her som har mest felles med Chromecasten, ikke VPN eller mobilnettet',
+      () {
+    InternetAddress a(String s) => InternetAddress(s);
+    expect(commonPrefixBits(a('192.168.50.20'), a('192.168.50.35')), 26);
+    expect(commonPrefixBits(a('192.168.1.20'), a('192.168.2.20')), 22);
+    expect(commonPrefixBits(a('10.0.0.1'), a('10.0.0.1')), 32);
+    expect(commonPrefixBits(a('10.0.0.1'), a('::1')), 0);
+    final here = [
+      a('127.0.0.1'),
+      a('10.8.0.2'), // VPN
+      a('100.72.14.9'), // mobilnettet
+      a('169.254.10.4'), // link-local
+      a('192.168.50.23'), // wifi
+      a('fe80::1'),
+    ];
+    expect(pickLocalAddress(a('192.168.50.40'), here), a('192.168.50.23'));
+    expect(pickLocalAddress(a('10.8.0.1'), here), a('10.8.0.2'));
+    expect(pickLocalAddress(a('192.168.50.40'), [a('127.0.0.1'), a('169.254.10.4')]), isNull);
+    expect(pickLocalAddress(a('169.254.1.1'), here), a('169.254.10.4'));
+  });
+
+  test('Chromecasten på samme maskin (testene): adressen er den samme', () async {
+    expect(await localAddressFor('127.0.0.1'), InternetAddress('127.0.0.1'));
+    expect(await localAddressFor('ikke en adresse'), isNull);
+  });
+
   group('Chromecasten', () {
     late _FakeChromecast tv;
     late HttpServer provider;
@@ -440,7 +467,7 @@ void main() {
       tv = _FakeChromecast();
       await tv.start();
       provider = await _provider({});
-      caster = ChromecastCaster(socket: (host, port) => Socket.connect(host, port));
+      caster = ChromecastCaster(socket: (host, port, source) => Socket.connect(host, port));
       device = CastDevice(id: 'x', name: 'Stue', host: '127.0.0.1', port: tv.server.port);
     });
 
@@ -495,6 +522,20 @@ void main() {
       expect(caster.active, isFalse);
       expect(caster.state, CastState.off);
       await _until(() => tv.received.any((m) => m.type == 'STOP' && m.json['sessionId'] == 'okt-1'));
+    });
+
+    test('Chromecasten får adressen her til mellomstasjonen, ikke sin egen', () async {
+      final local = ChromecastCaster(
+        socket: (host, port, source) => Socket.connect(host, port),
+        localAddress: (_) async => InternetAddress('127.0.0.2'),
+      );
+      addTearDown(local.stop);
+      await local.connect(device);
+      await local.load(channel());
+      expect(local.state, CastState.playing);
+      final load = tv.received.firstWhere((m) => m.type == 'LOAD');
+      expect((load.json['media']! as Map)['contentId'], startsWith('http://127.0.0.2:'));
+      expect(tv.fetched, startsWith('#EXTM3U'));
     });
 
     test('svarer på hjerteslag', () async {
@@ -565,7 +606,12 @@ void main() {
       await _until(() => caster.state == CastState.failed);
       expect(tv.types, ['video/mp4', 'video/webm', 'video/x-matroska']);
       expect(tv.fetched, isNull);
-      expect(caster.error, 'Chromecasten avviste filen (MKV) uten å hente noe fra PC-en.');
+      // ingenting hentet med noen av typene: den kom ikke fram til PC-en
+      expect(
+        caster.error,
+        'Chromecasten fikk ikke hentet strømmen fra PC-en. Har Windows-brannmuren stoppet Fyrlys? Tillat Fyrlys på '
+        'private nettverk, og prøv igjen.',
+      );
 
       tv.reject = {};
       await caster.load(movie());

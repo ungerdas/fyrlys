@@ -1,5 +1,14 @@
 # Endringer
 
+## v2.1.32
+
+- **Chromecast: TV-en fikk feil adresse.** Fyrlys ga Chromecasten dens egen adresse i stedet for PC-ens eller
+  telefonens, så den prøvde å hente strømmen fra seg selv og fikk aldri noe. Det gjaldt både TV-kanaler og filmer, fra
+  PC-en og fra telefonen. Nå får den adressen her, på samme nett som Chromecasten.
+- PC-en: første gang Chromecasten henter noe, kan Windows spørre om brannmuren. Tillat Fyrlys på private nettverk.
+- Får Chromecasten ikke hentet noe, sier feilen hva du kan sjekke: brannmuren på PC-en, eller at telefonen og
+  Chromecasten er på samme wifi.
+
 ## v2.1.31
 
 - **Fjern striper på PC-en:** bildet ser ikke lenger ut til å gå fortere. Avspilleren laget ett bilde per halvbilde,
