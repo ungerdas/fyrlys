@@ -49,6 +49,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   settes med `sed` i workflowen (`main.cpp`/`Runner.rc`): alt er «Fyrlys» (2.1.19; før sto organisasjonen fra `--org`
   i LegalCopyright). CompanyName og ProductName bestemmer mappen innstillingene ligger i (`%APPDATA%\Fyrlys\Fyrlys`),
   så de må aldri endres; workflowen stopper om de ikke stemmer. Ikonet er tegnet fra `fyrlys.svg` i nettversjonen.
+  Visual C++-runtime (2.1.33; eieren 3.11 på en annen PC: «MSVCP140.dll ikke ble funnet»): steget «Visual C++-runtime i
+  programmappen» kopierer dll-ene fra `VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT` (vswhere) til Release-mappen (lov
+  etter Microsofts regler for lokal utrulling), og dumpbin `/dependents` sjekker at alt exe-en og dll-ene trenger av
+  msvcp/vcruntime/concrt/vccorlib ligger der; hva de ellers henter fra Windows, logges.
 - Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva eieren må
   prøve på Windows-PC-en sin.
 - Flutter- og media_kit-kildene kan hentes for å sjekke API-er (github.com er åpent for git):
@@ -548,6 +552,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 2.11.2026: 2.1.32: Chromecast fikk Chromecastens egen adresse til mellomstasjonen (se Chromecast under Arkitektur);
   det forklarer alle forsøkene fra 2.1.24 (PC) og 2.1.26 (telefonen). Telefonen hans hadde fortsatt 2.1.28 (2.1.31
   tilgjengelig, ikke installert).
+- 3.11.2026: 2.1.33: Fyrlys startet ikke på en annen PC («MSVCP140.dll ikke ble funnet»): Flutter-bygget lenker mot
+  Visual C++-runtime, som ikke fulgte med. Nå i programmappen (se Arbeidsmåte, Windows). Den PC-en må installere med
+  `Fyrlys-oppsett.exe` (eller Microsofts `vc_redist.x64.exe`), den gamle versjonen starter ikke og kan ikke oppdatere seg.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

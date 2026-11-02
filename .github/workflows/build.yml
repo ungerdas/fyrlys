@@ -119,6 +119,49 @@ jobs:
           test -f "$release/libmpv-2.dll"
           ls -l "$release/libmpv-2.dll" libmpv-2.dll
           cp -f libmpv-2.dll "$release/libmpv-2.dll"
+      # Visual C++-runtime ved siden av fyrlys.exe: exe-en og programtilleggene trenger msvcp140.dll m.fl., og de finnes
+      # ikke på en Windows uten «Microsoft Visual C++ Redistributable» (eieren 3.11 på en annen PC: «MSVCP140.dll ikke
+      # ble funnet»). Microsoft lar dem ligge i programmappen. Etterpå sjekker dumpbin at alt exe-en og dll-ene trenger
+      # av VC-runtime, ligger der, og hva de ellers henter fra Windows logges.
+      - name: Visual C++-runtime i programmappen
+        shell: python
+        run: |
+          import glob, os, re, shutil, subprocess, sys
+          out = open("vcruntime.log", "w", encoding="utf-8")
+          def say(*a):
+              line = " ".join(str(x) for x in a)
+              print(line); out.write(line + "\n"); out.flush()
+          rel = os.path.abspath("build/windows/x64/runner/Release")
+          vswhere = os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe")
+          vs = subprocess.check_output([vswhere, "-latest", "-products", "*", "-requires",
+                                        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property",
+                                        "installationPath"], text=True).strip()
+          crt = sorted(glob.glob(os.path.join(vs, r"VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT")))
+          if not crt:
+              say("fant ikke Microsoft.VC*.CRT under", vs)
+              sys.exit(1)
+          say("fra", crt[-1])
+          for f in sorted(os.listdir(crt[-1])):
+              if f.lower().endswith(".dll"):
+                  shutil.copy2(os.path.join(crt[-1], f), rel)
+                  say("  ", f)
+          dumpbin = sorted(glob.glob(os.path.join(vs, r"VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe")))[-1]
+          have = {f.lower() for f in os.listdir(rel)}
+          need, others = set(), set()
+          for b in sorted(glob.glob(os.path.join(rel, "*.exe")) + glob.glob(os.path.join(rel, "*.dll"))):
+              text = subprocess.run([dumpbin, "/nologo", "/dependents", b], capture_output=True, text=True).stdout
+              for name in re.findall(r"^\s+(\S+\.dll)\s*$", text, re.M | re.I):
+                  low = name.lower()
+                  if re.match(r"(msvcp|vcruntime|concrt|vccorlib)\d", low):
+                      need.add(low)
+                  elif low not in have:
+                      others.add(low)
+          say("VC-runtime som trengs:", ", ".join(sorted(need)))
+          say("fra Windows ellers:", ", ".join(sorted(others)))
+          missing = sorted(need - have)
+          if missing:
+              say("FEIL: mangler i programmappen:", ", ".join(missing))
+              sys.exit(1)
       - name: Sjekk avspilleren (versjon, deinterlacing)
         shell: python
         run: |

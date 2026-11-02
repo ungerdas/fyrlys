@@ -1,5 +1,12 @@
 # Endringer
 
+## v2.1.33
+
+- **Windows: starter også på PC-er uten Microsoft Visual C++.** Fyrlys trenger C++-filene fra Microsoft (bl.a.
+  MSVCP140.dll). De fleste PC-er har dem fra før, men ikke alle, og der startet ikke Fyrlys («MSVCP140.dll ikke ble
+  funnet»). Nå følger de med i programmappen. På en PC der Fyrlys ikke startet: installer denne versjonen med
+  `Fyrlys-oppsett.exe`, for den gamle kan ikke oppdatere seg selv.
+
 ## v2.1.32
 
 - **Chromecast: TV-en fikk feil adresse.** Fyrlys ga Chromecasten dens egen adresse i stedet for PC-ens eller
