@@ -52,7 +52,12 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   Visual C++-runtime (2.1.33; eieren 3.11 på en annen PC: «MSVCP140.dll ikke ble funnet»): steget «Visual C++-runtime i
   programmappen» kopierer dll-ene fra `VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT` (vswhere) til Release-mappen (lov
   etter Microsofts regler for lokal utrulling), og dumpbin `/dependents` sjekker at alt exe-en og dll-ene trenger av
-  msvcp/vcruntime/concrt/vccorlib ligger der; hva de ellers henter fra Windows, logges.
+  msvcp/vcruntime/concrt/vccorlib ligger der; hva de ellers henter fra Windows, logges. Den skiller «ved start» (det
+  fyrlys.exe henter, og videre) fra «ved behov» (FFI), og stopper bygget hvis noe som lastes ved start trenger
+  feilsøkingsutgaven av runtime. Første kjøring (VS 18, MSVC 14.51): fyrlys.exe og de fire programtilleggene trenger
+  msvcp140, vcruntime140 og vcruntime140_1. `zlib.dll` (ved behov) er et Debug-bygg som trenger ucrtbased.dll og
+  vcruntime140d.dll (finnes bare med Visual Studio): ukjent hvilken pakke den kommer fra, og om appen noen gang laster
+  den på Windows. `dartjni.dll` (ved behov) henter jvm.dll.
 - Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva eieren må
   prøve på Windows-PC-en sin.
 - Flutter- og media_kit-kildene kan hentes for å sjekke API-er (github.com er åpent for git):
