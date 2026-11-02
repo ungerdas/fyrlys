@@ -147,20 +147,39 @@ jobs:
                   say("  ", f)
           dumpbin = sorted(glob.glob(os.path.join(vs, r"VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe")))[-1]
           have = {f.lower() for f in os.listdir(rel)}
-          need, others = set(), set()
+          imports = {}
           for b in sorted(glob.glob(os.path.join(rel, "*.exe")) + glob.glob(os.path.join(rel, "*.dll"))):
               text = subprocess.run([dumpbin, "/nologo", "/dependents", b], capture_output=True, text=True).stdout
-              for name in re.findall(r"^\s+(\S+\.dll)\s*$", text, re.M | re.I):
-                  low = name.lower()
-                  if re.match(r"(msvcp|vcruntime|concrt|vccorlib)\d", low):
-                      need.add(low)
-                  elif low not in have:
-                      others.add(low)
-          say("VC-runtime som trengs:", ", ".join(sorted(need)))
-          say("fra Windows ellers:", ", ".join(sorted(others)))
-          missing = sorted(need - have)
-          if missing:
-              say("FEIL: mangler i programmappen:", ", ".join(missing))
+              imports[os.path.basename(b).lower()] = {n.lower() for n in re.findall(r"^\s+(\S+\.dll)\s*$", text, re.M | re.I)}
+          # det som lastes når fyrlys.exe starter (exe-en og dll-ene den henter, og de de henter); resten lastes bare
+          # når appen ber om det (FFI)
+          started, todo = set(), ["fyrlys.exe"]
+          while todo:
+              b = todo.pop()
+              if b in started or b not in imports:
+                  continue
+              started.add(b)
+              todo.extend(n for n in imports[b] if n in have)
+          vc = re.compile(r"(msvcp|vcruntime|concrt|vccorlib)\d")
+          debug = re.compile(r"(ucrtbased|(msvcp|vcruntime)\d+(_\d)?d)\.dll$")
+          ok = True
+          for b, names in sorted(imports.items()):
+              used = sorted(n for n in names if vc.match(n) or debug.match(n))
+              when = "ved start" if b in started else "ved behov"
+              if used:
+                  say(f"{b} ({when}): {', '.join(used)}")
+              for n in used:
+                  if debug.match(n):
+                      # feilsøkingsutgaven av runtime finnes bare der Visual Studio er installert
+                      say(f"  {'FEIL' if b in started else 'ADVARSEL'}: {b} trenger {n} (Debug-bygg)")
+                      ok = ok and b not in started
+                  elif n not in have:
+                      say(f"  FEIL: {n} mangler i programmappen")
+                      ok = False
+          others = sorted({n for names in imports.values() for n in names
+                           if n not in have and not vc.match(n) and not debug.match(n)})
+          say("fra Windows ellers:", ", ".join(others))
+          if not ok:
               sys.exit(1)
       - name: Sjekk avspilleren (versjon, deinterlacing)
         shell: python
