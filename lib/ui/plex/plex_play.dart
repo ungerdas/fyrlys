@@ -21,7 +21,7 @@ VodPlayItem? plexPlayItem(PlexAccount plex, PlexItem item) {
   if (api == null || part == null) return null;
   final episode = item.type == PlexType.episode;
   return VodPlayItem(
-    key: 'plex:${plex.server?.id ?? ''}:${item.ratingKey}',
+    key: 'plex:${item.ratingKey}',
     title: episode && item.grandparentTitle.isNotEmpty ? item.grandparentTitle : item.title,
     subtitle: episode
         ? [item.code, item.title].where((t) => t.isNotEmpty).join(' ')
@@ -47,17 +47,32 @@ Future<PlayExtras> plexExtras(PlexAccount plex, String ratingKey) async {
           // VobSub er to filer (.idx og .sub): avspilleren kan ikke hente den fra en adresse
           if (s.codec != 'vobsub')
             ExternalSubtitle(
-              url: api.stream(s.key!),
+              url: api.stream(s.key!, s.codec),
               title: s.title.isNotEmpty ? s.title : (s.language.isNotEmpty ? s.language : tr('Undertekst')),
               language: s.languageCode,
             ),
     ],
-    markers: [
-      for (final m in full.markers)
-        if ((m.type == 'intro' || m.type == 'credits') && m.end > m.start)
-          SkipMarker(credits: m.type == 'credits', start: m.start, end: m.end),
-    ],
+    markers: _skipMarkers(full.markers),
   );
+}
+
+/// Introen og rulletekstene. Den siste rulleteksten er den på slutten (Plex sier det med «final»; eldre servere sier
+/// ingenting, og da er det den siste).
+List<SkipMarker> _skipMarkers(List<PlexMarker> markers) {
+  final credits = [for (final m in markers) if (m.type == 'credits' && m.end > m.start) m]
+    ..sort((a, b) => a.start.compareTo(b.start));
+  final flagged = credits.any((m) => m.last != null);
+  return [
+    for (final m in markers)
+      if (m.type == 'intro' && m.end > m.start) SkipMarker(credits: false, start: m.start, end: m.end),
+    for (var i = 0; i < credits.length; i++)
+      SkipMarker(
+        credits: true,
+        start: credits[i].start,
+        end: credits[i].end,
+        last: flagged ? credits[i].last == true : i == credits.length - 1,
+      ),
+  ];
 }
 
 /// Hvorfor filen ikke kunne spilles, ut fra hva serveren svarer på den (null: serveren gir filen, så det var noe i
@@ -92,8 +107,9 @@ Future<List<VodPlayItem>> Function(VodPlayItem last) plexNextSeasons(PlexAccount
     for (final s in list) {
       final n = s.index ?? 0;
       if (n <= current || n == 0) continue;
-      current = n;
+      // feiler hentingen, prøves samme sesong igjen neste gang
       final episodes = await plex.run((api) => api.children(s.ratingKey));
+      current = n;
       final items = [
         for (final e in episodes)
           if (plexPlayItem(plex, e) case final p?) p,

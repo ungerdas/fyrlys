@@ -276,10 +276,8 @@ class FakePlex {
           'Metadata': [
             {
               ...show,
-              if (q['includeOnDeck'] == '1')
-                'OnDeck': {
-                  'Metadata': [season1[1]],
-                },
+              // som en ekte server: ett objekt, ikke en liste
+              if (q['includeOnDeck'] == '1') 'OnDeck': {'Metadata': season1[1]},
             },
           ],
         }));
@@ -296,7 +294,8 @@ class FakePlex {
               ...season1[1],
               'Marker': [
                 {'type': 'intro', 'startTimeOffset': 10000, 'endTimeOffset': 70000},
-                {'type': 'credits', 'startTimeOffset': 2460000, 'endTimeOffset': 2520000},
+                {'type': 'credits', 'startTimeOffset': 1200000, 'endTimeOffset': 1230000, 'final': false},
+                {'type': 'credits', 'startTimeOffset': 2460000, 'endTimeOffset': 2520000, 'final': true},
               ],
               'Media': [
                 {

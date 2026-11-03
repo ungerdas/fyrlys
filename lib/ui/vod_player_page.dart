@@ -211,6 +211,10 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   /// sa da lista ble hentet, er gammelt når du går tilbake til en episode
   final Map<String, (Duration, Duration)> _seenHere = {};
 
+  /// spilleren lukkes: ingen flere beskjeder til serveren (avspilleren sier «pause» når den stoppes, etter at
+  /// serveren har fått «stoppet»)
+  bool _closing = false;
+
   /// undertekstfiler, intro og rulletekst (per nøkkel), og om undertekstene er lagt til i filen som spilles
   final Map<String, PlayExtras> _extras = {};
   final Set<String> _extrasLoading = {};
@@ -231,7 +235,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
         _set(() => _playing = v);
         // pause og spill av: serveren (Plex) får vite det med en gang
         final report = _item.report;
-        if (changed && report != null && _started && !_casting && !_ending && _duration > Duration.zero) {
+        if (changed && report != null && _started && !_closing && !_casting && !_ending && _duration > Duration.zero) {
           report.progress(_position, _duration, playing: v);
         }
       }))
@@ -267,6 +271,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   @override
   void dispose() {
     _save(stop: true);
+    _closing = true;
     WidgetsBinding.instance.removeObserver(this);
     appCaster.removeListener(_onCast);
     _castTimer?.cancel();
@@ -518,8 +523,8 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   /// Hvor du er, lagres hvert tiende sekund og når du går ut ([stop]: spilleren lukkes eller går til noe annet).
   /// For det serveren husker (Plex), får serveren beskjed i stedet.
   void _save({bool stop = false}) {
-    // ferdig: _onEnd har alt lagret den som sett
-    if (_ending || !_started || _duration <= Duration.zero || _position <= Duration.zero) return;
+    // ferdig: _onEnd har alt lagret den som sett; lukkes: «stoppet» er sendt
+    if (_ending || _closing || !_started || _duration <= Duration.zero || _position <= Duration.zero) return;
     final report = _item.report;
     if (report != null) {
       _seenHere[_item.key] = (_position, _duration);
@@ -575,11 +580,22 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     return null;
   }
 
-  /// «Hopp over intro»: til slutten av den. Rulleteksten: neste episode, ellers slutten av den.
+  /// «Hopp over intro»: til slutten av den. Rulleteksten på slutten: episoden er sett, og neste begynner. En annen
+  /// rulletekst: til slutten av den.
   void _skipMarker() {
     final m = _marker;
     if (m == null) return;
-    if (m.credits && _hasNext) {
+    if (m.credits && m.last && _hasNext) {
+      // sett ferdig (Plex merker den som sett når den ser slutten), og ikke «stoppet» ved rulleteksten etterpå
+      final d = _duration > Duration.zero ? _duration : m.end;
+      final report = _item.report;
+      if (report != null) {
+        _seenHere[_item.key] = (d, d);
+        report.finished(d);
+      } else {
+        _session.saveResume(_item.key, d, d);
+      }
+      _ending = true;
       _go(_index + 1);
       return;
     }
@@ -1153,6 +1169,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
         // stopper med en gang (TV-spilleren under åpner kanalen igjen, og abonnementet har kanskje bare én tilkobling)
         if (didPop) {
           _save(stop: true);
+          _closing = true;
           unawaited(_pb.stop());
         }
         if (!didPop && (_full || _mini)) _toggleFull();
@@ -1206,7 +1223,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
                           onPressed: _skipMarker,
                           icon: const Icon(Icons.skip_next),
                           label: Text(m.credits
-                              ? (_hasNext ? tr('Neste episode (S)') : tr('Hopp over rulleteksten (S)'))
+                              ? (m.last && _hasNext ? tr('Neste episode (S)') : tr('Hopp over rulleteksten (S)'))
                               : tr('Hopp over introen (S)')),
                         ),
                       ),

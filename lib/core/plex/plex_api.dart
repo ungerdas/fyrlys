@@ -224,14 +224,15 @@ Future<PlexConnection?> _bestOf(List<PlexConnection> list, Map<PlexConnection, F
   return done.future;
 }
 
-/// Svarer serveren på [base]? (/identity, som ikke krever innlogging, og at det er samme server)
+/// Svarer serveren på [base]? /identity krever ikke innlogging, så nøkkelen sendes ikke (adressen kan være en helt
+/// annen maskin, f.eks. i et annet nett med samme adresser), og det må være samme server.
 Future<bool> probeServer(String base, PlexServer server, http.Client client, PlexClientInfo info,
     {Duration timeout = const Duration(seconds: 6)}) async {
   try {
-    final res = await client.get(Uri.parse('$base/identity'), headers: info.headers(server.token)).timeout(timeout);
+    final res = await client.get(Uri.parse('$base/identity'), headers: info.headers()).timeout(timeout);
     if (res.statusCode != 200) return false;
     final id = plexText(plexMap(plexMap(_json(res))['MediaContainer'])['machineIdentifier']);
-    return id.isEmpty || id == server.id;
+    return id == server.id;
   } on Object {
     return false;
   }
@@ -429,6 +430,17 @@ class PlexServerApi {
   /// Filen avspilleren henter (innloggingen sendes som hode, se [headers]).
   String file(PlexPart part) => '$base${part.key}';
 
-  /// En undertekstfil (mpv henter den selv, uten hodene).
-  String stream(String key) => _uri(key, {'X-Plex-Token': token}).toString();
+  /// En undertekstfil, som UTF-8 (mange norske .srt er Latin-1) og med filtypen i adressen, så avspilleren kjenner
+  /// den igjen. mpv henter den selv, uten hodene.
+  String stream(String key, String codec) {
+    final ext = switch (codec) {
+      'subrip' || 'srt' => 'srt',
+      'webvtt' || 'vtt' => 'vtt',
+      'pgs' || 'hdmv_pgs_subtitle' => 'sup',
+      '' => '',
+      final other => other,
+    };
+    final path = ext.isEmpty || key.contains('.') ? key : '$key.$ext';
+    return _uri(path, {'encoding': 'utf-8', 'X-Plex-Token': token}).toString();
+  }
 }

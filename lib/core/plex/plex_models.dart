@@ -386,18 +386,22 @@ class PlexMedia {
 
 /// Intro eller rulletekst (for «Hopp over»).
 class PlexMarker {
-  const PlexMarker({required this.type, required this.start, required this.end});
+  const PlexMarker({required this.type, required this.start, required this.end, this.last});
 
   factory PlexMarker.fromJson(Map<String, Object?> j) => PlexMarker(
         type: plexText(j['type']),
         start: Duration(milliseconds: plexInt(j['startTimeOffset']) ?? 0),
         end: Duration(milliseconds: plexInt(j['endTimeOffset']) ?? 0),
+        last: j.containsKey('final') ? plexBool(j['final']) : null,
       );
 
   /// 'intro' eller 'credits'
   final String type;
   final Duration start;
   final Duration end;
+
+  /// rulleteksten på slutten (Plex sitt «final»; null når serveren ikke sier det)
+  final bool? last;
 }
 
 /// En film, serie, sesong eller episode.
@@ -441,7 +445,9 @@ class PlexItem {
   });
 
   factory PlexItem.fromJson(Map<String, Object?> j) {
-    final deck = plexList(plexMap(j['OnDeck'])['Metadata']);
+    // episoden du skal se nå: ett objekt fra serveren (en liste godtas også)
+    final raw = plexMap(j['OnDeck'])['Metadata'];
+    final deck = raw is Map ? [plexMap(raw)] : plexList(raw);
     return PlexItem(
       ratingKey: plexText(j['ratingKey']),
       type: PlexType.of(plexText(j['type'])),

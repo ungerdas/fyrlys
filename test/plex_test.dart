@@ -94,6 +94,9 @@ void main() {
     });
 
     test('en episode: koden, serien og plakaten til serien', () {
+      // episoden du skal se nå: ett objekt fra serveren
+      final show = PlexItem.fromJson({...FakePlex.show, 'OnDeck': {'Metadata': FakePlex.season1[1]}});
+      expect(show.onDeck?.ratingKey, '32');
       final e = PlexItem.fromJson(FakePlex.season1[1]);
       expect(e.code, 'S01E02');
       expect(e.cardTitle, 'Kysten');

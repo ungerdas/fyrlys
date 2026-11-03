@@ -25,12 +25,15 @@ class ExternalSubtitle {
 
 /// En del av filen du kan hoppe over: introen, eller rulleteksten på slutten.
 class SkipMarker {
-  const SkipMarker({required this.credits, required this.start, required this.end});
+  const SkipMarker({required this.credits, required this.start, required this.end, this.last = false});
 
   /// rulleteksten (ellers introen)
   final bool credits;
   final Duration start;
   final Duration end;
+
+  /// rulleteksten på slutten (etter den kommer neste episode; ikke en rulletekst midt i, med mer etterpå)
+  final bool last;
 
   bool covers(Duration at) => at >= start && at < end;
 }

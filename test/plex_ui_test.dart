@@ -114,6 +114,9 @@ void main() {
     final stopped = fake.calls('/:/timeline').last;
     expect(stopped['state'], 'stopped');
     expect(stopped['time'], '300000');
+    // ingenting etter «stoppet» (avspilleren sier «pause» når den stoppes)
+    final states = [for (final c in fake.calls('/:/timeline')) c['state']];
+    expect(states.sublist(states.indexOf('stopped')), ['stopped']);
     // detaljsiden henter filmen på nytt (hvor du slapp)
     expect(fake.calls('/library/metadata/10').length, greaterThanOrEqualTo(3));
   });
@@ -134,22 +137,40 @@ void main() {
     expect(find.text('Hopp over introen (S)'), findsOneWidget);
     expect(pb.addedSubtitles, hasLength(1));
     expect(pb.addedSubtitles.single.language, 'nor');
-    expect(pb.addedSubtitles.single.url, contains('/library/streams/900'));
+    expect(pb.addedSubtitles.single.url, contains('/library/streams/900.srt?'));
+    expect(pb.addedSubtitles.single.url, contains('encoding=utf-8'));
     await tester.tap(find.byKey(const ValueKey('hopp-over')));
     await _settle(tester);
     expect(pb.seeks.last, const Duration(seconds: 70));
 
-    // siste episode i sesong 1: neste sesong er alt hentet, og den første episoden der spilles når denne er ferdig
+    // en rulletekst midt i: bare hopp over den
+    pb.moveTo(const Duration(minutes: 20, seconds: 5));
+    await _settle(tester);
+    expect(find.text('Hopp over rulleteksten (S)'), findsOneWidget);
+
+    // siste episode i sesong 1: neste sesong er alt hentet; rulleteksten på slutten gir «Neste episode», og denne
+    // er sett ferdig
     expect(fake.calls('/library/metadata/22/children'), isNotEmpty);
+    pb.moveTo(const Duration(minutes: 41, seconds: 10));
+    await _settle(tester);
+    expect(find.text('Neste episode (S)'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('hopp-over')));
+    await _settle(tester);
+    expect(pb.urls.last, '${FakePlex.local}/library/parts/330/1700000000/file.mkv');
+    final done = [
+      for (final c in fake.calls('/:/timeline'))
+        if (c['ratingKey'] == '32') '${c['state']} ${c['time']}',
+    ];
+    expect(done.last, 'stopped 2520000');
+
+    // når en episode er ferdig, spilles den neste
+    pb.moveTo(const Duration(minutes: 1));
+    await _settle(tester);
     pb.finish();
     await _settle(tester);
     await tester.pump(const Duration(milliseconds: 1600));
     await _settle(tester);
-    expect(pb.urls.last, '${FakePlex.local}/library/parts/330/1700000000/file.mkv');
-    expect(
-      fake.calls('/:/timeline').where((c) => c['ratingKey'] == '32' && c['state'] == 'stopped'),
-      isNotEmpty,
-    );
+    expect(pb.urls.last, '${FakePlex.local}/library/parts/340/1700000000/file.mkv');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();

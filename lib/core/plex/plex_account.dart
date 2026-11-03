@@ -54,7 +54,10 @@ class PlexAccount extends ChangeNotifier {
   /// adressen serveren svarte på sist (prøves først neste gang)
   String? _base;
   PlexStatus status = PlexStatus.off;
+
+  /// feilen som vises (kan ha navnet på serveren); [_errorKind] er den samme uten navn, til loggen og feilrapporten
   String? error;
+  String? _errorKind;
   List<PlexLibrary> libraries = const [];
   PlexServerApi? _api;
   Future<PlexServerApi>? _connecting;
@@ -185,6 +188,7 @@ class PlexAccount extends ChangeNotifier {
     libraries = const [];
     status = PlexStatus.off;
     error = null;
+    _errorKind = null;
   }
 
   /// Serverne på kontoen, hentet på nytt.
@@ -246,9 +250,14 @@ class PlexAccount extends ChangeNotifier {
     try {
       var current = s;
       PlexConnection? conn;
+      // adressen fra sist, når den var i hjemmenettet (den over nettet eller via Plex svarer overalt, også hjemme,
+      // så da prøves alle: hjemmenettet går foran)
       final saved = _base;
-      if (saved != null && await probeServer(saved, s, _http, info, timeout: const Duration(seconds: 3))) {
-        conn = _known(s, saved);
+      final known = saved == null ? null : _known(s, saved);
+      if (known != null &&
+          known.tier == 0 &&
+          await probeServer(known.uri, s, _http, info, timeout: const Duration(seconds: 3))) {
+        conn = known;
       }
       conn ??= await pickConnection(s, _http, info);
       if (conn == null) {
@@ -275,6 +284,7 @@ class PlexAccount extends ChangeNotifier {
       libraries = libs;
       status = PlexStatus.ready;
       error = null;
+      _errorKind = null;
       debugPrint('Plex: koblet til ${tierName(conn.tier)} (${conn.secure ? 'https' : 'http'}), '
           '${libs.length} ${libs.length == 1 ? 'bibliotek' : 'biblioteker'}');
       await _save();
@@ -283,9 +293,11 @@ class PlexAccount extends ChangeNotifier {
     } on Object catch (e) {
       final ex = e is PlexException ? e : PlexException(tr('Fikk ikke kontakt med Plex: {error}', {'error': '$e'}));
       if (gen == _gen) {
+        _api = null;
         status = PlexStatus.failed;
         error = ex.message;
-        debugPrint('Plex: ${ex.message}');
+        _errorKind = ex.network ? 'ingen kontakt' : (ex.status != null ? 'HTTP ${ex.status}' : 'annen feil');
+        debugPrint('Plex: fikk ikke koblet til ($_errorKind)');
         _notify();
       }
       throw ex;
@@ -324,14 +336,17 @@ class PlexAccount extends ChangeNotifier {
       if (e.status == 401 || e.status == 403) {
         status = PlexStatus.failed;
         error = e.message;
+        _errorKind = 'HTTP ${e.status}';
         _notify();
         rethrow;
       }
-      if (!e.network || !identical(_api, api)) rethrow;
+      if (!e.network) rethrow;
+      // Alle som feilet samtidig, venter på samme nye forsøk. Sidene står som før imens (det gamle API-et byttes
+      // først når det nye svarer).
+      final current = _api;
+      if (current != null && !identical(current, api)) return call(current);
       debugPrint('Plex: mistet kontakten, prøver adressene på nytt');
-      _api = null;
-      final again = await connect();
-      return call(again);
+      return call(await connect(force: true));
     }
   }
 
@@ -354,7 +369,7 @@ class PlexAccount extends ChangeNotifier {
       switch (status) {
         PlexStatus.ready => tr('koblet til'),
         PlexStatus.connecting => tr('kobler til'),
-        PlexStatus.failed => tr('feil: {error}', {'error': error ?? ''}),
+        PlexStatus.failed => tr('feil: {error}', {'error': _errorKind ?? ''}),
         PlexStatus.off => tr('ikke tilkoblet ennå'),
       },
       if (api != null) '${tierName(api.tier)} (${api.base.startsWith('https') ? 'https' : 'http'})',
