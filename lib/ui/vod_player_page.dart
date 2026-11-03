@@ -9,6 +9,7 @@ import '../core/cast/caster.dart';
 import '../core/failure.dart';
 import '../core/names.dart';
 import '../core/picture.dart';
+import '../core/play_info.dart';
 import '../core/session.dart';
 import '../core/source.dart';
 import '../core/vod.dart';
@@ -27,7 +28,7 @@ export '../core/names.dart' show formatDuration;
 /// Spilleren er alltid mørk.
 final ThemeData _playerTheme = fyrlysTheme(Brightness.dark);
 
-/// Noe å spille: en film, en episode eller et program i TV-arkivet.
+/// Noe å spille: en film, en episode eller et program i TV-arkivet (fra IPTV-leverandøren eller Plex).
 class VodPlayItem {
   const VodPlayItem({
     required this.key,
@@ -37,6 +38,11 @@ class VodPlayItem {
     this.continueAs,
     this.archive,
     this.tech = const MediaTech(),
+    this.headers,
+    this.startAt,
+    this.report,
+    this.extras,
+    this.explain,
   });
 
   /// for «fortsett der du slapp», f.eks. «film:123», «episode:456» eller «arkiv:101:1793041200»
@@ -53,6 +59,21 @@ class VodPlayItem {
 
   /// bildet og lyden slik leverandøren oppgir dem (til Chromecasten: loggen og forklaringen når det ikke går)
   final MediaTech tech;
+
+  /// sendes med når filen hentes (Plex: innloggingen); null: IPTV-leverandørens
+  final Map<String, String>? headers;
+
+  /// hvor du slapp ifølge serveren (Plex), i stedet for det appen husker selv
+  final Duration? startAt;
+
+  /// får vite hvor du er (Plex: «Fortsett å se» og sett/ikke sett hos Plex); null: appen husker det selv
+  final PlayReport? report;
+
+  /// undertekstfiler, intro og rulletekst, hentet når den begynner å spille
+  final Future<PlayExtras> Function()? extras;
+
+  /// hvorfor filen ikke kan spilles (HTTP-koden), når det ikke er IPTV-leverandøren som skal spørres
+  final Future<String?> Function(String url)? explain;
 }
 
 /// Spilleren for filmer, episoder og TV-arkivet: tidslinje med spoling, ±10 sekunder, neste og forrige episode (eller
@@ -67,12 +88,16 @@ class VodPlayerPage extends StatelessWidget {
     this.resume = true,
     this.startFull = false,
     this.playback,
+    this.more,
   });
 
   final Session session;
 
   /// filmen, eller episodene i sesongen (så den kan gå videre til neste)
   final List<VodPlayItem> items;
+
+  /// det som kommer etter det siste i [items] (Plex: neste sesong); tom når det ikke er mer
+  final Future<List<VodPlayItem>> Function(VodPlayItem last)? more;
   final int index;
 
   /// fortsett der du slapp (false: fra begynnelsen)
@@ -173,8 +198,26 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   bool get _casting => appCaster.active;
 
   Session get _session => widget.page.session;
-  List<VodPlayItem> get _items => widget.page.items;
+
+  /// det som kan spilles; neste sesong legges til når den er hentet ([VodPlayerPage.more])
+  late final List<VodPlayItem> _items = [...widget.page.items];
   VodPlayItem get _item => _items[_index];
+
+  /// hentingen av neste sesong (mens den pågår), og om det ikke er mer
+  Future<bool>? _moreLoading;
+  bool _noMore = false;
+
+  /// hvor du kom (og lengden) i det som er sett her, for det serveren husker ([VodPlayItem.report]): det serveren
+  /// sa da lista ble hentet, er gammelt når du går tilbake til en episode
+  final Map<String, (Duration, Duration)> _seenHere = {};
+
+  /// undertekstfiler, intro og rulletekst (per nøkkel), og om undertekstene er lagt til i filen som spilles
+  final Map<String, PlayExtras> _extras = {};
+  final Set<String> _extrasLoading = {};
+  bool _subsAdded = false;
+
+  /// hodene filen hentes med: Plex sine, ellers leverandørens
+  Map<String, String> get _headers => _item.headers ?? _session.source?.httpHeaders ?? const {};
   bool get _hasNext => _index + 1 < _items.length;
   bool get _hasPrev => _index > 0;
   ArchiveClip? get _clip => _item.archive;
@@ -183,7 +226,15 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _subs
-      ..add(_pb.playingStream.listen((v) => _set(() => _playing = v)))
+      ..add(_pb.playingStream.listen((v) {
+        final changed = v != _playing;
+        _set(() => _playing = v);
+        // pause og spill av: serveren (Plex) får vite det med en gang
+        final report = _item.report;
+        if (changed && report != null && _started && !_casting && !_ending && _duration > Duration.zero) {
+          report.progress(_position, _duration, playing: v);
+        }
+      }))
       ..add(_pb.bufferingStream.listen((v) => _set(() => _buffering = v)))
       ..add(_pb.durationStream.listen((d) {
         // arkivet: lengden er programmets; strømmens egen brukes bare til å spole i HLS
@@ -215,7 +266,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    _save();
+    _save(stop: true);
     WidgetsBinding.instance.removeObserver(this);
     appCaster.removeListener(_onCast);
     _castTimer?.cancel();
@@ -270,10 +321,23 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     await _open(resume: widget.page.resume);
   }
 
+  /// Hvor [item] skal fortsette: det serveren husker (Plex), eller det appen husker selv.
+  Duration? _resumeOf(VodPlayItem item) {
+    if (item.report == null) return _session.resumeAt(item.key);
+    final seen = _seenHere[item.key];
+    if (seen == null) return item.startAt;
+    final (at, length) = seen;
+    if (at < const Duration(seconds: 10)) return null;
+    if (length > Duration.zero && at.inMilliseconds > length.inMilliseconds * 0.95) return null;
+    return at;
+  }
+
   Future<void> _open({bool resume = true}) async {
     final item = _item;
     debugPrint('Spiller ${item.key}');
-    final start = resume ? _session.resumeAt(item.key) : null;
+    final start = resume ? _resumeOf(item) : null;
+    _subsAdded = false;
+    _loadExtras(item);
     if (_casting) {
       if (start != null) _showFlash(tr('Fortsetter fra {time}', {'time': formatDuration(start)}));
       await _castOpen(start ?? Duration.zero);
@@ -294,7 +358,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     });
     if (start != null) _showFlash(tr('Fortsetter fra {time}', {'time': formatDuration(start)}));
     try {
-      await _pb.open(item.url, _session.source?.httpHeaders ?? const {}, start: start);
+      await _pb.open(item.url, _headers, start: start);
     } on Object catch (e) {
       _set(() {
         _status = tr('Kunne ikke spille av ({message}).', {'message': _session.source?.redact('$e') ?? e});
@@ -311,6 +375,9 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
       _variant = _urlIndex;
       _set(() => _started = true);
       if (_skip != null) _waitForSkip();
+      _applyExtras();
+      // det siste i lista: neste sesong hentes alt nå, så «Neste episode» virker
+      if (!_hasNext && widget.page.more != null) unawaited(_fetchMore());
     }
     // spolt tilbake etter slutten: ikke ferdig likevel (og ikke videre til neste episode)
     if (_ending && _duration > Duration.zero && p < _duration - const Duration(seconds: 10)) _ending = false;
@@ -351,6 +418,16 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
       _status = fallback;
       _buffering = false;
     });
+    // Plex: HTTP-koden fra serveren
+    final explain = _item.explain;
+    if (explain != null) {
+      unawaited(() async {
+        await _pb.stop();
+        final text = await explain(url);
+        if (text != null && mounted && at == _index && !_started && _status == fallback) _set(() => _status = text);
+      }());
+      return;
+    }
     // en bedre forklaring: alle tilkoblingene i bruk, eller leverandøren avviser den (med HTTP-koden)
     final src = _session.source;
     if (src == null) return;
@@ -366,7 +443,13 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     if (_ending) return;
     _ending = true;
     final d = _duration > Duration.zero ? _duration : _position;
-    _session.saveResume(_item.key, d, d);
+    final report = _item.report;
+    if (report != null) {
+      _seenHere[_item.key] = (d, d);
+      report.finished(d);
+    } else {
+      _session.saveResume(_item.key, d, d);
+    }
     // «Fortsett å se»: neste episode, eller borte når filmen (eller sesongen) er sett
     final next = _hasNext ? _items[_index + 1].continueAs : null;
     final current = _item.continueAs;
@@ -376,29 +459,142 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
       _session.removeContinue(current.key);
     }
     if (_hasNext) {
-      final next = _items[_index + 1];
-      _showFlash(tr('Neste: {title}', {'title': next.archive != null ? next.title : next.subtitle}));
-      _nextTimer?.cancel();
-      _nextTimer = Timer(const Duration(milliseconds: 1500), () {
-        if (mounted && _ending) _go(_index + 1);
-      });
+      _nextSoon();
+    } else if (widget.page.more != null) {
+      // siste episode i sesongen: neste sesong, når den finnes
+      unawaited(_fetchMore().then((found) {
+        if (!mounted || !_ending) return;
+        if (found) {
+          _nextSoon();
+        } else {
+          _wake(stay: true);
+        }
+      }));
     } else {
       _wake(stay: true);
     }
   }
 
-  /// Hvor du er, lagres hvert tiende sekund og når du går ut.
-  void _save() {
+  void _nextSoon() {
+    final next = _items[_index + 1];
+    _showFlash(tr('Neste: {title}', {'title': next.archive != null ? next.title : next.subtitle}));
+    _nextTimer?.cancel();
+    _nextTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted && _ending) _go(_index + 1);
+    });
+  }
+
+  /// Henter det som kommer etter det siste i lista (neste sesong). true når det kom noe. Den som spør mens det
+  /// hentes, får svaret fra samme henting.
+  Future<bool> _fetchMore() {
+    final more = widget.page.more;
+    if (more == null || _noMore) return Future.value(false);
+    final pending = _moreLoading;
+    if (pending != null) return pending;
+    late final Future<bool> f;
+    f = _loadMore(more).whenComplete(() {
+      if (identical(_moreLoading, f)) _moreLoading = null;
+    });
+    _moreLoading = f;
+    return f;
+  }
+
+  Future<bool> _loadMore(Future<List<VodPlayItem>> Function(VodPlayItem last) more) async {
+    try {
+      final next = await more(_items.last);
+      if (!mounted) return false;
+      if (next.isEmpty) {
+        _noMore = true;
+        return false;
+      }
+      setState(() => _items.addAll(next));
+      return true;
+    } on Object catch (e) {
+      debugPrint('Fant ikke det som kommer etter: $e');
+      return false;
+    }
+  }
+
+  /// Hvor du er, lagres hvert tiende sekund og når du går ut ([stop]: spilleren lukkes eller går til noe annet).
+  /// For det serveren husker (Plex), får serveren beskjed i stedet.
+  void _save({bool stop = false}) {
     // ferdig: _onEnd har alt lagret den som sett
     if (_ending || !_started || _duration <= Duration.zero || _position <= Duration.zero) return;
+    final report = _item.report;
+    if (report != null) {
+      _seenHere[_item.key] = (_position, _duration);
+      if (stop) {
+        report.stopped(_position, _duration);
+      } else {
+        report.progress(_position, _duration, playing: _casting ? castIsPlaying(appCaster) : _playing);
+      }
+      return;
+    }
     _session.saveResume(_item.key, _position, _duration);
     final c = _item.continueAs;
     if (c != null) _session.touchContinue(c);
   }
 
+  // ── undertekstfiler, intro og rulletekst ──
+
+  /// Henter undertekstfilene og intro/rulletekst for [item] (én gang), og legger dem til når den spiller.
+  void _loadExtras(VodPlayItem item) {
+    final load = item.extras;
+    if (load == null || _extras.containsKey(item.key) || !_extrasLoading.add(item.key)) return;
+    unawaited(() async {
+      PlayExtras extras;
+      try {
+        extras = await load();
+      } on Object catch (e) {
+        debugPrint('Fikk ikke hentet undertekstfiler og intro: $e');
+        extras = const PlayExtras();
+      }
+      _extrasLoading.remove(item.key);
+      _extras[item.key] = extras;
+      if (!mounted) return;
+      _applyExtras();
+      _set(() {});
+    }());
+  }
+
+  /// Undertekstfilene i filen som spilles (når den har begynt, og bare én gang per åpning).
+  void _applyExtras() {
+    final extras = _extras[_item.key];
+    if (extras == null || !_started || _subsAdded || _casting || _clip != null) return;
+    _subsAdded = true;
+    if (extras.subtitles.isNotEmpty) unawaited(_pb.addSubtitles(extras.subtitles));
+  }
+
+  /// introen eller rulleteksten der du er nå (for «Hopp over»)
+  SkipMarker? get _marker {
+    final extras = _extras[_item.key];
+    if (extras == null || !_started || _status != null) return null;
+    for (final m in extras.markers) {
+      if (m.covers(_position)) return m;
+    }
+    return null;
+  }
+
+  /// «Hopp over intro»: til slutten av den. Rulleteksten: neste episode, ellers slutten av den.
+  void _skipMarker() {
+    final m = _marker;
+    if (m == null) return;
+    if (m.credits && _hasNext) {
+      _go(_index + 1);
+      return;
+    }
+    if (_casting) {
+      unawaited(_castSeek(m.end));
+      return;
+    }
+    unawaited(_pb.seek(m.end));
+    _set(() => _position = m.end);
+    _wake();
+  }
+
   void _go(int index) {
     if (index < 0 || index >= _items.length) return;
-    _save();
+    _save(stop: true);
     _reopens.clear();
     _openTries = 0;
     _seekTimer?.cancel();
@@ -467,7 +663,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
         urls: urls,
         title: item.title,
         subtitle: item.subtitle,
-        headers: src?.httpHeaders ?? const {},
+        headers: item.headers ?? src?.httpHeaders ?? const {},
         start: start,
         details: item.tech.summary,
         risky: item.tech.castRisks,
@@ -925,6 +1121,8 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
       if (_hasNext) _go(_index + 1);
     } else if (key == LogicalKeyboardKey.keyP || key == LogicalKeyboardKey.pageUp || key == LogicalKeyboardKey.mediaTrackPrevious) {
       if (_hasPrev) _go(_index - 1);
+    } else if (key == LogicalKeyboardKey.keyS && _marker != null) {
+      _skipMarker();
     } else if (key == LogicalKeyboardKey.keyI) {
       unawaited(_setMini(!_mini));
     } else if (key == LogicalKeyboardKey.escape) {
@@ -954,7 +1152,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
         // lagres med en gang du går ut, så siden du kommer tilbake til («Fortsett fra …») er oppdatert, og strømmen
         // stopper med en gang (TV-spilleren under åpner kanalen igjen, og abonnementet har kanskje bare én tilkobling)
         if (didPop) {
-          _save();
+          _save(stop: true);
           unawaited(_pb.stop());
         }
         if (!didPop && (_full || _mini)) _toggleFull();
@@ -993,6 +1191,23 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
                           decoration: BoxDecoration(color: const Color(0xA6000000), borderRadius: BorderRadius.circular(12)),
                           child: Text(flash,
                               style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ),
+                  // «Hopp over intro» (eller rulleteksten) mens du er i den; også når kontrollene er skjult
+                  if (_marker case final m? when !_mini)
+                    Positioned(
+                      right: compact ? 12 : 24,
+                      bottom: showBars ? (compact ? 128 : 140) : 32,
+                      child: SafeArea(
+                        child: FilledButton.icon(
+                          key: const ValueKey('hopp-over'),
+                          style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14)),
+                          onPressed: _skipMarker,
+                          icon: const Icon(Icons.skip_next),
+                          label: Text(m.credits
+                              ? (_hasNext ? tr('Neste episode (S)') : tr('Hopp over rulleteksten (S)'))
+                              : tr('Hopp over introen (S)')),
                         ),
                       ),
                     ),

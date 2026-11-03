@@ -1,5 +1,22 @@
 # Endringer
 
+## v2.1.34
+
+- **Plex.** Koble Fyrlys til Plex-kontoen din (tannhjulet → Plex → *Koble til Plex*): du logger inn hos Plex i
+  nettleseren og trykker *Tillat*, så får Fyrlys en egen Plex-fane med filmene og seriene på Plex-serveren din. Plex-
+  fanen erstatter Filmer og Serier fra IPTV-leverandøren; vil du ha begge, slår du det av i innstillingene.
+- Hjem i Plex-fanen har *Fortsett å se* (filmer du er midt i og neste episode i seriene du ser på, som i Plex) og det
+  som sist kom i hvert bibliotek. Bibliotekene kan sorteres og filtreres på sjanger, og søket øverst søker i Plex.
+- Filmer og serier har egen side med bakgrunnsbilde, info, skuespillere og *Mer som dette*; serier med sesonger og
+  episoder. *Merk som sett* og *Merk som ikke sett* på filmer, serier og episoder.
+- Avspillingen er filmspilleren i Fyrlys (mpv), rett fra Plex-serveren uten omkoding. Plex får vite hvor du er
+  underveis, så *Fortsett å se* og hva som er sett, er det samme i Fyrlys og i Plex sine egne apper.
+- *Hopp over introen* og *Hopp over rulleteksten* (eller *Neste episode*) når Plex vet hvor de er (tast S). Neste
+  episode spilles når en er ferdig, også over i neste sesong. Undertekster i egne filer på Plex-serveren er med i
+  sporvalget.
+- Fyrlys finner selv adressen Plex-serveren svarer på: i hjemmenettet først, så over nettet (fjerntilgang), og til sist
+  via Plex. Innloggingen lagres kryptert, som IPTV-innloggingene.
+
 ## v2.1.33
 
 - **Windows: starter også på PC-er uten Microsoft Visual C++.** Fyrlys trenger C++-filene fra Microsoft (bl.a.

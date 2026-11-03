@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../build_info.dart';
 import '../core/models.dart';
+import '../core/plex/plex_account.dart';
 import '../core/report.dart';
 import '../core/session.dart';
 import '../core/source.dart';
@@ -14,6 +15,7 @@ import '../platform.dart';
 import 'language_dialog.dart';
 import 'login_page.dart';
 import 'motion.dart';
+import 'plex/plex_login.dart';
 import 'report_page.dart';
 
 /// «Logg ut av …?» (true: ja)
@@ -172,6 +174,10 @@ class _SettingsPageState extends State<SettingsPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               _Section(title: tr('Innlogging'), children: _logins()),
+              _Section(
+                title: 'Plex',
+                children: [ListenableBuilder(listenable: s.plex, builder: (context, _) => Column(children: _plex()))],
+              ),
               _Section(title: tr('Utseende'), children: [_theme(), _language()]),
               _Section(title: tr('Avspilling'), children: _playback()),
               _Section(title: tr('Kanaler og TV-guide'), children: [_lists()]),
@@ -237,6 +243,86 @@ class _SettingsPageState extends State<SettingsPage> {
           onTap: () => unawaited(_remove(current)),
         ),
     ];
+  }
+
+  // ── Plex ──
+
+  List<Widget> _plex() {
+    final plex = s.plex;
+    final scheme = Theme.of(context).colorScheme;
+    final server = plex.server;
+    if (!plex.linked || server == null) {
+      return [
+        ListTile(
+          leading: const Icon(Icons.video_library_outlined),
+          title: Text(tr('Koble til Plex')),
+          subtitle: Text(tr('Filmene og seriene på Plex-serveren din i en egen fane, med «Fortsett å se» og det du har '
+              'sett, som i Plex.')),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => unawaited(_connectPlex()),
+        ),
+      ];
+    }
+    final api = plex.api;
+    final String status;
+    if (plex.status == PlexStatus.ready && api != null) {
+      status = tr('tilkoblet {where}', {'where': PlexAccount.tierName(api.tier)});
+    } else {
+      status = switch (plex.status) {
+        PlexStatus.connecting => tr('kobler til …'),
+        PlexStatus.failed => plex.error ?? tr('fikk ikke kontakt'),
+        _ => tr('kobles til når du åpner Plex-fanen'),
+      };
+    }
+    return [
+      ListTile(
+        leading: Icon(
+          plex.status == PlexStatus.failed ? Icons.error_outline : Icons.check_circle,
+          color: plex.status == PlexStatus.failed ? scheme.error : scheme.primary,
+        ),
+        title: Text(server.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text([if (plex.user.isNotEmpty) tr('logget inn som {name}', {'name': plex.user}), status].join(' · ')),
+        trailing: TextButton(
+          onPressed: () => unawaited(showPlexServers(context, plex)),
+          child: Text(tr('Bytt server')),
+        ),
+      ),
+      if (s.source?.hasVod ?? false)
+        SwitchListTile(
+          secondary: const Icon(Icons.swap_horiz),
+          title: Text(tr('Plex erstatter Filmer og Serier')),
+          subtitle: Text(tr('Slå av for å ha Filmer og Serier fra IPTV-leverandøren ved siden av Plex.')),
+          value: plex.replacesVod,
+          onChanged: plex.setReplacesVod,
+        ),
+      ListTile(
+        leading: const Icon(Icons.link_off),
+        title: Text(tr('Koble fra Plex')),
+        onTap: () => unawaited(_disconnectPlex()),
+      ),
+    ];
+  }
+
+  Future<void> _connectPlex() async {
+    final ok = await showPlexLogin(context, s.plex);
+    if (ok && mounted) _snack(tr('Koblet til Plex. Filmene og seriene ligger i Plex-fanen.'));
+  }
+
+  Future<void> _disconnectPlex() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Koble fra Plex?')),
+        content: Text(isAndroid
+            ? tr('Fyrlys glemmer Plex-innloggingen på denne telefonen. Det du har sett, ligger på Plex-serveren.')
+            : tr('Fyrlys glemmer Plex-innloggingen på denne PC-en. Det du har sett, ligger på Plex-serveren.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(tr('Avbryt'))),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(tr('Koble fra'))),
+        ],
+      ),
+    );
+    if (yes ?? false) await s.plex.logout();
   }
 
   Widget _loginMenu(SavedLogin l) => PopupMenuButton<String>(

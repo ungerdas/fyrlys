@@ -16,6 +16,7 @@ import 'guide_view.dart';
 import 'motion.dart';
 import 'multiview_page.dart';
 import 'player_page.dart';
+import 'plex/plex_view.dart';
 import 'settings_page.dart';
 import 'start_view.dart';
 import 'vod_browser.dart';
@@ -34,9 +35,9 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-/// TV, TV-guide, Filmer og Serier: valget i toppen (bredt vindu) eller nederst (smalt vindu).
-/// Filmer og Serier bare når kilden har dem (Xtream Codes, ikke en vanlig M3U-liste).
-enum _Section { tv, guide, movies, series }
+/// TV, TV-guide, Filmer, Serier og Plex: valget i toppen (bredt vindu) eller nederst (smalt vindu).
+/// Filmer og Serier bare når kilden har dem (Xtream Codes, ikke en vanlig M3U-liste), og ikke når Plex erstatter dem.
+enum _Section { tv, guide, movies, series, plex }
 
 class _HomePageState extends State<HomePage> {
   final _search = TextEditingController();
@@ -178,9 +179,17 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  /// fanene kilden har
-  List<_Section> get _sectionList =>
-      (s.source?.hasVod ?? false) ? _Section.values : const [_Section.tv, _Section.guide];
+  /// fanene kilden har, og Plex når den er koblet til (i stedet for Filmer og Serier, med mindre du har valgt begge)
+  List<_Section> get _sectionList {
+    final plex = s.plex.linked;
+    final vod = (s.source?.hasVod ?? false) && !(plex && s.plex.replacesVod);
+    return [
+      _Section.tv,
+      _Section.guide,
+      if (vod) ...[_Section.movies, _Section.series],
+      if (plex) _Section.plex,
+    ];
+  }
 
   /// fanen som vises (TV hvis du sto på Filmer/Serier og kilden ikke har dem)
   _Section get _current => _sectionList.contains(_section) ? _section : _Section.tv;
@@ -189,6 +198,7 @@ class _HomePageState extends State<HomePage> {
         _Section.tv || _Section.guide => tr('Søk etter kanal'),
         _Section.movies => tr('Søk i filmer'),
         _Section.series => tr('Søk i serier'),
+        _Section.plex => tr('Søk i Plex'),
       };
 
   /// Valget i toppen; ikonene bare når det er god plass.
@@ -207,6 +217,7 @@ class _HomePageState extends State<HomePage> {
         _Section.guide => tr('TV-guide'),
         _Section.movies => tr('Filmer'),
         _Section.series => tr('Serier'),
+        _Section.plex => 'Plex',
       };
 
   static IconData _sectionIcon(_Section x) => switch (x) {
@@ -214,6 +225,7 @@ class _HomePageState extends State<HomePage> {
         _Section.guide => Icons.view_timeline_outlined,
         _Section.movies => Icons.movie_outlined,
         _Section.series => Icons.video_library_outlined,
+        _Section.plex => Icons.play_circle_outline,
       };
 
   @override
@@ -308,6 +320,7 @@ class _HomePageState extends State<HomePage> {
                         VodBrowser(key: const ValueKey('filmer'), session: s, kind: VodKind.movies, query: _query),
                       _Section.series =>
                         VodBrowser(key: const ValueKey('serier'), session: s, kind: VodKind.series, query: _query),
+                      _Section.plex => PlexView(key: const ValueKey('plex'), session: s, query: _query),
                       _Section.tv => wide
                           ? Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,

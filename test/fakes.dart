@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:fyrlys/core/cast/caster.dart';
 import 'package:fyrlys/core/languages.dart';
 import 'package:fyrlys/core/picture.dart';
+import 'package:fyrlys/core/play_info.dart';
 import 'package:fyrlys/core/models.dart';
 import 'package:fyrlys/core/source.dart';
 import 'package:fyrlys/core/vod.dart';
@@ -310,10 +311,14 @@ class FakePlayback implements Playback {
     if (c != null) cache = (back: c.back + delta, ahead: c.ahead - delta);
   }
 
+  /// hodene filene ble hentet med
+  final headers = <Map<String, String>>[];
+
   @override
   Future<void> open(String url, Map<String, String> headers, {Duration? start}) async {
     urls.add(url);
     starts.add(start);
+    this.headers.add(headers);
     _pos = Duration.zero;
     final l = length;
     if (l != null) _duration.add(l);
@@ -351,6 +356,12 @@ class FakePlayback implements Playback {
 
   @override
   Future<void> selectTrack(TrackChoice choice) async => selected.add(choice);
+
+  /// undertekstfilene som er lagt til
+  final addedSubtitles = <ExternalSubtitle>[];
+
+  @override
+  Future<void> addSubtitles(List<ExternalSubtitle> subtitles) async => addedSubtitles.addAll(subtitles);
 
   @override
   Future<void> setLanguages(LanguagePrefs prefs, {bool now = false}) async => languages.add((prefs, now));

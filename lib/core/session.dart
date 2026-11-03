@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../l10n/tr.dart';
@@ -12,6 +13,7 @@ import 'm3u_source.dart';
 import 'models.dart';
 import 'names.dart';
 import 'picture.dart';
+import 'plex/plex_account.dart';
 import 'public_streams.dart';
 import 'secrets.dart';
 import 'source.dart';
@@ -47,10 +49,32 @@ class SavedLogin {
 
 /// Tilstanden i appen: kilden du er logget inn på, kanallista, favoritter, «sist sett» og lys/mørk.
 class Session extends ChangeNotifier {
-  Session(this._prefs, {this.sourceFactory, this.listCache, SecretCodec? secrets, this.systemLanguage = 'no'})
-      : _secrets = secrets ?? SecretCodec.platform(),
+  Session(
+    this._prefs, {
+    this.sourceFactory,
+    this.listCache,
+    SecretCodec? secrets,
+    this.systemLanguage = 'no',
+    http.Client? plexClient,
+  })  : _secrets = secrets ?? SecretCodec.platform(),
         themeMode = _themeFrom(_prefs.getString('theme')) {
     appLanguage = _effectiveLanguage(language);
+    plex = PlexAccount(_prefs, _secrets, client: plexClient);
+    _plexShape = (plex.linked, plex.replacesVod);
+    plex.addListener(_onPlex);
+  }
+
+  /// Plex (felles for alle IPTV-innloggingene): fanen som erstatter Filmer og Serier når du har koblet til.
+  late final PlexAccount plex;
+
+  /// det ved Plex som endrer fanene (koblet til, og om Plex erstatter Filmer og Serier)
+  late (bool, bool) _plexShape;
+
+  void _onPlex() {
+    final shape = (plex.linked, plex.replacesVod);
+    if (shape == _plexShape) return;
+    _plexShape = shape;
+    notifyListeners();
   }
 
   /// språket Windows bruker ('no' eller 'en'); norsk i testene
@@ -872,6 +896,8 @@ class Session extends ChangeNotifier {
   @override
   void dispose() {
     source?.dispose();
+    plex.removeListener(_onPlex);
+    plex.dispose();
     super.dispose();
   }
 }

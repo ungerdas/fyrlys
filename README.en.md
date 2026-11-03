@@ -24,6 +24,7 @@ The app is in English or Norwegian (it follows Windows or the phone; change it u
 - Pause and rewind live TV
 - NRK1, NRK2, NRK3 and NRK Super from NRK's own live streams, one channel each (the provider's stream is the fallback)
 - Movies and series with “Continue watching” (Xtream Codes)
+- Plex: the movies and shows on your Plex server in a tab of their own, with “Continue watching”, watched/unwatched, skip intro and next episode (gear → Plex)
 - Several logins, each with its own favorites, and multiview with a channel from each subscription
 - mpv as the player: most formats, audio tracks and subtitles
 - Mini player that stays on top (Windows), picture format and audio delay per channel
@@ -69,6 +70,7 @@ stops casting.
 | C | channel list |
 | A | TV archive |
 | V | multiview |
+| S | skip the intro or credits (Plex) |
 | Esc | back |
 
 </details>

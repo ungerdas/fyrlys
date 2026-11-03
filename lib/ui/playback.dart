@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../core/languages.dart';
 import '../core/names.dart';
 import '../core/picture.dart';
+import '../core/play_info.dart';
 import '../l10n/tr.dart';
 import '../platform.dart';
 
@@ -74,6 +75,10 @@ abstract class Playback {
   Future<TrackList> tracks();
 
   Future<void> selectTrack(TrackChoice choice);
+
+  /// Undertekster i egne filer (Plex), lagt til i filen som spilles. Den som passer best med språket du foretrekker,
+  /// slås på når filen selv ikke har valgt noen.
+  Future<void> addSubtitles(List<ExternalSubtitle> subtitles);
 
   /// Språkene du foretrekker. Gjelder neste fil eller kanal som åpnes, og med [now] også det som spilles nå.
   Future<void> setLanguages(LanguagePrefs prefs, {bool now = false});
@@ -287,6 +292,38 @@ class MpvPlayback implements Playback {
   Future<void> _autoTracks(NativePlayer p) async {
     await _try(() => p.setProperty('aid', 'auto'));
     await _try(() => p.setProperty('sid', _langs.subtitlesOff ? 'no' : 'auto'));
+  }
+
+  @override
+  Future<void> addSubtitles(List<ExternalSubtitle> subtitles) async {
+    final p = _player.platform;
+    if (p is! NativePlayer || subtitles.isEmpty) return;
+    // den som har språket høyest på lista di, når filen ikke alt har slått på en undertekst
+    var pick = -1;
+    if (!_langs.subtitlesOff && _langs.subtitles.isNotEmpty) {
+      var sid = '';
+      try {
+        sid = (await p.getProperty('sid')).trim();
+      } on Object {
+        // vet ikke: ingen slås på
+        sid = '?';
+      }
+      if (sid == 'no' || sid.isEmpty) {
+        final wanted = _langs.subtitleCodes.split(',').map((c) => c.trim().toLowerCase()).toList();
+        var best = wanted.length;
+        for (var i = 0; i < subtitles.length; i++) {
+          final rank = wanted.indexOf(subtitles[i].language.toLowerCase());
+          if (rank >= 0 && rank < best) {
+            best = rank;
+            pick = i;
+          }
+        }
+      }
+    }
+    for (var i = 0; i < subtitles.length; i++) {
+      final s = subtitles[i];
+      await _try(() => p.command(['sub-add', s.url, i == pick ? 'select' : 'auto', s.title, s.language]));
+    }
   }
 
   @override

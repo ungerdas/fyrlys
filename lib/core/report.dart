@@ -50,6 +50,7 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
         ' · ${tr('TV-arkiv')}: $archive · ${tr('filmer og serier')}: ${onOff(src.hasVod)}');
   }
   if (s.error != null) out.writeln('${tr('Feil i listene')}: ${s.error}');
+  out.writeln('Plex: ${s.plex.reportLine}');
 
   out.writeln();
   final picture = s.picture;

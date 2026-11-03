@@ -359,7 +359,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: _Hero(
+          child: DetailHero(
             backdrop: s.source?.logoUrl(m.backdrop),
             poster: s.source?.logoUrl(item.icon),
             title: clean.title,
@@ -522,7 +522,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: _Hero(
+          child: DetailHero(
             backdrop: s.source?.logoUrl(info.backdrop),
             poster: s.source?.logoUrl(info.cover ?? item.icon),
             title: clean.title,
@@ -589,9 +589,9 @@ class _VodDetailPageState extends State<VodDetailPage> {
           fit: StackFit.expand,
           children: [
             if (image != null)
-              NetImage(image, decodeWidth: 192, fallback: _EpisodeFallback(url: fallback))
+              NetImage(image, decodeWidth: 192, fallback: EpisodeFallback(url: fallback))
             else
-              _EpisodeFallback(url: fallback),
+              EpisodeFallback(url: fallback),
             // nummeret på alle, også når episoden har eget bilde
             const DecoratedBox(
               decoration: BoxDecoration(
@@ -680,8 +680,8 @@ class _VodDetailPageState extends State<VodDetailPage> {
 }
 
 /// Når episoden ikke har eget bilde: seriens bakgrunnsbilde, dempet (nummeret legges over i raden).
-class _EpisodeFallback extends StatelessWidget {
-  const _EpisodeFallback({required this.url});
+class EpisodeFallback extends StatelessWidget {
+  const EpisodeFallback({super.key, required this.url});
 
   final String? url;
 
@@ -704,8 +704,9 @@ class _EpisodeFallback extends StatelessWidget {
 
 /// Toppen av en film- eller serieside: stort bakgrunnsbilde (eller plakaten, uskarp) som tones ut mot bakgrunnen,
 /// med plakat, tittel, merker, knapper og teksten over.
-class _Hero extends StatelessWidget {
-  const _Hero({
+class DetailHero extends StatelessWidget {
+  const DetailHero({
+    super.key,
     required this.backdrop,
     required this.poster,
     required this.title,
@@ -826,8 +827,8 @@ class _Hero extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final t in tags) _Badge(text: t, accent: true),
-                for (final c in chips) _Badge(text: c),
+                for (final t in tags) InfoBadge(text: t, accent: true),
+                for (final c in chips) InfoBadge(text: c),
               ],
             ),
           ),
@@ -868,8 +869,8 @@ class _Hero extends StatelessWidget {
 }
 
 /// Et lite merke: år, sjanger, «4K» … (fremhevet for merker fra navnet, som «PRE»).
-class _Badge extends StatelessWidget {
-  const _Badge({required this.text, this.accent = false});
+class InfoBadge extends StatelessWidget {
+  const InfoBadge({super.key, required this.text, this.accent = false});
 
   final String text;
   final bool accent;
