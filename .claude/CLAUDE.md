@@ -405,25 +405,29 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   fra plex.tv `resources` (bare `provides` server, uten IPv6) og `fromSaved`, `PlexConnection` med `tier` 0 hjemmenett/1
   nett/2 relay og `lanHttp` (http til en privat adresse i hjemmenettet når …plex.direct stoppes av ruteren; aldri over
   nettet), `PlexLibrary` (movie/show), `PlexItem` (film/serie/sesong/episode: bilder, `viewOffset`/`viewCount`/
-  `leafCount`, `onDeck`, `media`/`part`/`streams`, `markers`, `tech` → `MediaTech`, `resumeAt` via `resumeFrom` (≥ 10 s,
-  ≤ 95 %)), `PlexSort` (serier: «nylig lagt til» = `episode.addedAt:desc`)), `plex_api.dart` (`PlexClientInfo`: hodene
+  `leafCount`, `onDeck` (ett objekt i `OnDeck.Metadata`), `media`/`part`/`streams`, `markers` (`final` = rulleteksten
+  på slutten), `tech` → `MediaTech`, `resumeAt` via `resumeFrom` (≥ 10 s, ≤ 95 %)), `PlexSort` (serier: «nylig lagt til» = `episode.addedAt:desc`)), `plex_api.dart` (`PlexClientInfo`: hodene
   X-Plex-Product «Fyrlys», fast `X-Plex-Client-Identifier`, enhetsnavn i ASCII; `PlexTv`: PIN med `strong=true`,
   `authUrl` (app.plex.tv/auth), `checkPin`, `userName`, `servers` (clients.plex.tv); `pickConnection`: alle adressene
-  prøves samtidig mot `/identity` (samme machineIdentifier), beste i laveste tier, https foran http; `PlexServerApi`:
+  prøves samtidig mot `/identity` uten nøkkelen (krever samme machineIdentifier), beste i laveste tier, https foran
+  http; `PlexServerApi`:
   biblioteker, `items` (sider med X-Plex-Container-Start/Size, `genre`), `genres`, `continueWatching`
   (`/hubs/continueWatching/items`, ellers `/library/onDeck`), `recentlyAdded`, `metadata` (`includeOnDeck`,
   `includeMarkers`), `children`, `related`, `search` (`/hubs/search`, bare film/serie/episode, `sectionId`),
   `setWatched` (`/:/scrobble`/`unscrobble`), `timeline`, `image` (`/photo/:/transcode`, nøkkelen i adressen),
   `file` (nøkkelen som hode), `stream` (undertekstfiler)), `plex_account.dart` (`PlexAccount` i `Session.plex`, felles for
   alle IPTV-innloggingene: kryptert i `plex_protected` (ellers `plex_plain`), `plex_client_id`, `plex_replace_vod`
-  (på); `connect` (adressen fra sist først, så `pickConnection`, så serverlista fra plex.tv på nytt; delt forsøk, `_gen`
-  ved bytte), `run` (ny adresse og ett nytt forsøk når forbindelsen brøt), `reportLine` til feilrapporten uten navn/
-  adresser; `PlexReporter`: timeline playing/paused/stopped, og `/:/scrobble` bare når serveren ikke har sett deg gå
+  (på); `connect` (adressen fra sist først når den var i hjemmenettet, så `pickConnection`, så serverlista fra plex.tv
+  på nytt; delt forsøk, `_gen` ved bytte; `_api` byttes først når det nye svarer), `run` (ny adresse og ett nytt
+  forsøk når forbindelsen brøt, felles for alle som feilet samtidig), `reportLine` og loggen uten servernavn/
+  adresser (`_errorKind`; `error` i appen har navnet); `PlexReporter`: timeline playing/paused/stopped, og `/:/scrobble` bare når serveren ikke har sett deg gå
   forbi 90 % selv). `core/play_info.dart`: `PlayReport`, `PlayExtras`, `ExternalSubtitle`, `SkipMarker`. `VodPlayItem`
   har `headers`, `startAt`, `report`, `extras`, `explain`; `VodPlayerPage.more` (neste sesong, hentes når siste episode
   begynner); spilleren sender framdrift til `report` i stedet for `saveResume` (`_save(stop:)`), husker posisjonen i
-  `_seenHere`, legger undertekstfilene til med `Playback.addSubtitles` (mpv `sub-add`, den på språket du foretrekker
-  velges når filen selv ikke har valgt noen) og viser «Hopp over introen (S)» / rulleteksten (`hopp-over`). `ui/plex/`:
+  `_seenHere`, sender ingenting etter «stoppet» (`_closing`: mpv sier «pause» når den stoppes), legger undertekstfilene
+  til med `Playback.addSubtitles` (mpv `sub-add`, `<key>.<filtype>?encoding=utf-8`; den på språket du foretrekker velges
+  når filen selv ikke har valgt noen) og viser «Hopp over introen (S)» / «Hopp over rulleteksten (S)» / «Neste episode
+  (S)» for rulleteksten på slutten (episoden meldes som sett først) (`hopp-over`). `ui/plex/`:
   `plex_view.dart` (fanen: sidemeny/nedtrekksliste, Hjem med rader, bibliotek med sjanger/sortering og sider à 100, søk;
   `_refresh` henter på nytt når du kommer tilbake), `plex_detail_page.dart` (film: `DetailHero` fra
   `vod_detail_page.dart`, Spill av/Fortsett/Fra begynnelsen, sett/ikke sett, «Mer som dette»; serie: sesongene sortert,
