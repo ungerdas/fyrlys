@@ -236,7 +236,7 @@ class PlexTag {
 /// Rekkefølgen i et bibliotek.
 enum PlexSort {
   added,
-  title,
+  alpha,
   released,
   rating,
   lastViewed;
@@ -244,7 +244,7 @@ enum PlexSort {
   /// sorteringen i Plex-API-et; for serier er «nylig lagt til» når det sist kom en episode
   String api({required bool shows}) => switch (this) {
         PlexSort.added => shows ? 'episode.addedAt:desc' : 'addedAt:desc',
-        PlexSort.title => 'titleSort',
+        PlexSort.alpha => 'titleSort',
         PlexSort.released => 'originallyAvailableAt:desc',
         PlexSort.rating => 'audienceRating:desc',
         PlexSort.lastViewed => 'lastViewedAt:desc',
@@ -252,7 +252,7 @@ enum PlexSort {
 
   String get title => switch (this) {
         PlexSort.added => tr('Nylig lagt til'),
-        PlexSort.title => tr('A–Å'),
+        PlexSort.alpha => tr('A–Å'),
         PlexSort.released => tr('Nyeste utgivelser'),
         PlexSort.rating => tr('Best vurdert'),
         PlexSort.lastViewed => tr('Sist sett'),

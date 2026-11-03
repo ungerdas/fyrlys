@@ -53,7 +53,10 @@ class _PlexViewState extends State<PlexView> {
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    // en annen server er valgt (i innstillingene): koble til den
+    if (plex.linked && plex.api == null && plex.status == PlexStatus.off) unawaited(_connect());
   }
 
   Future<void> _connect({bool force = false}) async {
@@ -118,8 +121,10 @@ class _PlexViewState extends State<PlexView> {
                 refresh: _refresh,
                 onOpen: _open,
               );
+    // en ny server gir nye sider (bibliotekene og radene er ikke de samme)
+    final server = plex.server?.id ?? '';
     final switched = SmoothSwitch(
-      child: KeyedSubtree(key: ValueKey(searching ? 'søk:$place' : place), child: content),
+      child: KeyedSubtree(key: ValueKey(searching ? 'søk:$server:$place' : '$server:$place'), child: content),
     );
     if (wide) {
       return Row(

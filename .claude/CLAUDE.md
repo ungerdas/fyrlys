@@ -400,6 +400,40 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `test/l10n_test.dart` finner alle `tr('…')` i lib/ og krever engelsk med de samme `{navnene}`. Testene ellers venter
   norsk (`appLanguage` er 'no' i testene). Installasjonsprogrammet har engelsk (`Default.isl`, først = reserven) og
   norsk, valgt etter Windows. `README.en.md` er den engelske forsiden.
+- Plex (2.1.34, eieren 3.11: «Plex fane eller noe, som erstattet Filmer/Serier hvis man ville å koble til Plex. Gjerne
+  litt som Plezy»; Plezy er GPL-3, så ingen kode derfra, bare API-fakta). `core/plex/`: `plex_models.dart` (`PlexServer`
+  fra plex.tv `resources` (bare `provides` server, uten IPv6) og `fromSaved`, `PlexConnection` med `tier` 0 hjemmenett/1
+  nett/2 relay og `lanHttp` (http til en privat adresse i hjemmenettet når …plex.direct stoppes av ruteren; aldri over
+  nettet), `PlexLibrary` (movie/show), `PlexItem` (film/serie/sesong/episode: bilder, `viewOffset`/`viewCount`/
+  `leafCount`, `onDeck`, `media`/`part`/`streams`, `markers`, `tech` → `MediaTech`, `resumeAt` via `resumeFrom` (≥ 10 s,
+  ≤ 95 %)), `PlexSort` (serier: «nylig lagt til» = `episode.addedAt:desc`)), `plex_api.dart` (`PlexClientInfo`: hodene
+  X-Plex-Product «Fyrlys», fast `X-Plex-Client-Identifier`, enhetsnavn i ASCII; `PlexTv`: PIN med `strong=true`,
+  `authUrl` (app.plex.tv/auth), `checkPin`, `userName`, `servers` (clients.plex.tv); `pickConnection`: alle adressene
+  prøves samtidig mot `/identity` (samme machineIdentifier), beste i laveste tier, https foran http; `PlexServerApi`:
+  biblioteker, `items` (sider med X-Plex-Container-Start/Size, `genre`), `genres`, `continueWatching`
+  (`/hubs/continueWatching/items`, ellers `/library/onDeck`), `recentlyAdded`, `metadata` (`includeOnDeck`,
+  `includeMarkers`), `children`, `related`, `search` (`/hubs/search`, bare film/serie/episode, `sectionId`),
+  `setWatched` (`/:/scrobble`/`unscrobble`), `timeline`, `image` (`/photo/:/transcode`, nøkkelen i adressen),
+  `file` (nøkkelen som hode), `stream` (undertekstfiler)), `plex_account.dart` (`PlexAccount` i `Session.plex`, felles for
+  alle IPTV-innloggingene: kryptert i `plex_protected` (ellers `plex_plain`), `plex_client_id`, `plex_replace_vod`
+  (på); `connect` (adressen fra sist først, så `pickConnection`, så serverlista fra plex.tv på nytt; delt forsøk, `_gen`
+  ved bytte), `run` (ny adresse og ett nytt forsøk når forbindelsen brøt), `reportLine` til feilrapporten uten navn/
+  adresser; `PlexReporter`: timeline playing/paused/stopped, og `/:/scrobble` bare når serveren ikke har sett deg gå
+  forbi 90 % selv). `core/play_info.dart`: `PlayReport`, `PlayExtras`, `ExternalSubtitle`, `SkipMarker`. `VodPlayItem`
+  har `headers`, `startAt`, `report`, `extras`, `explain`; `VodPlayerPage.more` (neste sesong, hentes når siste episode
+  begynner); spilleren sender framdrift til `report` i stedet for `saveResume` (`_save(stop:)`), husker posisjonen i
+  `_seenHere`, legger undertekstfilene til med `Playback.addSubtitles` (mpv `sub-add`, den på språket du foretrekker
+  velges når filen selv ikke har valgt noen) og viser «Hopp over introen (S)» / rulleteksten (`hopp-over`). `ui/plex/`:
+  `plex_view.dart` (fanen: sidemeny/nedtrekksliste, Hjem med rader, bibliotek med sjanger/sortering og sider à 100, søk;
+  `_refresh` henter på nytt når du kommer tilbake), `plex_detail_page.dart` (film: `DetailHero` fra
+  `vod_detail_page.dart`, Spill av/Fortsett/Fra begynnelsen, sett/ikke sett, «Mer som dette»; serie: sesongene sortert,
+  episodene, «Fortsett SxxEyy» fra OnDeck, meny per episode), `plex_play.dart` (`plexPlayItem`, `plexExtras`,
+  `plexExplain` (HTTP-koden), `plexNextSeasons` (sesong 0 hoppes over), `openPlexPlayer`, `playPlexItem`),
+  `plex_login.dart` (PIN-dialogen: åpner nettleseren, sjekker hvert 2. s; serverlista), `plex_widgets.dart`.
+  `home_page.dart`: `_Section.plex`; Filmer/Serier skjules når Plex erstatter dem. Innstillinger → Plex (koble til/fra,
+  bytt server, «Plex erstatter Filmer og Serier»). Testet i `plex_test.dart` og `plex_ui_test.dart` med en falsk
+  Plex-server (`plex_fake.dart`); ikke prøvd mot en ekte Plex-server: PIN-innloggingen, adressevalget (plex.direct,
+  relay), at mpv spiller filene med hodene, timeline/scrobble, markørene og undertekstfilene.
 - `theme.dart` – fargene fra nettversjonen («Fyrlys om natta» / «Nordisk lys»).
 - Tester i `test/`: navn, Xtream-kilden (også arkivet: klokka, tidene, `parseArchive`, adressene), M3U-kilden og
   innloggingen (`m3u_source_test.dart`, med MockClient og `http.runWithClient`; også krypteringen av innloggingen),
@@ -560,6 +594,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 3.11.2026: 2.1.33: Fyrlys startet ikke på en annen PC («MSVCP140.dll ikke ble funnet»): Flutter-bygget lenker mot
   Visual C++-runtime, som ikke fulgte med. Nå i programmappen (se Arbeidsmåte, Windows). Den PC-en må installere med
   `Fyrlys-oppsett.exe` (eller Microsofts `vc_redist.x64.exe`), den gamle versjonen starter ikke og kan ikke oppdatere seg.
+- 3.11.2026: 2.1.34: Plex-fane som erstatter Filmer og Serier (se Arkitektur). Bare testet med tester og en falsk
+  Plex-server.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

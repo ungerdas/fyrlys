@@ -143,7 +143,7 @@ void main() {
       final libs = await api.libraries();
       expect([for (final l in libs) l.title], ['Mine filmer', 'Mine serier']);
 
-      final page = await api.items(libs[0], sort: PlexSort.title, genre: '5', start: 0, size: 50);
+      final page = await api.items(libs[0], sort: PlexSort.alpha, genre: '5', start: 0, size: 50);
       expect([for (final i in page.items) i.title], ['Fyrlyset']);
       var q = fake.calls('/library/sections/1/all').last;
       expect(q['type'], '1');

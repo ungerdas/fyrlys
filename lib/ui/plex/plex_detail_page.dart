@@ -175,7 +175,8 @@ class _PlexDetailPageState extends State<PlexDetailPage> {
     for (final season in _seasons) {
       if ((season.index ?? 1) == 0 && _seasons.length > 1) continue;
       try {
-        final list = _episodes[season.ratingKey] ?? await plex.run((api) => api.children(season.ratingKey));
+        final cached = _episodes[season.ratingKey];
+        final list = cached ?? await plex.run<List<PlexItem>>((api) => api.children(season.ratingKey));
         if (!mounted) return;
         if (list.isNotEmpty) {
           _playEpisodes(season, list, 0, resume: false);
