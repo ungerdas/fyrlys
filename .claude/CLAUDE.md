@@ -221,7 +221,14 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   I dag / I går / «Lørdag 24. oktober»), «Går nå», «Ikke i arkivet» dempet, strek for det du har sett. Et trykk lager
   `VodPlayItem`-er for alle som kan ses (`archiveItems`/`archivePlayItem`, nøkkel `arkiv:<kanal>:<start>`) og åpner
   filmspilleren på det valgte.
-- `ui/vod_browser.dart` (plakater i rutenett, kategori, sortering, sider hentes når du er 30 fra slutten, søk
+- `ui/vod_browser.dart` (2.1.35, eieren 3.11 med skjermbilde fra en annen IPTV-app: «Ønsker litt denne stilen på
+  serier fanen»; gjelder også Filmer: oversikten (`_view` '') med rader bortover: «Fortsett å se» som brede kort
+  (`_WideContinueCard`: `ContinueItem.backdrop` eller uskarp plakat, hvit strek `_ArtProgress`, ♡ og ×), «Favoritter»
+  (`Session.vodFavorites`/`toggleVodFavorite`, `vod_favorites@<innlogging>`, `VodItem.toJson`), «Nylig lagt til»
+  (`VodSort.newest`) og én `_LoadedRow` per kategori, med «Vis alle»; knappen øverst (`_Pill`, meny med Oversikt/Alle/
+  kategoriene) og søket gir rutenettet (`_view` 'alle' eller en kategori), med sortering og tilbake-pil. Backdrop:
+  `VodItem.backdrop` (serier: `backdrop_path` i lista) og `withBackdrop`, i `ContinueItem` fra detaljene. Før 2.1.35:
+  plakater i rutenett, kategori, sortering, sider hentes når du er 30 fra slutten, søk
   med 350 ms pause; «Fortsett å se» øverst når det ikke er søk/kategori: `Session.continueItems` (`continue` i
   shared_preferences, `ContinueItem` i `vod.dart`, maks 50), oppdatert av filmspilleren via `VodPlayItem.continueAs`:
   filmer til de er sett (> 95 %), serier med episoden du er på, eller den neste når en er sett ferdig;
@@ -600,6 +607,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `Fyrlys-oppsett.exe` (eller Microsofts `vc_redist.x64.exe`), den gamle versjonen starter ikke og kan ikke oppdatere seg.
 - 3.11.2026: 2.1.34: Plex-fane som erstatter Filmer og Serier (se Arkitektur). Bare testet med tester og en falsk
   Plex-server.
+- 3.11.2026: 2.1.35: Serier og Filmer som oversikt med rader og favoritter (se `ui/vod_browser.dart`). Testet med
+  widget-tester.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

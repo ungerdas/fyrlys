@@ -195,6 +195,7 @@ class FakeSource implements TvSource {
   @override
   Future<SeriesInfo> seriesInfo(String id) async => const SeriesInfo(
         name: 'Kystvakten',
+        backdrop: 'http://example/bilder/kystvakten-bred.jpg',
         plot: 'Livet langs kysten.',
         genre: 'Drama',
         year: '2023',

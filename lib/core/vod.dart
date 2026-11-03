@@ -62,7 +62,21 @@ class VodItem {
     this.year,
     this.plot = '',
     this.added = 0,
+    this.backdrop,
   });
+
+  /// lagret i appen (favorittene)
+  factory VodItem.fromJson(Map<Object?, Object?> j) => VodItem(
+        id: '${j['id']}',
+        name: '${j['name'] ?? ''}',
+        categoryId: '${j['cat'] ?? ''}',
+        icon: j['icon'] is String ? j['icon'] as String : null,
+        ext: j['ext'] is String ? j['ext'] as String : 'mp4',
+        rating: j['rating'] is num ? (j['rating'] as num).toDouble() : null,
+        year: j['year'] is String ? j['year'] as String : null,
+        added: j['added'] is int ? j['added'] as int : 0,
+        backdrop: j['bg'] is String ? j['bg'] as String : null,
+      );
 
   final String id;
   final String name;
@@ -79,6 +93,37 @@ class VodItem {
 
   /// når den ble lagt til (sekunder), for «nyeste først»
   final int added;
+
+  /// stort bakgrunnsbilde (liggende), når leverandøren har det i lista
+  final String? backdrop;
+
+  /// samme, med bakgrunnsbildet fra detaljene når lista ikke hadde det
+  VodItem withBackdrop(String? image) => image == null || backdrop != null
+      ? this
+      : VodItem(
+          id: id,
+          name: name,
+          categoryId: categoryId,
+          icon: icon,
+          ext: ext,
+          rating: rating,
+          year: year,
+          plot: plot,
+          added: added,
+          backdrop: image,
+        );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'name': name,
+        'cat': categoryId,
+        'icon': icon,
+        'ext': ext,
+        'rating': rating,
+        'year': year,
+        'added': added,
+        'bg': backdrop,
+      };
 }
 
 class VodPage {
@@ -375,6 +420,7 @@ class ContinueItem {
     this.episodeId,
     this.season,
     this.at = 0,
+    this.backdrop,
   });
 
   factory ContinueItem.fromJson(Map<Object?, Object?> j) => ContinueItem(
@@ -388,6 +434,7 @@ class ContinueItem {
         episodeId: j['ep'] is String ? j['ep'] as String : null,
         season: j['season'] is String ? j['season'] as String : null,
         at: j['at'] is int ? j['at'] as int : 0,
+        backdrop: j['bg'] is String ? j['bg'] as String : null,
       );
 
   /// `film:123` (samme som for «fortsett der du slapp») eller `serie:456`
@@ -408,6 +455,9 @@ class ContinueItem {
   /// sist sett (sekunder)
   final int at;
 
+  /// stort bakgrunnsbilde (det brede kortet i «Fortsett å se»)
+  final String? backdrop;
+
   /// nøkkelen for hvor du slapp i det som skal spilles
   String get resumeKey => episodeId == null ? key : 'episode:$episodeId';
 
@@ -422,6 +472,7 @@ class ContinueItem {
         episodeId: episodeId,
         season: season,
         at: seconds,
+        backdrop: backdrop,
       );
 
   Map<String, Object?> toJson() => {
@@ -435,6 +486,7 @@ class ContinueItem {
         'ep': episodeId,
         'season': season,
         'at': at,
+        'bg': backdrop,
       };
 }
 

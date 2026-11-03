@@ -1,5 +1,14 @@
 # Endringer
 
+## v2.1.35
+
+- **Serier og Filmer i ny drakt.** Fanene åpner på en oversikt med rader bortover, som i strømmetjenestene:
+  *Fortsett å se* med store bilder og en hvit strek for hvor langt du har kommet, *Favoritter*, *Nylig lagt til* og en
+  rad for hver kategori. *Vis alle* gir alt i et rutenett, og knappen øverst velger kategori.
+- **Favoritter for serier og filmer.** Trykk ♡ på siden til en serie eller film, eller på kortet i *Fortsett å se*.
+  Favorittene ligger i sin egen rad, per innlogging.
+- Kortene i *Fortsett å se* bruker seriens eller filmens bakgrunnsbilde når leverandøren har det, ellers plakaten.
+
 ## v2.1.34
 
 - **Plex.** Koble Fyrlys til Plex-kontoen din (tannhjulet → Plex → *Koble til Plex*): du logger inn hos Plex i

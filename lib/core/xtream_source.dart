@@ -89,6 +89,7 @@ List<VodItem> parseVodItems(VodKind kind, Object? raw) => [
                   }(),
                   plot: _text(s['plot']),
                   added: _number(s['last_modified'])?.toInt() ?? 0,
+                  backdrop: firstBackdrop(s),
                 )
               : VodItem(
                   id: '${s['stream_id']}',

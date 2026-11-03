@@ -64,8 +64,9 @@ class Poster extends StatelessWidget {
   }
 }
 
-/// Filmen som noe å spille, med plass i «Fortsett å se». [tech]: bildet og lyden, når filmens info er hentet.
-VodPlayItem? movieItem(Session s, VodItem item, {MediaTech tech = const MediaTech()}) {
+/// Filmen som noe å spille, med plass i «Fortsett å se». [tech]: bildet og lyden, når filmens info er hentet;
+/// [backdrop]: bakgrunnsbildet derfra (det brede kortet i «Fortsett å se»).
+VodPlayItem? movieItem(Session s, VodItem item, {MediaTech tech = const MediaTech(), String? backdrop}) {
   final src = s.source;
   if (src == null) return null;
   final clean = cleanTitle(item.name);
@@ -84,6 +85,7 @@ VodPlayItem? movieItem(Session s, VodItem item, {MediaTech tech = const MediaTec
       icon: item.icon,
       subtitle: sub,
       ext: item.ext,
+      backdrop: backdrop ?? item.backdrop,
     ),
   );
 }
@@ -113,6 +115,7 @@ List<VodPlayItem> seasonItems(Session s, SeriesInfo info, Season season, VodItem
             ext: e.ext,
             episodeId: e.id,
             season: season.number,
+            backdrop: info.backdrop ?? series.backdrop,
           ),
         );
       }(),
@@ -126,7 +129,7 @@ Future<void> playContinue(BuildContext context, Session s, ContinueItem c) async
   if (src == null) return;
   final nav = Navigator.of(context);
   final messenger = ScaffoldMessenger.maybeOf(context);
-  final series = VodItem(id: c.id, name: c.title, icon: c.icon, ext: c.ext);
+  final series = VodItem(id: c.id, name: c.title, icon: c.icon, ext: c.ext, backdrop: c.backdrop);
   if (c.kind == VodKind.movies) {
     final item = movieItem(s, series);
     if (item == null) return;
@@ -168,8 +171,9 @@ class _VodDetailPageState extends State<VodDetailPage> {
   Future<MovieInfo>? _movie;
   Future<SeriesInfo>? _series;
 
-  /// bildet og lyden i filmen, når infoen er hentet (til Chromecasten)
+  /// bildet og lyden i filmen, når infoen er hentet (til Chromecasten), og bakgrunnsbildet
   MediaTech _tech = const MediaTech();
+  String? _backdrop;
 
   /// «Mer fra samme kategori» (filmer), og navnet på kategorien
   Future<({String name, List<VodItem> items})>? _similar;
@@ -195,6 +199,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
         _movie = movie;
         unawaited(movie.then<void>((m) {
           _tech = m.tech;
+          _backdrop = m.backdrop;
         }, onError: (Object _) {}));
         _similar ??= _loadSimilar();
       } else {
@@ -229,12 +234,35 @@ class _VodDetailPageState extends State<VodDetailPage> {
   }
 
   void _playMovie({required bool resume}) {
-    final item = movieItem(s, widget.item, tech: _tech);
+    final item = movieItem(s, widget.item, tech: _tech, backdrop: _backdrop);
     if (item == null) return;
     unawaited(_play([item], 0, resume: resume));
   }
 
   List<VodPlayItem> _episodes(SeriesInfo info, Season season) => seasonItems(s, info, season, item);
+
+  /// ♡ ved knappene: filmen eller serien i favorittene (raden på oversikten)
+  Widget _favoriteButton({String? backdrop}) {
+    final kind = widget.kind;
+    final on = s.isVodFavorite(kind, item.id);
+    return IconButton.outlined(
+      tooltip: on ? tr('Fjern fra favoritter') : tr('Legg til i favoritter'),
+      style: IconButton.styleFrom(minimumSize: const Size(54, 54)),
+      isSelected: on,
+      selectedIcon: Icon(Icons.favorite, color: Theme.of(context).colorScheme.primary),
+      icon: const Icon(Icons.favorite_border),
+      onPressed: () {
+        final now = s.toggleVodFavorite(kind, item.withBackdrop(backdrop));
+        setState(() {});
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(now ? tr('Lagt til i favoritter') : tr('Fjernet fra favoritter')),
+            duration: const Duration(seconds: 2),
+          ));
+      },
+    );
+  }
 
   /// Episoden «Spill av» på seriesiden starter: den du holder på med (fra «Fortsett å se»), ellers den første
   /// (ekstramateriale i «sesong 0» bare hvis det ikke finnes noe annet).
@@ -386,6 +414,7 @@ class _VodDetailPageState extends State<VodDetailPage> {
                     icon: const Icon(Icons.replay),
                     label: Text(tr('Fra begynnelsen')),
                   ),
+                _favoriteButton(backdrop: m.backdrop),
               ],
             ),
             below: [
@@ -528,7 +557,12 @@ class _VodDetailPageState extends State<VodDetailPage> {
             title: clean.title,
             tags: clean.tags,
             chips: chips,
-            actions: play,
+            actions: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [if (play != null) play, _favoriteButton(backdrop: info.backdrop)],
+            ),
             below: [
               if (plot.isNotEmpty) _paragraph(plot),
               _credits(info.cast, info.director),

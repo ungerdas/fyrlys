@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/app.dart';
 import 'package:fyrlys/core/session.dart';
+import 'package:fyrlys/core/vod.dart';
 import 'package:fyrlys/ui/mini_player.dart';
 import 'package:fyrlys/ui/playback.dart';
 import 'package:fyrlys/ui/vod_detail_page.dart';
@@ -46,10 +47,26 @@ void main() {
 
     await tester.tap(find.text('Filmer'));
     await tester.pumpAndSettle();
-    expect(find.text('Fyrlyset'), findsOneWidget);
+    // oversikten: det som sist kom, og en rad for hver kategori
+    expect(find.text('Nylig lagt til'), findsOneWidget);
+    expect(find.text('Action'), findsOneWidget);
+    expect(find.text('Komedie'), findsOneWidget);
+    expect(find.text('Fyrlyset'), findsNWidgets(2));
+    expect(find.text('2024  ★ 7,5'), findsNWidgets(2));
+    expect(source.pageRequests, contains('vod:::added:0'));
+    expect(source.pageRequests, contains('vod:11:::0'));
+
+    // en kategori fra knappen øverst: plakatene i et rutenett
+    await tester.tap(find.text('Kategorier'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alle filmer (3)'), findsOneWidget);
+    await tester.tap(find.text('Komedie (1)'));
+    await tester.pumpAndSettle();
     expect(find.text('Nordlys'), findsOneWidget);
-    expect(find.text('2024  ★ 7,5'), findsOneWidget);
-    expect(find.text('Alle kategorier (3)'), findsOneWidget);
+    expect(find.text('Fyrlyset'), findsNothing);
+    await tester.tap(find.byTooltip('Tilbake til oversikten'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nylig lagt til'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'nord');
     await tester.pump(); // søket når lista, og pausen på 350 ms begynner
@@ -63,7 +80,16 @@ void main() {
     await tester.pump(); // søket når lista, og pausen på 350 ms begynner
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Fyrlyset'));
+
+    // «Vis alle» på det som sist kom: alt, nyeste først
+    await tester.tap(find.text('Vis alle').first);
+    await tester.pumpAndSettle();
+    expect(source.pageRequests.last, 'vod:::added:0');
+    expect(find.text('Alle filmer'), findsOneWidget);
+    await tester.tap(find.byTooltip('Tilbake til oversikten'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Fyrlyset').first);
     await tester.pumpAndSettle();
     expect(find.text('En film om et fyr.'), findsOneWidget);
     expect(find.text('Skuespillere: Kari Nordmann'), findsOneWidget);
@@ -146,7 +172,7 @@ void main() {
 
     await tester.tap(find.text('Filmer'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Fyrlyset'));
+    await tester.tap(find.text('Fyrlyset').first);
     await tester.pumpAndSettle();
     expect(find.text('Fortsett fra 12:05'), findsOneWidget);
     expect(find.text('Fra begynnelsen'), findsOneWidget);
@@ -165,7 +191,7 @@ void main() {
 
     await tester.tap(find.text('Serier'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Kystvakten'));
+    await tester.tap(find.text('Kystvakten').first);
     await tester.pumpAndSettle();
     expect(find.text('Livet langs kysten.'), findsOneWidget);
     expect(find.text('Sesong 1'), findsOneWidget);
@@ -214,7 +240,7 @@ void main() {
     expect(find.text('Fortsett å se'), findsNothing);
 
     // se to minutter av «Fyrlyset», og lukk
-    await tester.tap(find.text('Fyrlyset'));
+    await tester.tap(find.text('Fyrlyset').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Spill av'));
     await _settle(tester);
@@ -228,7 +254,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Fortsett å se'), findsOneWidget);
-    expect(find.text('Alle filmer'), findsOneWidget);
+    expect(find.text('Nylig lagt til'), findsOneWidget);
     expect(find.text('98 min igjen'), findsOneWidget);
     // rett til filmen, der du slapp
     await tester.tap(find.text('98 min igjen'));
@@ -247,7 +273,7 @@ void main() {
     // serie: første episode sett ferdig, så står den neste klar
     await tester.tap(find.text('Serier'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Kystvakten'));
+    await tester.tap(find.text('Kystvakten').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('S01E01  Første'));
     await _settle(tester);
@@ -261,9 +287,9 @@ void main() {
     Navigator.of(tester.element(find.byType(VodDetailPage))).pop();
     await tester.pumpAndSettle();
     expect(find.text('Fortsett å se'), findsOneWidget);
-    expect(find.text('S01E02 Andre'), findsOneWidget);
-    expect(find.text('Neste episode'), findsOneWidget);
-    await tester.tap(find.text('Neste episode'));
+    // det brede kortet: seriens bakgrunnsbilde, og episoden som står for tur
+    expect(find.text('S01E02 Andre · Neste episode'), findsOneWidget);
+    await tester.tap(find.text('S01E02 Andre · Neste episode'));
     await _settle(tester);
     expect(players.last.urls, ['http://example/series/402.mp4']);
     expect(find.text('S01E02 Andre'), findsWidgets);
@@ -284,7 +310,7 @@ void main() {
 
     await tester.tap(find.text('Serier'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Kystvakten'));
+    await tester.tap(find.text('Kystvakten').first);
     await tester.pumpAndSettle();
     expect(find.text('Spill av S01E01'), findsOneWidget);
 
@@ -317,6 +343,56 @@ void main() {
     await _settle(tester);
     expect(players.last.urls, ['http://example/series/402.mp4']);
     expect(players.last.starts, [null]);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('favoritter: ♡ på detaljsiden og i «Fortsett å se», raden på oversikten, og per innlogging',
+      (tester) async {
+    final (session, _) = await _start(tester);
+    final players = <FakePlayback>[];
+    playbackFactory = () {
+      final p = FakePlayback()..length = const Duration(minutes: 45);
+      players.add(p);
+      return p;
+    };
+    addTearDown(() => playbackFactory = MpvPlayback.new);
+
+    await tester.tap(find.text('Serier'));
+    await tester.pumpAndSettle();
+    expect(find.text('Favoritter'), findsNothing);
+    await tester.tap(find.text('Kystvakten').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Legg til i favoritter'));
+    await tester.pump();
+    expect(find.byTooltip('Fjern fra favoritter'), findsOneWidget);
+    expect(session.isVodFavorite(VodKind.series, '301'), isTrue);
+    // bakgrunnsbildet fra detaljene følger med
+    expect(session.vodFavorites(VodKind.series).single.backdrop, 'http://example/bilder/kystvakten-bred.jpg');
+
+    // fem minutter av første episode, og tilbake til oversikten
+    await tester.tap(find.text('Spill av S01E01'));
+    await _settle(tester);
+    players.last.moveTo(const Duration(minutes: 5));
+    await tester.pump();
+    Navigator.of(tester.element(find.byType(VodPlayerPage))).pop();
+    await _settle(tester);
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byType(VodDetailPage))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Favoritter'), findsOneWidget);
+    expect(find.byKey(const ValueKey('favoritt:301')), findsOneWidget);
+    expect(find.text('S01E01 Første · 40 min igjen'), findsOneWidget);
+    expect(session.continueItems.first.backdrop, 'http://example/bilder/kystvakten-bred.jpg');
+
+    // ♡ på kortet i «Fortsett å se» fjerner den fra favorittene
+    await tester.tap(find.byTooltip('Fjern fra favoritter'));
+    await tester.pumpAndSettle();
+    expect(find.text('Favoritter'), findsNothing);
+    expect(session.vodFavorites(VodKind.series), isEmpty);
+    // filmene har sine egne
+    expect(session.vodFavorites(VodKind.movies), isEmpty);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();

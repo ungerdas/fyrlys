@@ -149,7 +149,15 @@ class Session extends ChangeNotifier {
 
   /// Det hver innlogging har for seg (kanalene og filmene har ulike id-er hos ulike leverandører). Lyd, språk, bilde
   /// og lys/mørk gjelder alle.
-  static const _perLogin = ['favorites', 'favoriteCategories', 'recent', 'resume', 'continue', 'guide_cat'];
+  static const _perLogin = [
+    'favorites',
+    'favoriteCategories',
+    'recent',
+    'resume',
+    'continue',
+    'guide_cat',
+    'vod_favorites',
+  ];
 
   /// nøkkelen for [name] i innloggingen som er i bruk
   String _k(String name) => '$name@${activeLogin ?? ''}';
@@ -426,6 +434,7 @@ class Session extends ChangeNotifier {
     recent = _readChannels(_k('recent'));
     _resume = null;
     _continue = null;
+    _vodFavs = null;
     _connections = null;
     notifyListeners();
     unawaited(_startLists(src));
@@ -445,6 +454,7 @@ class Session extends ChangeNotifier {
     recent = const [];
     _resume = null;
     _continue = null;
+    _vodFavs = null;
     _byId = const {};
     _filtered.clear();
     _epg.clear();
@@ -876,6 +886,58 @@ class Session extends ChangeNotifier {
   /// tegnes på nytt når du kommer tilbake til dem.
   void _saveContinue() {
     unawaited(_prefs.setString(_k('continue'), jsonEncode([for (final c in _continue ?? const <ContinueItem>[]) c.toJson()])));
+  }
+
+  // ── favoritter blant filmer og serier ──
+
+  List<(VodKind, VodItem)>? _vodFavs;
+
+  /// favorittfilmene og -seriene (per innlogging), sist lagt til først
+  List<(VodKind, VodItem)> _vodFavList() {
+    final cached = _vodFavs;
+    if (cached != null) return cached;
+    final out = <(VodKind, VodItem)>[];
+    try {
+      final raw = jsonDecode(_prefs.getString(_k('vod_favorites')) ?? '[]');
+      if (raw is List) {
+        for (final j in raw) {
+          if (j is! Map || j['id'] == null) continue;
+          out.add((j['kind'] == VodKind.series.api ? VodKind.series : VodKind.movies, VodItem.fromJson(j)));
+        }
+      }
+    } on FormatException {
+      // begynner på nytt
+    }
+    return _vodFavs = out;
+  }
+
+  /// favorittene blant filmene eller seriene, sist lagt til først
+  List<VodItem> vodFavorites(VodKind kind) => [
+        for (final (k, item) in _vodFavList())
+          if (k == kind) item,
+      ];
+
+  bool isVodFavorite(VodKind kind, String id) => _vodFavList().any((f) => f.$1 == kind && f.$2.id == id);
+
+  /// Legger til eller fjerner [item] fra favorittene; true når den er favoritt nå.
+  bool toggleVodFavorite(VodKind kind, VodItem item) {
+    final list = _vodFavList();
+    final had = list.any((f) => f.$1 == kind && f.$2.id == item.id);
+    final next = had
+        ? [
+            for (final f in list)
+              if (f.$1 != kind || f.$2.id != item.id) f,
+          ]
+        : [(kind, item), ...list];
+    _vodFavs = next;
+    unawaited(_prefs.setString(
+      _k('vod_favorites'),
+      jsonEncode([
+        for (final (k, i) in next) {...i.toJson(), 'kind': k.api},
+      ]),
+    ));
+    notifyListeners();
+    return !had;
   }
 
   // ── utseende ──

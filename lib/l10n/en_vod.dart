@@ -90,4 +90,10 @@ const enVod = <String, String>{
   'Ikke i arkivet': 'Not in the archive',
   'Se fra start': 'Watch from start',
   'Se programmet': 'Watch the program',
+
+  // oversikten over filmer og serier
+  'Tilbake til oversikten': 'Back to the overview',
+  'Velg kategori': 'Choose category',
+  'Oversikt': 'Overview',
+  'Sortering': 'Sort',
 };
