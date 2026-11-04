@@ -388,43 +388,7 @@ class _SideRowState extends State<_SideRow> {
               const SizedBox(width: 5),
               ChannelLogo(url: widget.session.source?.logoUrl(ch.icon), name: ch.name, width: 56, height: 38),
               const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text.rich(
-                      TextSpan(children: [
-                        if (parts.time.isNotEmpty)
-                          TextSpan(
-                            text: '${parts.time}  ',
-                            style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
-                          ),
-                        TextSpan(text: parts.main),
-                      ]),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurface),
-                    ),
-                    if (parts.sub.isNotEmpty)
-                      Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: small)
-                    else if (_epg != null)
-                      FutureBuilder<List<EpgEntry>>(
-                        future: _epg,
-                        builder: (context, snap) {
-                          final cur = nowAndNext(snap.data ?? const [], DateTime.now()).now;
-                          if (cur == null) return const SizedBox.shrink();
-                          return Text(
-                            '${hhmm(cur.start)} ${cur.title}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: small,
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
+              Expanded(child: _details(ch, parts, small)),
               if (ch.number != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 6),
@@ -444,6 +408,50 @@ class _SideRowState extends State<_SideRow> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Navnet og det som står under: to linjer til navnet når det ikke står et program under (eventkanalene har kampen
+  /// i navnet, og ofte ingen programinfo).
+  Widget _details(Channel ch, NameParts parts, TextStyle small) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget title(int lines) => Text.rich(
+          TextSpan(children: [
+            if (parts.time.isNotEmpty)
+              TextSpan(
+                text: '${parts.time}  ',
+                style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
+              ),
+            TextSpan(text: parts.main),
+          ]),
+          maxLines: lines,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 14, height: 1.2, fontWeight: FontWeight.w600, color: scheme.onSurface),
+        );
+    if (parts.sub.isNotEmpty) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [title(2), Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: small)],
+      );
+    }
+    if (!ch.hasEpg) return Align(alignment: Alignment.centerLeft, child: title(2));
+    return FutureBuilder<List<EpgEntry>>(
+      future: _epg,
+      builder: (context, snap) {
+        final cur = nowAndNext(snap.data ?? const [], DateTime.now()).now;
+        // til programinfoen er hentet: én linje; ingen program nå: to
+        final none = snap.connectionState == ConnectionState.done && cur == null;
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            title(none ? 2 : 1),
+            if (cur != null)
+              Text('${hhmm(cur.start)} ${cur.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: small),
+          ],
+        );
+      },
     );
   }
 }

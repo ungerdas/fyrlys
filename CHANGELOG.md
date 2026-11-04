@@ -1,5 +1,11 @@
 # Endringer
 
+## v2.1.40
+
+- Navnene på kanalkortene kuttes mindre. Kanaler uten program under, som eventkanalene med kampen i navnet, får
+  navnet på to linjer, og nummeret står over stjerna, så navnet får mer plass. Hold musa over et kort for å se hele
+  navnet. Det samme gjelder kanallista i spilleren.
+
 ## v2.1.39
 
 - Filmer kunne få en grønn stripe nederst og bli litt klemt sammen på noen PC-er (særlig filmer i HEVC, som mange

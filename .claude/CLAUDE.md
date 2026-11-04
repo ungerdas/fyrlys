@@ -182,7 +182,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   (TV/TV-guide/Filmer/Serier, de to siste bare med `hasVod` (`_sectionList`/`_current`): SegmentedButton i toppen
   ≥ 900 px (ikoner ≥ 1200), ellers NavigationBar nederst; tannhjulet åpner innstillingene (2.1.16; «Se etter
   oppdateringer» står der, oppdateringsserveren er fjernet i 2.1.11); TV har sidemeny ≥ 900 px med ikoner, ellers nedtrekksliste; søket gjelder fanen du er på,
-  på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå).
+  på Hjem alle kanalene), `ui/channel_card.dart` (`showNext`: også det som kommer etterpå; 2.1.40, eieren 4.11 med
+  bilde av eventkanaler: «Forbedre gjerne så navnene ikke kuttes»: navnet på to linjer når det ikke står et program
+  under (eventkanalene, og kanaler uten program nå; til programinfoen er hentet: én linje), nummeret over stjerna
+  (kompakt), hele navnet som verktøytips etter 800 ms; høyden er den samme, 84; det samme i kanallista i spilleren,
+  `_details` i `side_list.dart`).
 - `ui/start_view.dart` – Hjem (filteret `home`, valgt når appen starter, 26.10 for 2.0.3; eieren ville ha vekt på TV,
   ikke filmer/serier): hilsen og dato/klokke, `LastWatchedCard` (siste i «sist sett», nå/etterpå, «Se videre»), eller
   velkomst første gang; favoritter (12, med nå og etterpå), resten av «sist sett» bortover, dine kategorier (ellers de
@@ -645,6 +649,7 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 4.11.2026: 2.1.39: grønn stripe nederst i en film fra Plex (1920×816) på en av PC-ene (se `ui/playback.dart`);
   målt på bildet var filmen klemt omtrent 816/896 og stripa omtrent 80 av 896 linjer. Ikke prøvd på Windows herfra.
   Samme feilrapport: en annen film fra Plex svarte 404 på selve fila (Plex finner den ikke på disken).
+- 4.11.2026: 2.1.40: navnene på kanalkortene kuttes mindre (se `ui/channel_card.dart`). Testet med tester.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

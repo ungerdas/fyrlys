@@ -84,6 +84,52 @@ class _ChannelCardState extends State<ChannelCard> {
     final fav = s.isFavorite(ch.id);
     final dim = TextStyle(color: scheme.onSurfaceVariant, fontSize: 13);
     final up = _focused || _hovered;
+    // Navnet får to linjer når det ikke står et program under (eventkanalene har kampen i navnet, og ofte ingen
+    // programinfo). Med programmet under er det én linje, ellers blir kortet for høyt.
+    Widget title(int lines) => Text.rich(
+          TextSpan(children: [
+            if (parts.time.isNotEmpty)
+              TextSpan(
+                text: '${parts.time}  ',
+                style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
+              ),
+            TextSpan(text: parts.main),
+          ]),
+          maxLines: lines,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, height: 1.2),
+        );
+    final Widget details;
+    if (parts.sub.isNotEmpty) {
+      details = Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          title(2),
+          const SizedBox(height: 3),
+          Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: dim),
+        ],
+      );
+    } else if (ch.hasEpg) {
+      details = FutureBuilder<List<EpgEntry>>(
+        future: _epg,
+        builder: (context, snap) {
+          final epg = snap.data ?? const <EpgEntry>[];
+          // til programinfoen er hentet: én linje (som regel kommer det et program); ingen program nå: to
+          final none = snap.connectionState == ConnectionState.done && nowAndNext(epg, DateTime.now()).now == null;
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              title(none ? 2 : 1),
+              if (!none) ...[const SizedBox(height: 3), _program(epg, dim)],
+            ],
+          );
+        },
+      );
+    } else {
+      details = Align(alignment: Alignment.centerLeft, child: title(2));
+    }
     return Lift(
       up: up,
       child: Material(
@@ -105,42 +151,27 @@ class _ChannelCardState extends State<ChannelCard> {
               children: [
                 ChannelLogo(url: s.source?.logoUrl(ch.icon), name: ch.name),
                 const SizedBox(width: 12),
+                // hele navnet når musa står over (også det som ikke fikk plass)
                 Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text.rich(
-                        TextSpan(children: [
-                          if (parts.time.isNotEmpty)
-                            TextSpan(
-                              text: '${parts.time}  ',
-                              style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
-                            ),
-                          TextSpan(text: parts.main),
-                        ]),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                      ),
-                      const SizedBox(height: 3),
-                      if (parts.sub.isNotEmpty)
-                        Text(parts.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: dim)
-                      else if (_epg != null)
-                        FutureBuilder<List<EpgEntry>>(
-                          future: _epg,
-                          builder: (context, snap) => _program(snap.data ?? const [], dim),
-                        ),
-                    ],
+                  child: Tooltip(
+                    message: ch.name,
+                    waitDuration: const Duration(milliseconds: 800),
+                    child: details,
                   ),
                 ),
-                if (ch.number != null)
-                  Padding(padding: const EdgeInsets.only(left: 8), child: Text(ch.number!, style: dim)),
-                IconButton(
-                  tooltip: fav ? tr('Fjern fra favoritter') : tr('Legg til i favoritter'),
-                  icon: Icon(fav ? Icons.star : Icons.star_border,
-                      color: fav ? scheme.primary : scheme.onSurfaceVariant),
-                  onPressed: () => unawaited(s.toggleFavorite(ch)),
+                // nummeret over stjerna, så navnet får bredden
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (ch.number != null) Text(ch.number!, style: dim.copyWith(fontSize: 12)),
+                    IconButton(
+                      tooltip: fav ? tr('Fjern fra favoritter') : tr('Legg til i favoritter'),
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(fav ? Icons.star : Icons.star_border,
+                          color: fav ? scheme.primary : scheme.onSurfaceVariant),
+                      onPressed: () => unawaited(s.toggleFavorite(ch)),
+                    ),
+                  ],
                 ),
               ],
             ),
