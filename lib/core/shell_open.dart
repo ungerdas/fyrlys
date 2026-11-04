@@ -3,6 +3,7 @@
 // adressen.
 
 import 'dart:ffi';
+import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 
@@ -32,6 +33,10 @@ const _showNormal = 1;
 
 /// COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE, som Microsoft anbefaler før ShellExecute
 const _apartment = 0x2 | 0x4;
+
+/// [shellOpen] i en egen isolate, så appen ikke står fast om Windows bruker tid på å starte nettleseren. (En egen
+/// funksjon, så det eneste som sendes med, er [target].)
+Future<int> shellOpenInBackground(String target) => Isolate.run(() => shellOpen(target));
 
 /// Åpner [target] (en nettadresse) med ShellExecuteW og «open». Gir svaret derfra: over 32 har det gått bra.
 int shellOpen(String target) {

@@ -330,7 +330,7 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `username=`/`password=`, e-post og `C:\Users\<navn>`), `core/report.dart` (`buildReport`: versjon, Windows, antall og
   slag innlogginger (ikke navnene), abonnementet, listene, innstillingene, loggen og slutten av oppdateringsloggen;
   `saveReport` i Nedlastinger, `showInExplorer`, `openUrl` byttes ut i testene; `openUrl` på Windows er `shellOpen` i
-  `core/shell_open.dart` (2.1.36: ShellExecuteW med FFI og COM satt opp rundt, som url_launcher; explorer.exe åpnet
+  `core/shell_open.dart` (2.1.36: ShellExecuteW med FFI i en egen isolate, COM satt opp rundt; explorer.exe åpnet
   Dokumenter for Plex-adressen med «#?» og «&»); `windowsName` (2.1.25): Windows 11 sier
   selv «Windows 10» i `Platform.operatingSystemVersion`, så bygg ≥ 22000 gir «Windows 11»). Innstillinger → Hjelp →
   «Feilrapport» åpner `ui/report_page.dart` (2.1.30): hele teksten (`SelectableText`, nøkkel `report-text`), «Kopier»

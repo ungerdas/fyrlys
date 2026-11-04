@@ -132,7 +132,7 @@ Future<void> Function(String url) openUrl = (url) async {
   if (isAndroid) return AndroidHost.openUrl(url);
   if (!Platform.isWindows) return;
   try {
-    final code = shellOpen(url);
+    final code = await shellOpenInBackground(url);
     // adressen står ikke i loggen (koden fra Plex er med i den)
     if (code <= 32) debugPrint('Nettleseren kunne ikke åpnes (ShellExecute svarte $code)');
   } on Object catch (e) {
