@@ -274,7 +274,7 @@ class _PlexWideCardState extends State<PlexWideCard> {
   }
 }
 
-/// En rad bortover med overskrift (startsiden i Plex-fanen og «Mer som dette»).
+/// En rad bortover med overskrift (startsiden i Plex-fanen og «Mer som dette»), med «Vis alle» når [onAll] er satt.
 class PlexRow extends StatelessWidget {
   const PlexRow({
     super.key,
@@ -284,6 +284,8 @@ class PlexRow extends StatelessWidget {
     required this.count,
     required this.builder,
     this.padding = 16,
+    this.onAll,
+    this.allKey,
   });
 
   final String title;
@@ -293,14 +295,38 @@ class PlexRow extends StatelessWidget {
   final Widget Function(BuildContext context, int index) builder;
   final double padding;
 
+  /// hele raden
+  final VoidCallback? onAll;
+
+  /// nøkkelen til «Vis alle» (testene)
+  final Key? allKey;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(padding, 18, padding, 10),
-          child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          padding: EdgeInsets.fromLTRB(padding, onAll == null ? 18 : 10, onAll == null ? padding : padding - 8,
+              onAll == null ? 10 : 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (onAll != null)
+                TextButton(
+                  key: allKey,
+                  onPressed: onAll,
+                  child: Text(tr('Vis alle'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
+            ],
+          ),
         ),
         SizedBox(
           height: height,

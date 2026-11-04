@@ -46,7 +46,7 @@ class FakePlex {
   int approveAt = 1;
   int pinChecks = 0;
 
-  /// /hubs/continueWatching/items finnes ikke (eldre server)
+  /// /hubs/continueWatching/items og /hubs/promoted finnes ikke (eldre server)
   bool oldServer = false;
 
   final requests = <http.Request>[];
@@ -153,6 +153,7 @@ class FakePlex {
         'viewOffset': viewOffset,
         'viewCount': viewCount,
         'thumb': '/library/metadata/$key/thumb/1',
+        'librarySectionID': 2,
         'Media': [_media(part == 0 ? int.parse(key) * 10 : part)],
       };
 
@@ -329,6 +330,59 @@ class FakePlex {
         return _json(_container({
           'Metadata': [all.firstWhere((e) => e['ratingKey'] == key)],
         }));
+      case '/hubs/promoted':
+        if (oldServer) return _json({'error': 'ukjent'}, 404);
+        // som en server som ikke ser på contentDirectoryID: det som ikke skal vises, tar appen bort selv
+        return _json(_container({
+          'Hub': [
+            // har sin egen rad
+            {
+              'hubIdentifier': 'home.continue',
+              'title': 'Fortsett å se',
+              'type': 'mixed',
+              'Metadata': [started],
+            },
+            // en samling som er lagt på Hjem, med episoder
+            {
+              'hubIdentifier': 'custom.collection.2.77',
+              'title': 'Nytt fra Kystkanalen',
+              'type': 'episode',
+              'key': '/library/collections/77/children',
+              'more': true,
+              'Metadata': [season2[1], season2[0]],
+            },
+            {
+              'hubIdentifier': 'movie.recentlyadded.1',
+              'title': 'Nylig lagt til i Mine filmer',
+              'type': 'movie',
+              'librarySectionID': 1,
+              'key': '/hubs/sections/1/recentlyAdded',
+              'more': false,
+              'Metadata': [movie, started],
+            },
+            {
+              'hubIdentifier': 'tv.recentlyadded.2',
+              'title': 'Nylig lagt til i Mine serier',
+              'type': 'show',
+              'librarySectionID': 2,
+              'Metadata': [show],
+            },
+            // ikke film eller serie
+            {
+              'hubIdentifier': 'music.recent.3',
+              'title': 'Nylig spilt',
+              'type': 'track',
+              'Metadata': [
+                {'ratingKey': '900', 'type': 'track', 'title': 'En sang', 'librarySectionID': 3},
+              ],
+            },
+          ],
+        }));
+      case '/library/collections/77/children':
+        final all = [...season2, ...season1];
+        final start = int.tryParse(q['X-Plex-Container-Start'] ?? '0') ?? 0;
+        final size = int.tryParse(q['X-Plex-Container-Size'] ?? '100') ?? 100;
+        return _json(_container({'totalSize': all.length, 'Metadata': all.skip(start).take(size).toList()}));
       case '/hubs/metadata/10/related':
         return _json(_container({
           'Hub': [

@@ -183,6 +183,43 @@ void main() {
       expect([for (final i in await api.continueWatching()) i.ratingKey], ['32']);
     });
 
+    test('radene på Hjem: rekkefølgen fra Plex, bare filmer og serier fra bibliotekene som vises', () async {
+      final fake = FakePlex();
+      final api = PlexServerApi(
+        base: FakePlex.local,
+        token: FakePlex.serverToken,
+        info: const PlexClientInfo(id: 'test'),
+        client: fake.client,
+      );
+      expect(api.headers['X-Plex-Language'], 'nb');
+      final libs = await api.libraries();
+      var hubs = await api.homeHubs(libs);
+      // uten «Fortsett å se» (egen rad) og musikk
+      expect([for (final h in hubs) h.title], ['Nytt fra Kystkanalen', 'Nylig lagt til i Mine filmer', 'Nylig lagt til i Mine serier']);
+      expect([for (final i in hubs.first.items) i.ratingKey], ['34', '33']);
+      expect(hubs.first.canShowAll, isTrue);
+      expect(hubs[1].canShowAll, isFalse);
+      final q = fake.calls('/hubs/promoted').last;
+      expect(q['contentDirectoryID'], '1,2');
+      expect(q['count'], '20');
+
+      // bare filmene: det fra serie-biblioteket tas bort, også når serveren sender det
+      hubs = await api.homeHubs([libs.first]);
+      expect([for (final h in hubs) h.title], ['Nylig lagt til i Mine filmer']);
+      expect(fake.calls('/hubs/promoted').last['contentDirectoryID'], '1');
+      expect(await api.homeHubs(const []), isEmpty);
+
+      // hele raden, en side om gangen
+      final page = await api.hubItems('/library/collections/77/children', sections: {'1', '2'}, start: 2, size: 2);
+      expect([for (final i in page.items) i.ratingKey], ['31', '32']);
+      expect(page.fetched, 2);
+      expect(page.total, 4);
+      expect(fake.calls('/library/collections/77/children').last['X-Plex-Container-Start'], '2');
+      final hidden = await api.hubItems('/library/collections/77/children', sections: {'1'});
+      expect(hidden.items, isEmpty);
+      expect(hidden.fetched, 4);
+    });
+
     test('søket gir bare filmer, serier og episoder', () async {
       final fake = FakePlex();
       final api = PlexServerApi(
@@ -246,6 +283,20 @@ void main() {
       await again.logout();
       expect(again.linked, isFalse);
       expect(prefs.getString('plex_plain'), isNull);
+    });
+
+    test('skjulte biblioteker huskes per server', () async {
+      final (plex, _, prefs) = await _account({'plex_plain': FakePlex.saved()});
+      await plex.connect();
+      expect([for (final l in plex.shownLibraries) l.title], ['Mine filmer', 'Mine serier']);
+      plex.setHidden(plex.libraries[1], true);
+      expect([for (final l in plex.shownLibraries) l.title], ['Mine filmer']);
+      expect(plex.shownSections, {'1'});
+      expect(plex.isHidden(plex.libraries[1]), isTrue);
+      expect(prefs.getStringList('plex_hidden_libraries'), ['srv1/2']);
+      plex.setHidden(plex.libraries[1], false);
+      expect(plex.shownSections, {'1', '2'});
+      expect(prefs.getStringList('plex_hidden_libraries'), isEmpty);
     });
 
     test('adressen fra sist svarer ikke: de andre prøves, og plex.tv spørres når ingen svarer', () async {

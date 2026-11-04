@@ -13,7 +13,8 @@ import 'fakes.dart';
 import 'plex_fake.dart';
 
 Future<(Session, FakePlex)> _start(WidgetTester tester, {bool linked = true}) async {
-  tester.view.physicalSize = const Size(1400, 900);
+  // høyt nok til at alle radene på Hjem får plass
+  tester.view.physicalSize = const Size(1400, 1600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   final fake = FakePlex();
@@ -69,6 +70,7 @@ void main() {
     expect(find.text('Mine filmer'), findsOneWidget);
     // musikk er ikke med
     expect(find.text('Musikk'), findsNothing);
+    expect(find.text('Nylig spilt'), findsNothing);
 
     // begge deler, når du vil det
     session.plex.setReplacesVod(false);
@@ -82,7 +84,7 @@ void main() {
     final (_, fake) = await _start(tester);
     final pb = _fakePlayback();
     await _openPlex(tester);
-    await tester.tap(find.byKey(const ValueKey('nylig:1:10')));
+    await tester.tap(find.byKey(const ValueKey('rad:movie.recentlyadded.1:10')));
     await tester.pumpAndSettle();
     expect(find.byType(PlexDetailPage), findsOneWidget);
     expect(find.text('En film om et fyr ved havet.'), findsOneWidget);
@@ -179,7 +181,7 @@ void main() {
   testWidgets('en serie: sesongene, episodene, «Fortsett S01E02» og sett/ikke sett', (tester) async {
     final (_, fake) = await _start(tester);
     await _openPlex(tester);
-    await tester.tap(find.byKey(const ValueKey('nylig:2:20')));
+    await tester.tap(find.byKey(const ValueKey('rad:tv.recentlyadded.2:20')));
     await tester.pumpAndSettle();
     expect(find.text('En serie om kysten.'), findsOneWidget);
     expect(find.text('Fortsett S01E02'), findsOneWidget);
@@ -198,6 +200,92 @@ void main() {
     await tester.tap(find.text('Merk som sett').last);
     await tester.pumpAndSettle();
     expect(fake.calls('/:/scrobble').last['key'], '33');
+  });
+
+  testWidgets('Hjem som på Plex: radene fra serveren i den rekkefølgen, og «Vis alle»', (tester) async {
+    final (_, fake) = await _start(tester);
+    await _openPlex(tester);
+    final q = fake.calls('/hubs/promoted').last;
+    expect(q['contentDirectoryID'], '1,2');
+    expect(q['pinnedContentDirectoryID'], '1,2');
+    expect(q['excludeContinueWatching'], '1');
+    // overskriftene Plex lager selv, på norsk
+    expect(fake.requests.lastWhere((r) => r.url.path == '/hubs/promoted').headers['X-Plex-Language'], 'nb');
+    // «Fortsett å se» én gang, og ikke musikk
+    expect(find.text('Fortsett å se'), findsOneWidget);
+    expect(find.text('Nylig spilt'), findsNothing);
+    // rekkefølgen fra Plex
+    final collection = tester.getTopLeft(find.text('Nytt fra Kystkanalen')).dy;
+    expect(collection, lessThan(tester.getTopLeft(find.text('Nylig lagt til i Mine filmer')).dy));
+    // episodene med navnet på serien
+    expect(find.byKey(const ValueKey('rad:custom.collection.2.77:34')), findsOneWidget);
+    expect(find.text('S02E02 · Sommeren'), findsOneWidget);
+    // «Vis alle» bare der Plex har flere
+    expect(find.byKey(const ValueKey('vis-alle:movie.recentlyadded.1')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('vis-alle:custom.collection.2.77')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('alle:31')), findsOneWidget);
+    expect(find.byKey(const ValueKey('alle:34')), findsOneWidget);
+    expect(fake.calls('/library/collections/77/children').first['X-Plex-Container-Start'], '0');
+
+    // en episode åpner serien på den sesongen
+    await tester.tap(find.byKey(const ValueKey('alle:33')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PlexDetailPage), findsOneWidget);
+    expect(find.textContaining('Våren'), findsOneWidget);
+  });
+
+  testWidgets('en eldre server uten radene: det som sist kom i hvert bibliotek', (tester) async {
+    final (_, fake) = await _start(tester);
+    fake.oldServer = true;
+    await _openPlex(tester);
+    expect(fake.calls('/hubs/promoted'), isNotEmpty);
+    expect(find.text('Nylig lagt til i Mine filmer'), findsOneWidget);
+    expect(find.byKey(const ValueKey('nylig:1:10')), findsOneWidget);
+
+    // «Vis alle» er biblioteket
+    await tester.tap(find.byKey(const ValueKey('vis-alle:nylig:1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Alle sjangre'), findsOneWidget);
+    expect(find.text('Fyrlyset'), findsOneWidget);
+  });
+
+  testWidgets('skjule et bibliotek: borte fra sidemenyen, Hjem og søket, og tilbake igjen', (tester) async {
+    final (session, fake) = await _start(tester);
+    await _openPlex(tester);
+    expect(find.text('Mine serier'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('velg-biblioteker')));
+    await tester.pumpAndSettle();
+    expect(find.text('Biblioteker i Plex-fanen'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('vis-bibliotek:2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ferdig'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mine serier'), findsNothing);
+    expect(find.text('Nytt fra Kystkanalen'), findsNothing);
+    expect(find.text('Nylig lagt til i Mine serier'), findsNothing);
+    expect(find.text('Nylig lagt til i Mine filmer'), findsOneWidget);
+    expect(find.byKey(const ValueKey('fortsett:32')), findsNothing);
+    expect(find.byKey(const ValueKey('fortsett:11')), findsOneWidget);
+    expect(fake.calls('/hubs/promoted').last['contentDirectoryID'], '1');
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('plex_hidden_libraries'), ['srv1/2']);
+
+    // i innstillingene: hva som er skjult, og tilbake igjen
+    await tester.tap(find.byTooltip('Innstillinger'));
+    await tester.pumpAndSettle();
+    expect(find.text('Skjult: Mine serier'), findsOneWidget);
+    await tester.tap(find.text('Biblioteker i Plex-fanen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('vis-bibliotek:2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ferdig'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alle vises'), findsOneWidget);
+    expect(session.plex.shownSections, {'1', '2'});
   });
 
   testWidgets('et bibliotek: plakatene, sjanger, sortering og søk', (tester) async {

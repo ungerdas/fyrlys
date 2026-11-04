@@ -30,6 +30,7 @@ class PlexAccount extends ChangeNotifier {
   static const _protectedKey = 'plex_protected';
   static const _plainKey = 'plex_plain';
   static const _replaceKey = 'plex_replace_vod';
+  static const _hiddenKey = 'plex_hidden_libraries';
 
   final SharedPreferences _prefs;
   final SecretCodec _secrets;
@@ -80,6 +81,34 @@ class PlexAccount extends ChangeNotifier {
 
   void setReplacesVod(bool value) {
     unawaited(_prefs.setBool(_replaceKey, value));
+    _notify();
+  }
+
+  /// bibliotekene som er skjult i Plex-fanen («<server>/<bibliotek>»)
+  Set<String> get _hidden => <String>{...?_prefs.getStringList(_hiddenKey)};
+
+  String _libraryId(PlexLibrary l) => '${server?.id ?? ''}/${l.key}';
+
+  /// [l] vises ikke i Plex-fanen (sidemenyen, Hjem og søket)
+  bool isHidden(PlexLibrary l) => _hidden.contains(_libraryId(l));
+
+  /// Bibliotekene som vises i Plex-fanen.
+  List<PlexLibrary> get shownLibraries {
+    final hidden = _hidden;
+    return [
+      for (final l in libraries)
+        if (!hidden.contains(_libraryId(l))) l,
+    ];
+  }
+
+  /// nøklene til bibliotekene som vises
+  Set<String> get shownSections => {for (final l in shownLibraries) l.key};
+
+  void setHidden(PlexLibrary l, bool hidden) {
+    final set = _hidden;
+    final id = _libraryId(l);
+    if (!(hidden ? set.add(id) : set.remove(id))) return;
+    unawaited(_prefs.setStringList(_hiddenKey, set.toList()..sort()));
     _notify();
   }
 

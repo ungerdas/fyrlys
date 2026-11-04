@@ -416,7 +416,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   nettet), `PlexLibrary` (movie/show), `PlexItem` (film/serie/sesong/episode: bilder, `viewOffset`/`viewCount`/
   `leafCount`, `onDeck` (ett objekt i `OnDeck.Metadata`), `media`/`part`/`streams`, `markers` (`final` = rulleteksten
   på slutten), `tech` → `MediaTech`, `resumeAt` via `resumeFrom` (≥ 10 s, ≤ 95 %)), `PlexSort` (serier: «nylig lagt til» = `episode.addedAt:desc`)), `plex_api.dart` (`PlexClientInfo`: hodene
-  X-Plex-Product «Fyrlys», fast `X-Plex-Client-Identifier`, enhetsnavn i ASCII; `PlexTv`: PIN med `strong=true`,
+  X-Plex-Product «Fyrlys», fast `X-Plex-Client-Identifier`, enhetsnavn i ASCII, `X-Plex-Language` nb/en (2.1.37: for
+  overskriftene serveren lager selv; om den oversetter til nb, er ikke prøvd); `PlexTv`: PIN med `strong=true`,
   `authUrl` (app.plex.tv/auth), `checkPin`, `userName`, `servers` (clients.plex.tv); `pickConnection`: alle adressene
   prøves samtidig mot `/identity` uten nøkkelen (krever samme machineIdentifier), beste i laveste tier, https foran
   http; `PlexServerApi`:
@@ -424,9 +425,15 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   (`/hubs/continueWatching/items`, ellers `/library/onDeck`), `recentlyAdded`, `metadata` (`includeOnDeck`,
   `includeMarkers`), `children`, `related`, `search` (`/hubs/search`, bare film/serie/episode, `sectionId`),
   `setWatched` (`/:/scrobble`/`unscrobble`), `timeline`, `image` (`/photo/:/transcode`, nøkkelen i adressen),
+  `homeHubs` (2.1.37: `/hubs/promoted` med `contentDirectoryID` og `pinnedContentDirectoryID` = bibliotekene som
+  vises, `count=20`, `excludeContinueWatching=1`; `parseHubs` i plex_models: rekkefølgen fra Plex, bare film/serie/
+  sesong/episode fra bibliotekene som vises (hubens og hvert elements `librarySectionID`), uten hubIdentifier med
+  continue/ondeck; `PlexHub.canShowAll` = `more` og en `key` som begynner med /), `hubItems` («Vis alle»: `key`
+  med X-Plex-Container-Start/Size, `PlexHubPage` med `fetched`/`total`),
   `file` (nøkkelen som hode), `stream` (undertekstfiler)), `plex_account.dart` (`PlexAccount` i `Session.plex`, felles for
   alle IPTV-innloggingene: kryptert i `plex_protected` (ellers `plex_plain`), `plex_client_id`, `plex_replace_vod`
-  (på); `connect` (adressen fra sist først når den var i hjemmenettet, så `pickConnection`, så serverlista fra plex.tv
+  (på), `plex_hidden_libraries` (2.1.37, eieren 4.11: «vil ha mulighet til å ta vekk» biblioteker; «<server>/<nøkkel>»;
+  `isHidden`, `setHidden`, `shownLibraries`, `shownSections`); `connect` (adressen fra sist først når den var i hjemmenettet, så `pickConnection`, så serverlista fra plex.tv
   på nytt; delt forsøk, `_gen` ved bytte; `_api` byttes først når det nye svarer), `run` (ny adresse og ett nytt
   forsøk når forbindelsen brøt, felles for alle som feilet samtidig), `reportLine` og loggen uten servernavn/
   adresser (`_errorKind`; `error` i appen har navnet); `PlexReporter`: timeline playing/paused/stopped, og `/:/scrobble` bare når serveren ikke har sett deg gå
@@ -437,12 +444,19 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   til med `Playback.addSubtitles` (mpv `sub-add`, `<key>.<filtype>?encoding=utf-8`; den på språket du foretrekker velges
   når filen selv ikke har valgt noen) og viser «Hopp over introen (S)» / «Hopp over rulleteksten (S)» / «Neste episode
   (S)» for rulleteksten på slutten (episoden meldes som sett først) (`hopp-over`). `ui/plex/`:
-  `plex_view.dart` (fanen: sidemeny/nedtrekksliste, Hjem med rader, bibliotek med sjanger/sortering og sider à 100, søk;
-  `_refresh` henter på nytt når du kommer tilbake), `plex_detail_page.dart` (film: `DetailHero` fra
+  `plex_view.dart` (fanen: sidemeny/nedtrekksliste med de som vises og `velg-biblioteker` (tune) ved overskriften,
+  bibliotek med sjanger/sortering og sider à 100, søk uten skjulte biblioteker; Hjem (2.1.37, eieren 4.11 med bilder
+  av Plex: «Hjem siden på plex er som hjem siden på orgianle plex. Med "Nytt fra ..." radene»): «Fortsett å se»
+  (uten skjulte biblioteker), så radene fra `homeHubs` (kort `rad:<hubId>:<ratingKey>`, «Vis alle» `vis-alle:<hubId>`
+  åpner `_PlexHubPage` med kortene `alle:<ratingKey>`); svarer serveren 404/400 eller har ingen rader, «Nylig lagt
+  til i …» per bibliotek (`nylig:<bibliotek>:<ratingKey>`, «Vis alle» velger biblioteket); nøkkelen til Hjem og søket
+  har bibliotekene som vises, så de hentes på nytt når noe skjules; `_refresh` henter på nytt når du kommer tilbake), `plex_detail_page.dart` (film: `DetailHero` fra
   `vod_detail_page.dart`, Spill av/Fortsett/Fra begynnelsen, sett/ikke sett, «Mer som dette»; serie: sesongene sortert,
   episodene, «Fortsett SxxEyy» fra OnDeck, meny per episode), `plex_play.dart` (`plexPlayItem`, `plexExtras`,
   `plexExplain` (HTTP-koden), `plexNextSeasons` (sesong 0 hoppes over), `openPlexPlayer`, `playPlexItem`),
-  `plex_login.dart` (PIN-dialogen: åpner nettleseren, sjekker hvert 2. s; serverlista), `plex_widgets.dart`.
+  `plex_login.dart` (PIN-dialogen: åpner nettleseren, sjekker hvert 2. s; serverlista; `showPlexLibraries`, avkrysning
+  `vis-bibliotek:<nøkkel>`, kobler til først når bibliotekene ikke er hentet), `plex_widgets.dart` (`PlexRow` med
+  `onAll`/`allKey`).
   `home_page.dart`: `_Section.plex`; Filmer/Serier skjules når Plex erstatter dem. Innstillinger → Plex (koble til/fra,
   bytt server, «Plex erstatter Filmer og Serier»). Testet i `plex_test.dart` og `plex_ui_test.dart` med en falsk
   Plex-server (`plex_fake.dart`); ikke prøvd mot en ekte Plex-server: PIN-innloggingen, adressevalget (plex.direct,
@@ -612,7 +626,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 3.11.2026: 2.1.35: Serier og Filmer som oversikt med rader og favoritter (se `ui/vod_browser.dart`). Testet med
   widget-tester.
 - 4.11.2026: 2.1.36: «Koble til Plex» åpnet mappen Dokumenter (skjermbilde fra eieren): `openUrl` startet
-  explorer.exe med adressen. Nå ShellExecuteW (se Feilrapport under Arkitektur). Ikke prøvd på Windows herfra.
+  explorer.exe med adressen. Nå ShellExecuteW (se Feilrapport under Arkitektur). Ikke prøvd på Windows herfra. Eieren
+  fikk koblet til før 2.1.36 var ute (trolig med «Kopier lenken»): «Liker egen Plex fane».
+- 4.11.2026: 2.1.37: Hjem i Plex-fanen med radene fra Plex sin egen startside, og biblioteker kan skjules (se Plex
+  under Arkitektur). Testet med tester og den falske Plex-serveren; om serveren hans gir «Nytt fra …»-radene i
+  `/hubs/promoted` med `pinnedContentDirectoryID`, og om overskriftene blir norske, er ikke prøvd.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

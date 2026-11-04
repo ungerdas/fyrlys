@@ -629,3 +629,67 @@ class PlexPage {
   final List<PlexItem> items;
   final int total;
 }
+
+// ── radene på Hjem ──
+
+/// En rad på Hjem slik Plex har den på sin egen startside («Nytt fra …», samlinger lagt på Hjem, «Nylig lagt til …»):
+/// tittelen, det som står i den, og adressen til hele raden.
+class PlexHub {
+  const PlexHub({required this.id, required this.title, required this.items, this.key, this.more = false});
+
+  /// hubIdentifier hos Plex (ellers tittelen)
+  final String id;
+  final String title;
+  final List<PlexItem> items;
+
+  /// hele raden hos Plex
+  final String? key;
+
+  /// Plex har flere enn de som står i raden
+  final bool more;
+
+  /// «Vis alle»: Plex har flere, og sier hvor de er
+  bool get canShowAll => more && (key?.startsWith('/') ?? false);
+}
+
+/// En side fra en hel rad («Vis alle»): det som vises, hvor mange Plex ga (også de som ikke vises her), og hvor mange
+/// det er i alt når Plex sier det.
+class PlexHubPage {
+  const PlexHubPage({required this.items, required this.fetched, this.total});
+
+  final List<PlexItem> items;
+  final int fetched;
+  final int? total;
+}
+
+/// En film, serie, sesong eller episode fra et av bibliotekene i [sections] (de som vises). Uten bibliotek står den.
+bool plexShown(PlexItem item, Set<String> sections) =>
+    item.type != PlexType.other &&
+    item.ratingKey.isNotEmpty &&
+    (item.sectionId == null || sections.contains(item.sectionId));
+
+/// Radene i et svar fra /hubs/promoted: bare filmer, serier, sesonger og episoder fra [sections], i den rekkefølgen
+/// Plex har dem. Uten «Fortsett å se» (den har sin egen rad) og uten rader som da blir tomme (musikk, bilder,
+/// samlinger, skjulte biblioteker).
+List<PlexHub> parseHubs(Map<String, Object?> container, {required Set<String> sections}) {
+  final hubs = <PlexHub>[];
+  final ids = <String>{};
+  for (final hub in plexList(container['Hub'])) {
+    final title = plexText(hub['title']).trim();
+    final id = plexPath(hub['hubIdentifier']) ?? title;
+    final lower = id.toLowerCase();
+    if (title.isEmpty || lower.contains('continue') || lower.contains('ondeck')) continue;
+    final section = plexPath(hub['librarySectionID']);
+    if (section != null && !sections.contains(section)) continue;
+    final seen = <String>{};
+    final items = <PlexItem>[];
+    for (final j in plexList(hub['Metadata'])) {
+      final item = PlexItem.fromJson(j);
+      if (plexShown(item, sections) && seen.add(item.ratingKey)) items.add(item);
+    }
+    if (items.isNotEmpty && ids.add(id)) {
+      hubs.add(PlexHub(id: id, title: title, items: items, key: plexPath(hub['key']), more: plexBool(hub['more'])));
+    }
+  }
+  return hubs;
+}

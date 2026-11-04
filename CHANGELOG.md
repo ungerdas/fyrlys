@@ -1,5 +1,13 @@
 # Endringer
 
+## v2.1.37
+
+- **Hjem i Plex-fanen er som Hjem i Plex.** Under *Fortsett å se* kommer radene Plex har på sin egen startside, i
+  samme rekkefølge: *Nytt fra …*-radene og de andre samlingene du har lagt på Hjem, det som sist kom, og så videre.
+  *Vis alle* viser hele raden.
+- **Skjul biblioteker** du ikke vil ha i Plex-fanen: knappen ved *Biblioteker* i sidemenyen, eller tannhjulet → Plex
+  → *Biblioteker i Plex-fanen*. Det som er skjult, vises ikke i sidemenyen, på Hjem eller i søket.
+
 ## v2.1.36
 
 - *Koble til Plex* åpnet mappen Dokumenter i stedet for innloggingen hos Plex. Nå åpnes siden i nettleseren din,

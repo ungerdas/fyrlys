@@ -287,6 +287,13 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Text(tr('Bytt server')),
         ),
       ),
+      ListTile(
+        leading: const Icon(Icons.video_library_outlined),
+        title: Text(tr('Biblioteker i Plex-fanen')),
+        subtitle: Text(_plexLibrariesLine()),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => unawaited(showPlexLibraries(context, plex)),
+      ),
       if (s.source?.hasVod ?? false)
         SwitchListTile(
           secondary: const Icon(Icons.swap_horiz),
@@ -301,6 +308,17 @@ class _SettingsPageState extends State<SettingsPage> {
         onTap: () => unawaited(_disconnectPlex()),
       ),
     ];
+  }
+
+  /// «Skjult: …», eller at alle vises
+  String _plexLibrariesLine() {
+    final plex = s.plex;
+    if (plex.libraries.isEmpty) return tr('Velg hvilke som vises i sidemenyen, på Hjem og i søket');
+    final hidden = [
+      for (final l in plex.libraries)
+        if (plex.isHidden(l)) l.title,
+    ];
+    return hidden.isEmpty ? tr('Alle vises') : tr('Skjult: {names}', {'names': hidden.join(', ')});
   }
 
   Future<void> _connectPlex() async {

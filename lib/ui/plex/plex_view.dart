@@ -1,5 +1,5 @@
-// Plex-fanen: Hjem (Fortsett å se og det som sist kom i hvert bibliotek), bibliotekene (sidemeny i et bredt vindu,
-// ellers nedtrekksliste) med sjanger og sortering, og søket i toppen av siden.
+// Plex-fanen: Hjem (Fortsett å se og radene fra Plex sin egen startside), bibliotekene (sidemeny i et bredt vindu,
+// ellers nedtrekksliste) med sjanger og sortering, og søket i toppen av siden. Biblioteker kan skjules.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -13,6 +13,7 @@ import '../../core/session.dart';
 import '../../l10n/tr.dart';
 import '../motion.dart';
 import 'plex_detail_page.dart';
+import 'plex_login.dart' show showPlexLibraries;
 import 'plex_play.dart';
 import 'plex_widgets.dart';
 
@@ -77,8 +78,17 @@ class _PlexViewState extends State<PlexView> {
     _refresh.value++;
   }
 
+  /// hele raden fra Hjem
+  Future<void> _showAll(PlexHub hub) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => _PlexHubPage(plex: plex, hub: hub, onOpen: _open)),
+    );
+    _refresh.value++;
+  }
+
+  /// biblioteket du står i (et skjult bibliotek gir Hjem)
   PlexLibrary? get _library {
-    for (final l in plex.libraries) {
+    for (final l in plex.shownLibraries) {
       if (l.key == _place) return l;
     }
     return null;
@@ -113,7 +123,14 @@ class _PlexViewState extends State<PlexView> {
     final Widget content = searching
         ? _PlexSearch(plex: plex, query: widget.query, library: library, onOpen: _open)
         : library == null
-            ? _PlexHome(plex: plex, refresh: _refresh, onOpen: _open, onPlay: _play)
+            ? _PlexHome(
+                plex: plex,
+                refresh: _refresh,
+                onOpen: _open,
+                onPlay: _play,
+                onAll: _showAll,
+                onLibrary: (l) => setState(() => _place = l.key),
+              )
             : _PlexLibraryView(
                 key: ValueKey('bibliotek:${library.key}'),
                 plex: plex,
@@ -121,11 +138,12 @@ class _PlexViewState extends State<PlexView> {
                 refresh: _refresh,
                 onOpen: _open,
               );
-    // en ny server gir nye sider (bibliotekene og radene er ikke de samme)
+    // en ny server gir nye sider (bibliotekene og radene er ikke de samme), og Hjem og søket hentes på nytt når et
+    // bibliotek skjules eller vises igjen
     final server = plex.server?.id ?? '';
-    final switched = SmoothSwitch(
-      child: KeyedSubtree(key: ValueKey(searching ? 'søk:$server:$place' : '$server:$place'), child: content),
-    );
+    final shown = [for (final l in plex.shownLibraries) l.key].join(',');
+    final page = searching ? 'søk:$server:$place:$shown' : (library == null ? '$server:home:$shown' : '$server:$place');
+    final switched = SmoothSwitch(child: KeyedSubtree(key: ValueKey(page), child: content));
     if (wide) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -144,26 +162,48 @@ class _PlexViewState extends State<PlexView> {
 
   Widget _sidebar(String place) {
     final scheme = Theme.of(context).colorScheme;
+    final shown = plex.shownLibraries;
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
         _tile('home', tr('Hjem'), Icons.home_outlined, place),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 16, 6),
-          child: Text(
-            tr('Biblioteker').toUpperCase(),
-            style: TextStyle(fontSize: 12, letterSpacing: 0.8, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
+          padding: const EdgeInsets.fromLTRB(20, 10, 8, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  tr('Biblioteker').toUpperCase(),
+                  style: TextStyle(
+                      fontSize: 12, letterSpacing: 0.8, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
+                ),
+              ),
+              _choose(),
+            ],
           ),
         ),
-        for (final l in plex.libraries) _tile(l.key, l.title, l.shows ? Icons.tv_outlined : Icons.movie_outlined, place),
-        if (plex.libraries.isEmpty)
+        for (final l in shown) _tile(l.key, l.title, l.shows ? Icons.tv_outlined : Icons.movie_outlined, place),
+        if (shown.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 16, 4),
-            child: Text(tr('Ingen biblioteker med filmer eller serier.'), style: TextStyle(color: scheme.onSurfaceVariant)),
+            child: Text(
+              plex.libraries.isEmpty ? tr('Ingen biblioteker med filmer eller serier.') : tr('Alle bibliotekene er skjult.'),
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
           ),
       ],
     );
   }
+
+  /// Velg hvilke biblioteker som vises.
+  Widget _choose() => IconButton(
+        key: const ValueKey('velg-biblioteker'),
+        tooltip: tr('Velg biblioteker'),
+        iconSize: 18,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(Icons.tune, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        onPressed: () => unawaited(showPlexLibraries(context, plex)),
+      );
 
   Widget _tile(String id, String name, IconData icon, String place) {
     final scheme = Theme.of(context).colorScheme;
@@ -205,28 +245,49 @@ class _PlexViewState extends State<PlexView> {
 
   /// Smalt vindu: Hjem og bibliotekene i en nedtrekksliste.
   Widget _picker(String place) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-        child: DropdownButton<String>(
-          isExpanded: true,
-          value: place,
-          items: [
-            DropdownMenuItem(value: 'home', child: Text(tr('Hjem'))),
-            for (final l in plex.libraries)
-              DropdownMenuItem(value: l.key, child: Text(l.title, overflow: TextOverflow.ellipsis)),
+        padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: place,
+                items: [
+                  DropdownMenuItem(value: 'home', child: Text(tr('Hjem'))),
+                  for (final l in plex.shownLibraries)
+                    DropdownMenuItem(value: l.key, child: Text(l.title, overflow: TextOverflow.ellipsis)),
+                ],
+                onChanged: (v) => setState(() => _place = v ?? 'home'),
+              ),
+            ),
+            _choose(),
           ],
-          onChanged: (v) => setState(() => _place = v ?? 'home'),
         ),
       );
 }
 
-/// Hjem: «Fortsett å se» og det som sist kom i hvert bibliotek, i rader bortover.
+/// Hjem: «Fortsett å se» og radene Plex har på sin egen startside («Nytt fra …», samlinger lagt på Hjem, «Nylig lagt
+/// til …»), i rader bortover. Har ikke serveren noen der (eldre servere), det som sist kom i hvert bibliotek.
 class _PlexHome extends StatefulWidget {
-  const _PlexHome({required this.plex, required this.refresh, required this.onOpen, required this.onPlay});
+  const _PlexHome({
+    required this.plex,
+    required this.refresh,
+    required this.onOpen,
+    required this.onPlay,
+    required this.onAll,
+    required this.onLibrary,
+  });
 
   final PlexAccount plex;
   final Listenable refresh;
   final void Function(PlexItem item) onOpen;
   final void Function(PlexItem item) onPlay;
+
+  /// hele raden («Vis alle»)
+  final void Function(PlexHub hub) onAll;
+
+  /// biblioteket i sidemenyen («Vis alle» på «Nylig lagt til i …»)
+  final void Function(PlexLibrary library) onLibrary;
 
   @override
   State<_PlexHome> createState() => _PlexHomeState();
@@ -234,9 +295,14 @@ class _PlexHome extends StatefulWidget {
 
 class _PlexHomeState extends State<_PlexHome> {
   List<PlexItem>? _continue;
+
+  /// radene fra Plex sin egen startside (tom: serveren har ingen, så [_recent] vises)
+  List<PlexHub>? _hubs;
+
+  /// reserven: det som sist kom i hvert bibliotek
   final Map<String, List<PlexItem>> _recent = {};
 
-  /// feilene per rad ('fortsett' eller bibliotekets nøkkel)
+  /// feilene per rad ('fortsett', 'rader' eller bibliotekets nøkkel)
   final Map<String, String> _errors = {};
   bool _loaded = false;
 
@@ -270,12 +336,46 @@ class _PlexHomeState extends State<_PlexHome> {
   }
 
   Future<void> _load() async {
-    final plex = widget.plex;
+    final shown = widget.plex.shownLibraries;
+    final sections = {for (final l in shown) l.key};
     await Future.wait([
-      _row('fortsett', (api) => api.continueWatching(), (list) => _continue = list),
-      for (final l in plex.libraries) _row(l.key, (api) => api.recentlyAdded(l), (list) => _recent[l.key] = list),
+      _row('fortsett', (api) => api.continueWatching(), (list) {
+        _continue = [
+          for (final it in list)
+            if (plexShown(it, sections)) it,
+        ];
+      }),
+      _loadHubs(shown),
     ]);
     if (mounted) setState(() => _loaded = true);
+  }
+
+  Future<void> _loadHubs(List<PlexLibrary> shown) async {
+    try {
+      final hubs = await widget.plex.run((api) => api.homeHubs(shown));
+      if (!mounted) return;
+      if (hubs.isNotEmpty) {
+        setState(() {
+          _hubs = hubs;
+          _errors.remove('rader');
+        });
+        return;
+      }
+    } on PlexException catch (e) {
+      // eldre servere har ikke radene (da brukes reserven); ellers står det som var der, med feilen
+      if (e.status != 404 && e.status != 400) {
+        if (mounted) setState(() => _errors['rader'] = e.message);
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _hubs = const [];
+      _errors.remove('rader');
+    });
+    await Future.wait([
+      for (final l in shown) _row(l.key, (api) => api.recentlyAdded(l), (list) => _recent[l.key] = list),
+    ]);
   }
 
   @override
@@ -298,21 +398,43 @@ class _PlexHomeState extends State<_PlexHome> {
         ),
       ));
     }
-    for (final l in plex.libraries) {
-      final list = _recent[l.key] ?? const <PlexItem>[];
-      if (list.isEmpty) continue;
+    final hubs = _hubs ?? const <PlexHub>[];
+    for (final hub in hubs) {
       rows.add(PlexRow(
-        title: tr('Nylig lagt til i {library}', {'library': l.title}),
+        key: ValueKey('rad:${hub.id}'),
+        title: hub.title,
         height: 300,
         itemWidth: 150,
-        count: list.length,
+        count: hub.items.length,
+        onAll: hub.canShowAll ? () => widget.onAll(hub) : null,
+        allKey: ValueKey('vis-alle:${hub.id}'),
         builder: (context, i) => PlexPosterCard(
-          key: ValueKey('nylig:${l.key}:${list[i].ratingKey}'),
+          key: ValueKey('rad:${hub.id}:${hub.items[i].ratingKey}'),
           plex: plex,
-          item: list[i],
-          onTap: () => widget.onOpen(list[i]),
+          item: hub.items[i],
+          onTap: () => widget.onOpen(hub.items[i]),
         ),
       ));
+    }
+    if (hubs.isEmpty) {
+      for (final l in plex.shownLibraries) {
+        final list = _recent[l.key] ?? const <PlexItem>[];
+        if (list.isEmpty) continue;
+        rows.add(PlexRow(
+          title: tr('Nylig lagt til i {library}', {'library': l.title}),
+          height: 300,
+          itemWidth: 150,
+          count: list.length,
+          onAll: () => widget.onLibrary(l),
+          allKey: ValueKey('vis-alle:nylig:${l.key}'),
+          builder: (context, i) => PlexPosterCard(
+            key: ValueKey('nylig:${l.key}:${list[i].ratingKey}'),
+            plex: plex,
+            item: list[i],
+            onTap: () => widget.onOpen(list[i]),
+          ),
+        ));
+      }
     }
     if (rows.isEmpty) {
       if (!_loaded) return const Center(child: CircularProgressIndicator());
@@ -605,8 +727,13 @@ class _PlexSearchState extends State<_PlexSearch> {
     try {
       final list = await widget.plex.run((api) => api.search(query, section: section));
       if (!mounted || my != _seq) return;
+      final sections = widget.plex.shownSections;
       setState(() {
-        _results = list;
+        // ikke fra bibliotekene som er skjult
+        _results = [
+          for (final it in list)
+            if (plexShown(it, sections)) it,
+        ];
         _error = null;
       });
     } on PlexException catch (e) {
@@ -636,6 +763,147 @@ class _PlexSearchState extends State<_PlexSearch> {
         item: results[i],
         onTap: () => widget.onOpen(results[i]),
       ),
+    );
+  }
+}
+
+/// Hele raden fra Hjem («Vis alle»): plakatene i et rutenett, en side om gangen.
+class _PlexHubPage extends StatefulWidget {
+  const _PlexHubPage({required this.plex, required this.hub, required this.onOpen});
+
+  final PlexAccount plex;
+  final PlexHub hub;
+  final void Function(PlexItem item) onOpen;
+
+  @override
+  State<_PlexHubPage> createState() => _PlexHubPageState();
+}
+
+class _PlexHubPageState extends State<_PlexHubPage> {
+  static const _page = 100;
+
+  final List<PlexItem> _items = [];
+  final Set<String> _seen = {};
+
+  /// så mange Plex har gitt (også de som ikke vises her)
+  int _fetched = 0;
+  bool _loading = false;
+  bool _done = false;
+  bool _morePending = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_more());
+  }
+
+  Future<void> _more() async {
+    final key = widget.hub.key;
+    if (key == null) {
+      _done = true;
+      return;
+    }
+    if (_loading || _done) return;
+    setState(() => _loading = true);
+    try {
+      final sections = widget.plex.shownSections;
+      final page = await widget.plex.run((api) => api.hubItems(key, sections: sections, start: _fetched, size: _page));
+      if (!mounted) return;
+      setState(() {
+        var added = 0;
+        for (final it in page.items) {
+          if (_seen.add(it.ratingKey)) {
+            _items.add(it);
+            added++;
+          }
+        }
+        _fetched += page.fetched;
+        final total = page.total;
+        // ferdig: en tom side, alt Plex sa det var, eller en side med bare det vi har (raden kan ikke deles opp)
+        _done = page.fetched == 0 || (total != null && _fetched >= total) || (added == 0 && page.items.isNotEmpty);
+        _loading = false;
+        _error = null;
+      });
+      // hele siden var fra skjulte biblioteker: den neste
+      if (!_done && page.items.isEmpty) unawaited(_more());
+    } on PlexException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
+    }
+  }
+
+  void _maybeMore() {
+    if (_morePending || _loading || _done || _error != null) return;
+    _morePending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _morePending = false;
+      if (mounted) unawaited(_more());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final error = _error;
+    final Widget body;
+    if (error != null && _items.isEmpty) {
+      body = PlexMessage(text: error, error: true, onRetry: () => unawaited(_more()));
+    } else if (_items.isEmpty) {
+      body = _loading || !_done ? const Center(child: CircularProgressIndicator()) : PlexMessage(text: tr('Ingenting her.'));
+    } else {
+      body = CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            sliver: SliverGrid.builder(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 180,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 14,
+                childAspectRatio: 0.5,
+              ),
+              itemCount: _items.length,
+              itemBuilder: (context, i) {
+                if (i >= _items.length - 30) _maybeMore();
+                final it = _items[i];
+                return PlexPosterCard(
+                  key: ValueKey('alle:${it.ratingKey}'),
+                  plex: widget.plex,
+                  item: it,
+                  onTap: () => widget.onOpen(it),
+                );
+              },
+            ),
+          ),
+          if (error != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: Row(
+                  children: [
+                    Flexible(child: Text(error, style: TextStyle(color: scheme.error))),
+                    const SizedBox(width: 12),
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _error = null);
+                        unawaited(_more());
+                      },
+                      child: Text(tr('Prøv igjen')),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.hub.title)),
+      body: body,
     );
   }
 }

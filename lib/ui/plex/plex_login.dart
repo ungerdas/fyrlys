@@ -243,3 +243,90 @@ class _PlexServerDialogState extends State<_PlexServerDialog> {
     );
   }
 }
+
+/// Velg hvilke biblioteker som vises i Plex-fanen (sidemenyen, Hjem og søket).
+Future<void> showPlexLibraries(BuildContext context, PlexAccount plex) =>
+    showDialog<void>(context: context, builder: (_) => _PlexLibrariesDialog(plex: plex));
+
+class _PlexLibrariesDialog extends StatefulWidget {
+  const _PlexLibrariesDialog({required this.plex});
+
+  final PlexAccount plex;
+
+  @override
+  State<_PlexLibrariesDialog> createState() => _PlexLibrariesDialogState();
+}
+
+class _PlexLibrariesDialogState extends State<_PlexLibrariesDialog> {
+  String? _error;
+
+  /// bibliotekene hentes når Fyrlys kobler til serveren (første gang Plex-fanen åpnes)
+  late bool _loading = widget.plex.libraries.isEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_loading) unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    try {
+      await widget.plex.connect();
+    } on PlexException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final plex = widget.plex;
+    final error = _error;
+    return AlertDialog(
+      title: Text(tr('Biblioteker i Plex-fanen')),
+      content: SizedBox(
+        width: 440,
+        child: ListenableBuilder(
+          listenable: plex,
+          builder: (context, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                tr('Det du slår av, vises ikke i sidemenyen, på Hjem eller i søket.'),
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 8),
+              if (_loading) const LinearProgressIndicator(),
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(error, style: TextStyle(color: scheme.error)),
+                ),
+              if (!_loading && error == null && plex.libraries.isEmpty)
+                Text(tr('Ingen biblioteker med filmer eller serier.')),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final l in plex.libraries)
+                      CheckboxListTile(
+                        key: ValueKey('vis-bibliotek:${l.key}'),
+                        value: !plex.isHidden(l),
+                        onChanged: (v) => plex.setHidden(l, !(v ?? true)),
+                        secondary: Icon(l.shows ? Icons.tv_outlined : Icons.movie_outlined),
+                        title: Text(l.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Ferdig')))],
+    );
+  }
+}

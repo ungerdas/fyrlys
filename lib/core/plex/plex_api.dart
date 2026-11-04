@@ -57,6 +57,8 @@ class PlexClientInfo {
         'X-Plex-Platform': isAndroid ? 'Android' : 'Windows',
         'X-Plex-Device': isAndroid ? 'Android' : 'Windows',
         'X-Plex-Device-Name': plexAscii(deviceName),
+        // overskriftene Plex lager selv («Nylig lagt til …»), på språket i appen
+        'X-Plex-Language': appLanguage == 'en' ? 'en' : 'nb',
         if (token != null) 'X-Plex-Token': token,
       };
 }
@@ -345,6 +347,41 @@ class PlexServerApi {
   /// Det som sist kom i biblioteket (serier: der det sist kom en episode).
   Future<List<PlexItem>> recentlyAdded(PlexLibrary library, {int size = 24}) async =>
       (await items(library, sort: PlexSort.added, size: size)).items;
+
+  /// Radene på Hjem i Plex for [libraries], de samme som på Plex sin egen startside («Nytt fra …», samlinger lagt på
+  /// Hjem, «Nylig lagt til …»), uten «Fortsett å se». Tom når serveren ikke har noen der.
+  Future<List<PlexHub>> homeHubs(List<PlexLibrary> libraries, {int count = 20}) async {
+    if (libraries.isEmpty) return const [];
+    final ids = [for (final l in libraries) l.key].join(',');
+    final c = await get('/hubs/promoted', {
+      'contentDirectoryID': ids,
+      'pinnedContentDirectoryID': ids,
+      'count': '$count',
+      'excludeContinueWatching': '1',
+    });
+    return parseHubs(c, sections: {for (final l in libraries) l.key});
+  }
+
+  /// En side av hele raden [key] («Vis alle»), bare fra bibliotekene i [sections].
+  Future<PlexHubPage> hubItems(String key, {required Set<String> sections, int start = 0, int size = 100}) async {
+    final c = await get(key, {'X-Plex-Container-Start': '$start', 'X-Plex-Container-Size': '$size'});
+    var list = plexList(c['Metadata']);
+    // noen rader svarer med raden rundt innholdet
+    if (list.isEmpty) {
+      for (final hub in plexList(c['Hub'])) {
+        list = plexList(hub['Metadata']);
+        if (list.isNotEmpty) break;
+      }
+    }
+    return PlexHubPage(
+      items: [
+        for (final j in list)
+          if (PlexItem.fromJson(j) case final item when plexShown(item, sections)) item,
+      ],
+      fetched: list.length,
+      total: plexInt(c['totalSize']),
+    );
+  }
 
   /// En film, serie, sesong eller episode med alt om den. [onDeck]: serien får med episoden du skal se nå.
   /// [markers]: intro og rulletekst.
