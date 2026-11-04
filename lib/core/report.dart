@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -9,6 +10,7 @@ import '../platform.dart';
 import 'android_host.dart';
 import 'app_log.dart';
 import 'session.dart';
+import 'shell_open.dart';
 import 'updater.dart';
 
 /// Feilrapporten: det som trengs for å finne ut av en feil (versjon, Windows, innstillinger, abonnementet og loggen),
@@ -124,14 +126,17 @@ Future<void> Function(String path) showInExplorer = (path) async {
   }
 };
 
-/// Åpner en nettadresse i nettleseren (byttes ut i testene).
+/// Åpner en nettadresse i nettleseren (byttes ut i testene). På Windows med ShellExecuteW ([shellOpen]), ikke
+/// explorer.exe, som åpnet Dokumenter for adresser med «#?» og «&» (innloggingen hos Plex).
 Future<void> Function(String url) openUrl = (url) async {
   if (isAndroid) return AndroidHost.openUrl(url);
   if (!Platform.isWindows) return;
   try {
-    await Process.start('explorer.exe', [url]);
-  } on Object {
-    // ingen nettleser
+    final code = shellOpen(url);
+    // adressen står ikke i loggen (koden fra Plex er med i den)
+    if (code <= 32) debugPrint('Nettleseren kunne ikke åpnes (ShellExecute svarte $code)');
+  } on Object catch (e) {
+    debugPrint('Nettleseren kunne ikke åpnes ($e)');
   }
 };
 

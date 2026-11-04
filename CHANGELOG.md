@@ -1,5 +1,10 @@
 # Endringer
 
+## v2.1.36
+
+- *Koble til Plex* åpnet mappen Dokumenter i stedet for innloggingen hos Plex. Nå åpnes siden i nettleseren din,
+  på samme måte som når du klikker en lenke i Windows.
+
 ## v2.1.35
 
 - **Serier og Filmer i ny drakt.** Fanene åpner på en oversikt med rader bortover, som i strømmetjenestene:
