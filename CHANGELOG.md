@@ -1,5 +1,10 @@
 # Endringer
 
+## v2.1.38
+
+- Fyrlys åpner maksimert igjen når vinduet var maksimert sist. Før ble det et vanlig vindu med en gang det ble
+  vist, og det ble husket til neste gang.
+
 ## v2.1.37
 
 - **Hjem i Plex-fanen er som Hjem i Plex.** Under *Fortsett å se* kommer radene Plex har på sin egen startside, i

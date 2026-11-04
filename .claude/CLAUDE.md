@@ -310,7 +310,12 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   ryddes), og den første henter vinduet fram (`_bringToFront`). Svarer noe annet på porten, starter appen som vanlig.
 - `ui/window_memory.dart` (2.1.13) – `WindowMemory.restore` før `runApp`: størrelse/plass (`window` i
   shared_preferences, bare når tittellinja ligger på en skjerm, `screen_retriever`) og maksimert; lagres 600 ms etter
-  flytting/endring, ikke i fullskjerm eller minimert (maksimert beholder den vanlige størrelsen).
+  flytting/endring, ikke i fullskjerm eller minimert (maksimert beholder den vanlige størrelsen). 2.1.38 (eieren 4.11:
+  «Fyrlys hopper alltid minimert», med skjermbilde av et vanlig vindu): Flutter-programmet viser vinduet med
+  `ShowWindow(SW_SHOWNORMAL)` når første bilde er tegnet (`win32_window.cpp` fra `flutter create`), og det gjorde
+  et vindu som var maksimert før det, vanlig igjen; `onWindowUnmaximize` lagret det, så det ble vanlig hver gang.
+  Nå maksimeres det først når det er vist (`_maximizeWhenShown`: `isVisible` hvert 40. ms, høyst 20 s, så
+  `maximize` uten animasjonen), og ingenting lagres imens (`_waiting`); `ready` er ferdig når det er gjort.
 - `core/failure.dart` (2.1.20) – `explainFailure(src, url, fallback:, channel:)` når en strøm ikke kan spilles etter
   forsøkene: `busyText` fra `account(fresh: true)` først, ellers `TvSource.streamStatus(url)` (GET, bare svaret leses;
   `httpStatus` med kildens klient) og `refusedText(kode)` for 400 og over, ellers det mpv sa. Brukes av alle tre
@@ -631,6 +636,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 4.11.2026: 2.1.37: Hjem i Plex-fanen med radene fra Plex sin egen startside, og biblioteker kan skjules (se Plex
   under Arkitektur). Testet med tester og den falske Plex-serveren; om serveren hans gir «Nytt fra …»-radene i
   `/hubs/promoted` med `pinnedContentDirectoryID`, og om overskriftene blir norske, er ikke prøvd.
+- 4.11.2026: 2.1.38: vinduet åpnet alltid som et vanlig vindu, også når det var maksimert sist (se
+  `ui/window_memory.dart`). Testet med en test som etterligner window_manager; ikke prøvd på Windows.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

@@ -19,18 +19,47 @@ class WindowMemory with WindowListener {
   Timer? _timer;
 
   /// Før første bilde, så vinduet ikke hopper: stiller det tilbake og følger med på endringene etterpå.
-  static Future<WindowMemory> restore(SharedPreferences prefs) async {
+  static Future<WindowMemory> restore(
+    SharedPreferences prefs, {
+    Duration poll = const Duration(milliseconds: 40),
+  }) async {
     final memory = WindowMemory._(prefs);
     final saved = read(prefs.getString(key));
     try {
       final bounds = saved.bounds;
       if (bounds != null && await _onScreen(bounds)) await windowManager.setBounds(bounds);
-      if (saved.maximized) await windowManager.maximize();
     } on Object {
       // standardplassen
     }
     windowManager.addListener(memory);
+    // Windows-delen av appen viser vinduet som et vanlig vindu når det første bildet er tegnet (SW_SHOWNORMAL). Et
+    // vindu som alt var maksimert, ble da vanlig igjen, og det ble husket til neste gang. Derfor maksimeres det først
+    // når det er vist.
+    if (saved.maximized) memory.ready = memory._maximizeWhenShown(poll);
     return memory;
+  }
+
+  /// ferdig når vinduet er maksimert slik det var sist (testene)
+  Future<void> ready = Future.value();
+
+  /// til vinduet er maksimert: endringene huskes ikke (et øyeblikk er det et vanlig vindu)
+  bool _waiting = false;
+
+  Future<void> _maximizeWhenShown(Duration poll) async {
+    _waiting = true;
+    try {
+      final until = DateTime.now().add(const Duration(seconds: 20));
+      while (!await windowManager.isVisible()) {
+        if (DateTime.now().isAfter(until)) return;
+        await Future<void>.delayed(poll);
+      }
+      await withoutWindowAnimations(() => windowManager.maximize());
+    } on Object {
+      // blir et vanlig vindu
+    } finally {
+      _waiting = false;
+      _later();
+    }
   }
 
   /// Det som er lagret: den vanlige størrelsen og plasseringen (null: ingen, ødelagt eller for lite) og om
@@ -71,7 +100,7 @@ class WindowMemory with WindowListener {
   Future<void> _store() async {
     try {
       // i fullskjerm, minimert og som minispiller er ikke størrelsen den vanlige
-      if (MiniWindow.instance.active) return;
+      if (_waiting || MiniWindow.instance.active) return;
       if (await windowManager.isFullScreen() || await windowManager.isMinimized()) return;
       final maximized = await windowManager.isMaximized();
       // maksimert: behold den vanlige størrelsen fra før, så vinduet blir riktig når det gjøres vanlig igjen
