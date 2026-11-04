@@ -294,6 +294,10 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   ikke tar imot kjeden. Infoen: «(fjerner striper)», eller «(interlacet)» om bwdif ikke virker. CI-steget «Sjekk
   avspilleren» spiller en liten interlacet y4m-fil med ekte libmpv og krever 20–30 bilder/s og ikke interlacet med
   kjeden (leser strengen fra playback.dart); mpv sin egen og uten deinterlacing logges til sammenligning. Ikke på Android.
+  2.1.39: `VideoControllerConfiguration(hwdec: 'auto-copy')` på PC (media_kits standard er `auto`): med d3d11va rett
+  fra skjermkortet ble hele dekoderflaten tegnet (for HEVC rundet opp til 128 linjer, 816 → 896), så filmen ble klemt
+  sammen med en grønn stripe nederst (eieren 4.11, bilde fra en PC med Intel-grafikk; ikke på den andre PC-en).
+  `ytdl=no` i `setup` (mpv prøvde youtube-dl på hver adresse som ikke kunne åpnes).
 - `core/updater.dart` – oppdatering fra siste release (bare bygg med byggnummer), rett fra
   `api.github.com/repos/<repo>/releases/latest` (`_latest`/`_release`; byggnummeret fra `<!-- bygg N -->`; 404 =
   privat repo, feil med forklaring). Blir repoet privat igjen, virker ikke oppdateringen
@@ -638,6 +642,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `/hubs/promoted` med `pinnedContentDirectoryID`, og om overskriftene blir norske, er ikke prøvd.
 - 4.11.2026: 2.1.38: vinduet åpnet alltid som et vanlig vindu, også når det var maksimert sist (se
   `ui/window_memory.dart`). Testet med en test som etterligner window_manager; ikke prøvd på Windows.
+- 4.11.2026: 2.1.39: grønn stripe nederst i en film fra Plex (1920×816) på en av PC-ene (se `ui/playback.dart`);
+  målt på bildet var filmen klemt omtrent 816/896 og stripa omtrent 80 av 896 linjer. Ikke prøvd på Windows herfra.
+  Samme feilrapport: en annen film fra Plex svarte 404 på selve fila (Plex finner den ikke på disken).
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

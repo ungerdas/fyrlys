@@ -1,5 +1,10 @@
 # Endringer
 
+## v2.1.39
+
+- Filmer kunne få en grønn stripe nederst og bli litt klemt sammen på noen PC-er (særlig filmer i HEVC, som mange
+  fra Plex er). Nå kopieres bildene fra skjermkortet før de tegnes, så bildet blir riktig.
+
 ## v2.1.38
 
 - Fyrlys åpner maksimert igjen når vinduet var maksimert sist. Før ble det et vanlig vindu med en gang det ble

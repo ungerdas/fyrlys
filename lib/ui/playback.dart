@@ -117,9 +117,15 @@ bool mpvErrorIsFatal(String prefix, String level, String text) {
 /// mpv via media_kit.
 class MpvPlayback implements Playback {
   MpvPlayback() {
-    _video = VideoController(_player);
+    _video = VideoController(_player, configuration: _videoConfiguration);
     _logs = _player.stream.log.listen(_onLog);
   }
+
+  /// PC: skjermkortet dekoder, og bildene kopieres over til mpv (auto-copy, d3d11va-copy på Windows). Med bildene rett
+  /// fra skjermkortet (auto) ble hele dekoderflaten tegnet: den er rundet opp til 128 linjer for HEVC (816 → 896), så
+  /// filmen ble klemt sammen og fikk en grønn stripe nederst (eieren 4.11, en PC med Intel-grafikk). Telefonen: som før.
+  static VideoControllerConfiguration get _videoConfiguration =>
+      isAndroid ? const VideoControllerConfiguration() : const VideoControllerConfiguration(hwdec: 'auto-copy');
 
   // advarsler og feil fra mpv: i loggen (til feilrapporten), og de som betyr noe, som feil
   final Player _player = Player(configuration: const PlayerConfiguration(logLevel: MPVLogLevel.warn));
@@ -192,6 +198,8 @@ class MpvPlayback implements Playback {
     _tv = live || tv;
     final p = _player.platform;
     if (p is! NativePlayer) return;
+    // youtube-dl brukes ikke: uten dette prøver mpv det på hver adresse som ikke kan åpnes (og logger at det mangler)
+    await _try(() => p.setProperty('ytdl', 'no'));
     // Direktesending over nett: koble til igjen ved korte brudd, og ikke vent evig på en strøm som er død.
     await _try(() => p.setProperty('network-timeout', '20'));
     await _try(() => p.setProperty(
