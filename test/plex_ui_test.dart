@@ -288,7 +288,8 @@ void main() {
     expect(session.plex.shownSections, {'1', '2'});
   });
 
-  testWidgets('rekkefølgen på bibliotekene: pilene i sidemenyen og i valget, og Hjem følger med', (tester) async {
+  testWidgets('rekkefølgen på bibliotekene: pilene i valget av biblioteker, og sidemenyen og Hjem følger med',
+      (tester) async {
     final (_, fake) = await _start(tester);
     // en eldre server: Hjem har det som sist kom i hvert bibliotek, i den rekkefølgen
     fake.oldServer = true;
@@ -296,12 +297,24 @@ void main() {
     double y(String text) => tester.getTopLeft(find.text(text)).dy;
     expect(y('Mine filmer'), lessThan(y('Mine serier')));
     expect(y('Nylig lagt til i Mine filmer'), lessThan(y('Nylig lagt til i Mine serier')));
+    // pilene står ikke i sidemenyen
+    expect(find.byTooltip('Flytt opp'), findsNothing);
+    expect(find.byTooltip('Flytt ned'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('velg-biblioteker')));
+    await tester.pumpAndSettle();
+    double inDialog(String text) =>
+        tester.getTopLeft(find.descendant(of: find.byType(AlertDialog), matching: find.text(text))).dy;
+    expect(inDialog('Mine filmer'), lessThan(inDialog('Mine serier')));
     // øverst kan ikke flyttes opp, nederst ikke ned
     expect(tester.widget<IconButton>(find.byKey(const ValueKey('flytt-opp:1'))).onPressed, isNull);
     expect(tester.widget<IconButton>(find.byKey(const ValueKey('flytt-ned:2'))).onPressed, isNull);
-
     await tester.tap(find.byKey(const ValueKey('flytt-ned:1')));
     await tester.pumpAndSettle();
+    expect(inDialog('Mine serier'), lessThan(inDialog('Mine filmer')));
+    await tester.tap(find.text('Ferdig'));
+    await tester.pumpAndSettle();
+
     expect(y('Mine serier'), lessThan(y('Mine filmer')));
     expect(y('Nylig lagt til i Mine serier'), lessThan(y('Nylig lagt til i Mine filmer')));
     // radene fra Plex spørres om i samme rekkefølge
@@ -309,20 +322,7 @@ void main() {
     expect(fake.calls('/hubs/promoted').last['pinnedContentDirectoryID'], '2,1');
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getStringList('plex_library_order'), ['srv1/2', 'srv1/1']);
-
-    // i valget av biblioteker: samme rekkefølge, og pilene der også
-    await tester.tap(find.byKey(const ValueKey('velg-biblioteker')));
-    await tester.pumpAndSettle();
-    double inDialog(String text) =>
-        tester.getTopLeft(find.descendant(of: find.byType(AlertDialog), matching: find.text(text))).dy;
-    expect(inDialog('Mine serier'), lessThan(inDialog('Mine filmer')));
-    await tester.tap(find.byKey(const ValueKey('valg-opp:1')));
-    await tester.pumpAndSettle();
-    expect(inDialog('Mine filmer'), lessThan(inDialog('Mine serier')));
-    await tester.tap(find.text('Ferdig'));
-    await tester.pumpAndSettle();
-    expect(y('Mine filmer'), lessThan(y('Mine serier')));
-    expect(prefs.getStringList('plex_library_order'), ['srv1/1', 'srv1/2']);
+    expect(find.byTooltip('Flytt opp'), findsNothing);
   });
 
   testWidgets('et bibliotek: plakatene, sjanger, sortering og søk', (tester) async {

@@ -1,5 +1,10 @@
 # Endringer
 
+## v2.1.42
+
+- Pilene for rekkefølgen på bibliotekene står ikke lenger i sidemenyen hele tiden. De ligger i *Biblioteker i
+  Plex-fanen*, som du åpner med knappen ved *Biblioteker* øverst i sidemenyen (eller tannhjulet → Plex).
+
 ## v2.1.41
 
 - **Velg rekkefølgen på bibliotekene i Plex-fanen.** Pilene ved hvert bibliotek i sidemenyen flytter det opp eller

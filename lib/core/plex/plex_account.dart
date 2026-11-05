@@ -132,21 +132,14 @@ class PlexAccount extends ChangeNotifier {
     return [for (final r in ranked) r.lib];
   }
 
-  /// Flytter [l] forbi biblioteket over ([step] < 0) eller under ([step] > 0) blant [among], bibliotekene du ser: i
-  /// sidemenyen de som vises, så et skjult bibliotek imellom hoppes over (uten [among]: alle). Huskes per server.
-  void moveLibrary(PlexLibrary l, int step, {List<PlexLibrary>? among}) {
-    final seen = among ?? libraries;
-    final i = seen.indexWhere((x) => x.key == l.key);
-    final j = i + (step < 0 ? -1 : 1);
-    if (i < 0 || step == 0 || j < 0 || j >= seen.length) return;
-    final past = seen[j].key;
+  /// Flytter [l] ett steg opp ([step] < 0) eller ned ([step] > 0) blant alle bibliotekene (også de skjulte, som i
+  /// valget av biblioteker). Huskes per server.
+  void moveLibrary(PlexLibrary l, int step) {
     final list = [...libraries];
-    final from = list.indexWhere((x) => x.key == l.key);
-    if (from < 0) return;
-    final moved = list.removeAt(from);
-    final at = list.indexWhere((x) => x.key == past);
-    if (at < 0) return;
-    list.insert(step < 0 ? at : at + 1, moved);
+    final i = list.indexWhere((x) => x.key == l.key);
+    final j = i + (step < 0 ? -1 : 1);
+    if (i < 0 || step == 0 || j < 0 || j >= list.length) return;
+    list.insert(j, list.removeAt(i));
     libraries = list;
     // hele rekkefølgen for serveren, så et bibliotek som kommer til senere, havner sist
     final prefix = '${server?.id ?? ''}/';

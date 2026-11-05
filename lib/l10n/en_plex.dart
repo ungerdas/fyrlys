@@ -8,7 +8,7 @@ const enPlex = <String, String>{
   'Biblioteker': 'Libraries',
   'Ingen biblioteker med filmer eller serier.': 'No movie or TV libraries.',
   'Nylig lagt til i {library}': 'Recently added in {library}',
-  'Velg biblioteker': 'Choose libraries',
+  'Velg og sorter biblioteker': 'Choose and order libraries',
   'Alle bibliotekene er skjult.': 'All libraries are hidden.',
   'Biblioteker i Plex-fanen': 'Libraries in the Plex tab',
   'Det du slår av, vises ikke i sidemenyen, på Hjem eller i søket. Pilene endrer rekkefølgen.':

@@ -355,12 +355,12 @@ class _PlexLibrariesDialogState extends State<_PlexLibrariesDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 plexMoveButton(
-                  key: ValueKey('valg-opp:${l.key}'),
+                  key: ValueKey('flytt-opp:${l.key}'),
                   up: true,
                   onPressed: i == 0 ? null : () => plex.moveLibrary(l, -1),
                 ),
                 plexMoveButton(
-                  key: ValueKey('valg-ned:${l.key}'),
+                  key: ValueKey('flytt-ned:${l.key}'),
                   up: false,
                   onPressed: i == libs.length - 1 ? null : () => plex.moveLibrary(l, 1),
                 ),

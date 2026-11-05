@@ -182,17 +182,7 @@ class _PlexViewState extends State<PlexView> {
             ],
           ),
         ),
-        // pilene endrer rekkefølgen (forbi de skjulte)
-        for (var i = 0; i < shown.length; i++)
-          _tile(
-            shown[i].key,
-            shown[i].title,
-            shown[i].shows ? Icons.tv_outlined : Icons.movie_outlined,
-            place,
-            move: shown.length < 2 ? null : (step) => plex.moveLibrary(shown[i], step, among: shown),
-            first: i == 0,
-            last: i == shown.length - 1,
-          ),
+        for (final l in shown) _tile(l.key, l.title, l.shows ? Icons.tv_outlined : Icons.movie_outlined, place),
         if (shown.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 16, 4),
@@ -205,19 +195,18 @@ class _PlexViewState extends State<PlexView> {
     );
   }
 
-  /// Velg hvilke biblioteker som vises.
+  /// Velg hvilke biblioteker som vises, og rekkefølgen (pilene står bare der, ikke i sidemenyen).
   Widget _choose() => IconButton(
         key: const ValueKey('velg-biblioteker'),
-        tooltip: tr('Velg biblioteker'),
+        tooltip: tr('Velg og sorter biblioteker'),
         iconSize: 18,
         visualDensity: VisualDensity.compact,
         icon: Icon(Icons.tune, color: Theme.of(context).colorScheme.onSurfaceVariant),
         onPressed: () => unawaited(showPlexLibraries(context, plex)),
       );
 
-  /// Hjem eller et bibliotek i sidemenyen; [move] gir pilene (−1 opp, 1 ned).
-  Widget _tile(String id, String name, IconData icon, String place,
-      {void Function(int step)? move, bool first = false, bool last = false}) {
+  /// Hjem eller et bibliotek i sidemenyen.
+  Widget _tile(String id, String name, IconData icon, String place) {
     final scheme = Theme.of(context).colorScheme;
     final selected = id == place;
     return Padding(
@@ -247,12 +236,7 @@ class _PlexViewState extends State<PlexView> {
                     ),
                   ),
                 ),
-                if (move != null) ...[
-                  plexMoveButton(key: ValueKey('flytt-opp:$id'), up: true, onPressed: first ? null : () => move(-1)),
-                  plexMoveButton(key: ValueKey('flytt-ned:$id'), up: false, onPressed: last ? null : () => move(1)),
-                  const SizedBox(width: 4),
-                ] else
-                  const SizedBox(width: 12),
+                const SizedBox(width: 12),
               ],
             ),
           ),

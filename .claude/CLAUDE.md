@@ -448,9 +448,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   (på), `plex_hidden_libraries` (2.1.37, eieren 4.11: «vil ha mulighet til å ta vekk» biblioteker; «<server>/<nøkkel>»;
   `isHidden`, `setHidden`, `shownLibraries`, `shownSections`), `plex_library_order` (2.1.41, eieren 5.11: «Ønsker
   muligheten til å endre på rekkefølgen her» om sidemenyen; hele rekkefølgen for serveren, «<server>/<nøkkel>», andre
-  serveres står igjen; `libraries` sorteres med `_inOrder` i `_connect`, nye biblioteker sist; `moveLibrary(l, step,
-  among:)` flytter forbi naboen blant dem du ser: sidemenyen sender `shownLibraries`, så et skjult bibliotek imellom
-  hoppes over, valget alle); `connect` (adressen fra sist først når den var i hjemmenettet, så `pickConnection`, så serverlista fra plex.tv
+  serveres står igjen; `libraries` sorteres med `_inOrder` i `_connect`, nye biblioteker sist; `moveLibrary(l, step)`
+  ett steg blant alle, også de skjulte; pilene bare i valget av biblioteker, eieren 5.11 om pilene i sidemenyen i
+  2.1.41: «ønsker ikke knappene synlig hele tiden, kun når jeg går inn på innstillinger i høyre hjørne»); `connect` (adressen fra sist først når den var i hjemmenettet, så `pickConnection`, så serverlista fra plex.tv
   på nytt; delt forsøk, `_gen` ved bytte; `_api` byttes først når det nye svarer), `run` (ny adresse og ett nytt
   forsøk når forbindelsen brøt, felles for alle som feilet samtidig), `reportLine` og loggen uten servernavn/
   adresser (`_errorKind`; `error` i appen har navnet); `PlexReporter`: timeline playing/paused/stopped, og `/:/scrobble` bare når serveren ikke har sett deg gå
@@ -468,14 +468,14 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   åpner `_PlexHubPage` med kortene `alle:<ratingKey>`); svarer serveren 404/400 eller har ingen rader, «Nylig lagt
   til i …» per bibliotek (`nylig:<bibliotek>:<ratingKey>`, «Vis alle» velger biblioteket); nøkkelen til Hjem og søket
   har bibliotekene som vises, i rekkefølgen, så de hentes på nytt når noe skjules eller flyttes (`homeHubs` sender
-  dem i den rekkefølgen; om Plex ordner radene etter den, er ikke prøvd); pilene i sidemenyen `flytt-opp:<nøkkel>`/
-  `flytt-ned:<nøkkel>` (`plexMoveButton` i `plex_widgets.dart`, som «Dine kategorier» på TV-siden), flisene
-  `sidemeny:<id>`; `_refresh` henter på nytt når du kommer tilbake), `plex_detail_page.dart` (film: `DetailHero` fra
+  dem i den rekkefølgen; om Plex ordner radene etter den, er ikke prøvd); flisene i sidemenyen `sidemeny:<id>`, uten
+  piler; `velg-biblioteker` har verktøytipset «Velg og sorter biblioteker»; `_refresh` henter på nytt når du kommer tilbake), `plex_detail_page.dart` (film: `DetailHero` fra
   `vod_detail_page.dart`, Spill av/Fortsett/Fra begynnelsen, sett/ikke sett, «Mer som dette»; serie: sesongene sortert,
   episodene, «Fortsett SxxEyy» fra OnDeck, meny per episode), `plex_play.dart` (`plexPlayItem`, `plexExtras`,
   `plexExplain` (HTTP-koden), `plexNextSeasons` (sesong 0 hoppes over), `openPlexPlayer`, `playPlexItem`),
   `plex_login.dart` (PIN-dialogen: åpner nettleseren, sjekker hvert 2. s; serverlista; `showPlexLibraries`, ListTile med
-  avkrysning `vis-bibliotek:<nøkkel>` og pilene `valg-opp:<nøkkel>`/`valg-ned:<nøkkel>`, kobler til først når bibliotekene ikke er hentet), `plex_widgets.dart` (`PlexRow` med
+  avkrysning `vis-bibliotek:<nøkkel>` og pilene `flytt-opp:<nøkkel>`/`flytt-ned:<nøkkel>` (`plexMoveButton` i
+  `plex_widgets.dart`, som «Dine kategorier» på TV-siden), kobler til først når bibliotekene ikke er hentet), `plex_widgets.dart` (`PlexRow` med
   `onAll`/`allKey`).
   `home_page.dart`: `_Section.plex`; Filmer/Serier skjules når Plex erstatter dem. Innstillinger → Plex (koble til/fra,
   bytt server, «Plex erstatter Filmer og Serier»). Testet i `plex_test.dart` og `plex_ui_test.dart` med en falsk
@@ -658,7 +658,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   Samme feilrapport: en annen film fra Plex svarte 404 på selve fila (Plex finner den ikke på disken).
 - 4.11.2026: 2.1.40: navnene på kanalkortene kuttes mindre (se `ui/channel_card.dart`). Testet med tester.
 - 5.11.2026: 2.1.41: rekkefølgen på bibliotekene i Plex-fanen (se Plex under Arkitektur). Testet med tester og den
-  falske Plex-serveren (`homeVideos` gir et tredje bibliotek).
+  falske Plex-serveren (`homeVideos` gir et tredje bibliotek). Eieren tok den i bruk samme dag (bilde: TV-serier over
+  Filmer), men ville ikke ha pilene i sidemenyen hele tiden; 2.1.42 har dem bare i valget av biblioteker.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/
