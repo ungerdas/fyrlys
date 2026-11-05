@@ -1,5 +1,12 @@
 # Endringer
 
+## v2.1.41
+
+- **Velg rekkefølgen på bibliotekene i Plex-fanen.** Pilene ved hvert bibliotek i sidemenyen flytter det opp eller
+  ned, og rekkefølgen huskes. Nedtrekkslista i et smalt vindu følger den, og Hjem ber Plex om radene i samme
+  rekkefølge. I *Biblioteker i Plex-fanen* (knappen ved *Biblioteker*, eller tannhjulet → Plex) er pilene der også,
+  så de skjulte kan flyttes.
+
 ## v2.1.40
 
 - Navnene på kanalkortene kuttes mindre. Kanaler uten program under, som eventkanalene med kampen i navnet, får

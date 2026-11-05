@@ -299,6 +299,51 @@ void main() {
       expect(prefs.getStringList('plex_hidden_libraries'), isEmpty);
     });
 
+    test('rekkefølgen på bibliotekene huskes per server, og pilene i sidemenyen hopper over de skjulte', () async {
+      final (plex, fake, prefs) = await _account({
+        'plex_plain': FakePlex.saved(),
+        // en annen server, og den rekkefølgen som var valgt her
+        'plex_library_order': ['srv2/7', 'srv1/2'],
+      });
+      List<String> titles(List<PlexLibrary> libs) => [for (final l in libs) l.title];
+      var changes = 0;
+      plex.addListener(() => changes++);
+      await plex.connect();
+      // det som ikke står i rekkefølgen, kommer etter
+      expect(titles(plex.libraries), ['Mine serier', 'Mine filmer']);
+
+      plex.moveLibrary(plex.libraries[1], -1);
+      expect(titles(plex.libraries), ['Mine filmer', 'Mine serier']);
+      expect(prefs.getStringList('plex_library_order'), ['srv2/7', 'srv1/1', 'srv1/2']);
+      final before = changes;
+      // øverst kan ikke flyttes opp, nederst ikke ned
+      plex.moveLibrary(plex.libraries.first, -1);
+      plex.moveLibrary(plex.libraries.last, 1);
+      expect(titles(plex.libraries), ['Mine filmer', 'Mine serier']);
+      expect(changes, before);
+
+      // et nytt bibliotek på serveren kommer sist
+      fake.homeVideos = true;
+      await plex.connect(force: true);
+      expect(titles(plex.libraries), ['Mine filmer', 'Mine serier', 'Hjemmevideoer']);
+
+      // i sidemenyen (bare de som vises): opp forbi det skjulte, til det som vises over
+      plex.setHidden(plex.libraries[1], true);
+      expect(titles(plex.shownLibraries), ['Mine filmer', 'Hjemmevideoer']);
+      plex.moveLibrary(plex.libraries[2], -1, among: plex.shownLibraries);
+      expect(titles(plex.shownLibraries), ['Hjemmevideoer', 'Mine filmer']);
+      expect(titles(plex.libraries), ['Hjemmevideoer', 'Mine filmer', 'Mine serier']);
+      expect(prefs.getStringList('plex_library_order'), ['srv2/7', 'srv1/4', 'srv1/1', 'srv1/2']);
+      plex.moveLibrary(plex.shownLibraries.last, 1, among: plex.shownLibraries);
+      expect(titles(plex.libraries), ['Hjemmevideoer', 'Mine filmer', 'Mine serier']);
+
+      // neste gang appen starter
+      final again = PlexAccount(prefs, const NoSecretCodec(), client: fake.client);
+      await again.connect();
+      expect(titles(again.libraries), ['Hjemmevideoer', 'Mine filmer', 'Mine serier']);
+      expect(titles(again.shownLibraries), ['Hjemmevideoer', 'Mine filmer']);
+    });
+
     test('adressen fra sist svarer ikke: de andre prøves, og plex.tv spørres når ingen svarer', () async {
       final (plex, fake, _) = await _account({'plex_plain': FakePlex.saved()});
       fake.localWorks = false;

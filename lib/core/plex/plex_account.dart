@@ -31,6 +31,7 @@ class PlexAccount extends ChangeNotifier {
   static const _plainKey = 'plex_plain';
   static const _replaceKey = 'plex_replace_vod';
   static const _hiddenKey = 'plex_hidden_libraries';
+  static const _orderKey = 'plex_library_order';
 
   final SharedPreferences _prefs;
   final SecretCodec _secrets;
@@ -59,6 +60,8 @@ class PlexAccount extends ChangeNotifier {
   /// feilen som vises (kan ha navnet på serveren); [_errorKind] er den samme uten navn, til loggen og feilrapporten
   String? error;
   String? _errorKind;
+
+  /// bibliotekene med filmer og serier, i rekkefølgen du har valgt (ellers serverens)
   List<PlexLibrary> libraries = const [];
   PlexServerApi? _api;
   Future<PlexServerApi>? _connecting;
@@ -109,6 +112,49 @@ class PlexAccount extends ChangeNotifier {
     final id = _libraryId(l);
     if (!(hidden ? set.add(id) : set.remove(id))) return;
     unawaited(_prefs.setStringList(_hiddenKey, set.toList()..sort()));
+    _notify();
+  }
+
+  /// rekkefølgen du har valgt («<server>/<bibliotek>», for alle serverne)
+  List<String> get _order => _prefs.getStringList(_orderKey) ?? const [];
+
+  /// [libs] i rekkefølgen du har valgt; de som ikke står der (nye biblioteker), kommer sist, i serverens rekkefølge
+  List<PlexLibrary> _inOrder(List<PlexLibrary> libs) {
+    final order = _order;
+    if (order.isEmpty) return libs;
+    final place = <String, int>{};
+    for (var i = 0; i < order.length; i++) {
+      place.putIfAbsent(order[i], () => i);
+    }
+    final ranked = [
+      for (var i = 0; i < libs.length; i++) (lib: libs[i], rank: place[_libraryId(libs[i])] ?? order.length + i),
+    ]..sort((a, b) => a.rank.compareTo(b.rank));
+    return [for (final r in ranked) r.lib];
+  }
+
+  /// Flytter [l] forbi biblioteket over ([step] < 0) eller under ([step] > 0) blant [among], bibliotekene du ser: i
+  /// sidemenyen de som vises, så et skjult bibliotek imellom hoppes over (uten [among]: alle). Huskes per server.
+  void moveLibrary(PlexLibrary l, int step, {List<PlexLibrary>? among}) {
+    final seen = among ?? libraries;
+    final i = seen.indexWhere((x) => x.key == l.key);
+    final j = i + (step < 0 ? -1 : 1);
+    if (i < 0 || step == 0 || j < 0 || j >= seen.length) return;
+    final past = seen[j].key;
+    final list = [...libraries];
+    final from = list.indexWhere((x) => x.key == l.key);
+    if (from < 0) return;
+    final moved = list.removeAt(from);
+    final at = list.indexWhere((x) => x.key == past);
+    if (at < 0) return;
+    list.insert(step < 0 ? at : at + 1, moved);
+    libraries = list;
+    // hele rekkefølgen for serveren, så et bibliotek som kommer til senere, havner sist
+    final prefix = '${server?.id ?? ''}/';
+    unawaited(_prefs.setStringList(_orderKey, [
+      for (final id in _order)
+        if (!id.startsWith(prefix)) id,
+      for (final x in list) _libraryId(x),
+    ]));
     _notify();
   }
 
@@ -310,7 +356,7 @@ class PlexAccount extends ChangeNotifier {
       server = current;
       _base = conn.uri;
       _api = api;
-      libraries = libs;
+      libraries = _inOrder(libs);
       status = PlexStatus.ready;
       error = null;
       _errorKind = null;

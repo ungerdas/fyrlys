@@ -49,6 +49,9 @@ class FakePlex {
   /// /hubs/continueWatching/items og /hubs/promoted finnes ikke (eldre server)
   bool oldServer = false;
 
+  /// et tredje bibliotek med filmer (lagt til på serveren)
+  bool homeVideos = false;
+
   final requests = <http.Request>[];
   late final MockClient client = MockClient(_handle);
 
@@ -246,6 +249,7 @@ class FakePlex {
             {'key': '1', 'title': 'Mine filmer', 'type': 'movie'},
             {'key': '2', 'title': 'Mine serier', 'type': 'show'},
             {'key': '3', 'title': 'Musikk', 'type': 'artist'},
+            if (homeVideos) {'key': '4', 'title': 'Hjemmevideoer', 'type': 'movie'},
           ],
         }));
       case '/library/sections/1/all':

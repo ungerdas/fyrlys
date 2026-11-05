@@ -377,3 +377,15 @@ class PlexMessage extends StatelessWidget {
     );
   }
 }
+
+/// En liten pil som flytter et bibliotek opp eller ned (som i «Dine kategorier» på TV-siden); [onPressed] null:
+/// øverst eller nederst.
+Widget plexMoveButton({required Key key, required bool up, required VoidCallback? onPressed}) => IconButton(
+      key: key,
+      tooltip: up ? tr('Flytt opp') : tr('Flytt ned'),
+      onPressed: onPressed,
+      icon: Icon(up ? Icons.arrow_upward : Icons.arrow_downward, size: 18),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+    );

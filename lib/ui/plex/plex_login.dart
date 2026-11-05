@@ -10,6 +10,7 @@ import '../../core/plex/plex_api.dart';
 import '../../core/plex/plex_models.dart';
 import '../../core/report.dart' show copyText, openUrl;
 import '../../l10n/tr.dart';
+import 'plex_widgets.dart' show plexMoveButton;
 
 /// true når Fyrlys ble koblet til Plex.
 Future<bool> showPlexLogin(BuildContext context, PlexAccount plex) async {
@@ -295,7 +296,7 @@ class _PlexLibrariesDialogState extends State<_PlexLibrariesDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                tr('Det du slår av, vises ikke i sidemenyen, på Hjem eller i søket.'),
+                tr('Det du slår av, vises ikke i sidemenyen, på Hjem eller i søket. Pilene endrer rekkefølgen.'),
                 style: TextStyle(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
@@ -311,14 +312,7 @@ class _PlexLibrariesDialogState extends State<_PlexLibrariesDialog> {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
-                    for (final l in plex.libraries)
-                      CheckboxListTile(
-                        key: ValueKey('vis-bibliotek:${l.key}'),
-                        value: !plex.isHidden(l),
-                        onChanged: (v) => plex.setHidden(l, !(v ?? true)),
-                        secondary: Icon(l.shows ? Icons.tv_outlined : Icons.movie_outlined),
-                        title: Text(l.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ),
+                    for (var i = 0; i < plex.libraries.length; i++) _library(plex.libraries, i),
                   ],
                 ),
               ),
@@ -327,6 +321,52 @@ class _PlexLibrariesDialogState extends State<_PlexLibrariesDialog> {
         ),
       ),
       actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Ferdig')))],
+    );
+  }
+
+  /// Et bibliotek: vises eller ikke, og pilene for rekkefølgen (blant alle, også de skjulte).
+  Widget _library(List<PlexLibrary> libs, int i) {
+    final scheme = Theme.of(context).colorScheme;
+    final plex = widget.plex;
+    final l = libs[i];
+    final shown = !plex.isHidden(l);
+    void toggle() => plex.setHidden(l, shown);
+    return ListTile(
+      key: ValueKey('vis-bibliotek:${l.key}'),
+      contentPadding: const EdgeInsetsDirectional.only(start: 4),
+      leading: Checkbox(value: shown, onChanged: (_) => toggle()),
+      title: Row(
+        children: [
+          Icon(l.shows ? Icons.tv_outlined : Icons.movie_outlined, size: 20, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              l.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: shown ? null : scheme.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+      trailing: libs.length < 2
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                plexMoveButton(
+                  key: ValueKey('valg-opp:${l.key}'),
+                  up: true,
+                  onPressed: i == 0 ? null : () => plex.moveLibrary(l, -1),
+                ),
+                plexMoveButton(
+                  key: ValueKey('valg-ned:${l.key}'),
+                  up: false,
+                  onPressed: i == libs.length - 1 ? null : () => plex.moveLibrary(l, 1),
+                ),
+              ],
+            ),
+      onTap: toggle,
     );
   }
 }

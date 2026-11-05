@@ -182,7 +182,17 @@ class _PlexViewState extends State<PlexView> {
             ],
           ),
         ),
-        for (final l in shown) _tile(l.key, l.title, l.shows ? Icons.tv_outlined : Icons.movie_outlined, place),
+        // pilene endrer rekkefølgen (forbi de skjulte)
+        for (var i = 0; i < shown.length; i++)
+          _tile(
+            shown[i].key,
+            shown[i].title,
+            shown[i].shows ? Icons.tv_outlined : Icons.movie_outlined,
+            place,
+            move: shown.length < 2 ? null : (step) => plex.moveLibrary(shown[i], step, among: shown),
+            first: i == 0,
+            last: i == shown.length - 1,
+          ),
         if (shown.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 16, 4),
@@ -205,10 +215,13 @@ class _PlexViewState extends State<PlexView> {
         onPressed: () => unawaited(showPlexLibraries(context, plex)),
       );
 
-  Widget _tile(String id, String name, IconData icon, String place) {
+  /// Hjem eller et bibliotek i sidemenyen; [move] gir pilene (−1 opp, 1 ned).
+  Widget _tile(String id, String name, IconData icon, String place,
+      {void Function(int step)? move, bool first = false, bool last = false}) {
     final scheme = Theme.of(context).colorScheme;
     final selected = id == place;
     return Padding(
+      key: ValueKey('sidemeny:$id'),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       child: Material(
         color: selected ? scheme.surfaceContainerHighest : Colors.transparent,
@@ -234,7 +247,12 @@ class _PlexViewState extends State<PlexView> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                if (move != null) ...[
+                  plexMoveButton(key: ValueKey('flytt-opp:$id'), up: true, onPressed: first ? null : () => move(-1)),
+                  plexMoveButton(key: ValueKey('flytt-ned:$id'), up: false, onPressed: last ? null : () => move(1)),
+                  const SizedBox(width: 4),
+                ] else
+                  const SizedBox(width: 12),
               ],
             ),
           ),

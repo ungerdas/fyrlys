@@ -313,7 +313,7 @@ class _SettingsPageState extends State<SettingsPage> {
   /// «Skjult: …», eller at alle vises
   String _plexLibrariesLine() {
     final plex = s.plex;
-    if (plex.libraries.isEmpty) return tr('Velg hvilke som vises i sidemenyen, på Hjem og i søket');
+    if (plex.libraries.isEmpty) return tr('Velg hvilke som vises, og i hvilken rekkefølge');
     final hidden = [
       for (final l in plex.libraries)
         if (plex.isHidden(l)) l.title,

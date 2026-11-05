@@ -11,9 +11,9 @@ const enPlex = <String, String>{
   'Velg biblioteker': 'Choose libraries',
   'Alle bibliotekene er skjult.': 'All libraries are hidden.',
   'Biblioteker i Plex-fanen': 'Libraries in the Plex tab',
-  'Det du slår av, vises ikke i sidemenyen, på Hjem eller i søket.':
-      "Libraries you turn off don't appear in the sidebar, on Home or in search.",
-  'Velg hvilke som vises i sidemenyen, på Hjem og i søket': 'Choose which ones appear in the sidebar, on Home and in search',
+  'Det du slår av, vises ikke i sidemenyen, på Hjem eller i søket. Pilene endrer rekkefølgen.':
+      "Libraries you turn off don't appear in the sidebar, on Home or in search. The arrows change the order.",
+  'Velg hvilke som vises, og i hvilken rekkefølge': 'Choose which ones appear, and in what order',
   'Alle vises': 'All shown',
   'Skjult: {names}': 'Hidden: {names}',
   'Ingenting her ennå. Legg til filmer eller serier på Plex-serveren.':
