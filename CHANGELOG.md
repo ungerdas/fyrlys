@@ -1,5 +1,13 @@
 # Endringer
 
+## v2.1.43
+
+- **Plex Home: velg hvem som ser på.** Har du Plex Home, står den som ser på øverst i sidemenyen i Plex-fanen. Trykk
+  der for *Hvem ser på?*, og velg en annen bruker (med PIN-koden når brukeren har det). Hver bruker får sin egen
+  *Fortsett å se*, det de har sett, og bare det de har tilgang til. Fyrlys husker hvem som så på sist.
+- I tannhjulet → Plex kan du også bytte bruker, og slå på at Fyrlys spør hvem som ser på første gang Plex-fanen
+  åpnes etter at appen har startet.
+
 ## v2.1.42
 
 - Pilene for rekkefølgen på bibliotekene står ikke lenger i sidemenyen hele tiden. De ligger i *Biblioteker i

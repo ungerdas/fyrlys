@@ -32,6 +32,7 @@ class PlexAccount extends ChangeNotifier {
   static const _replaceKey = 'plex_replace_vod';
   static const _hiddenKey = 'plex_hidden_libraries';
   static const _orderKey = 'plex_library_order';
+  static const _askKey = 'plex_ask_user';
 
   final SharedPreferences _prefs;
   final SecretCodec _secrets;
@@ -42,10 +43,26 @@ class PlexAccount extends ChangeNotifier {
   late final PlexClientInfo info = PlexClientInfo(id: _clientId(), deviceName: _deviceName());
   late final PlexTv tv = PlexTv(info, _http);
 
+  /// innloggingen til den som ser på (kontoen som koblet til, eller brukeren i Plex Home som er valgt)
   String? _token;
 
-  /// brukernavnet hos Plex
+  /// innloggingen til kontoen som koblet Fyrlys til Plex, når en annen bruker i Plex Home er valgt (null: [_token]);
+  /// med den hentes og byttes brukerne
+  String? _homeToken;
+
+  /// navnet på den som ser på (brukernavnet til kontoen, eller navnet på brukeren i Plex Home)
   String user = '';
+
+  /// brukeren i Plex Home som er valgt (null: kontoen som koblet til)
+  PlexHomeUser? homeUser;
+
+  /// brukerne i Plex Home (tom før de er hentet, og når kontoen ikke har et Plex Home)
+  List<PlexHomeUser> homeUsers = const [];
+  bool _homeLoaded = false;
+  Future<List<PlexHomeUser>>? _homeLoading;
+
+  /// «Hvem ser på?» er vist siden appen startet
+  bool askedThisRun = false;
 
   /// serveren som brukes
   PlexServer? server;
@@ -114,6 +131,101 @@ class PlexAccount extends ChangeNotifier {
     unawaited(_prefs.setStringList(_hiddenKey, set.toList()..sort()));
     _notify();
   }
+
+  // ── Plex Home ──
+
+  /// flere enn én bruker i Plex Home: da kan du velge hvem som ser på
+  bool get hasHome => homeUsers.length > 1;
+
+  /// den i Plex Home som ser på nå (null før brukerne er hentet, med mindre en er valgt)
+  PlexHomeUser? get currentHomeUser {
+    final chosen = homeUser;
+    if (chosen != null) {
+      for (final u in homeUsers) {
+        if (u.uuid == chosen.uuid) return u;
+      }
+      return chosen;
+    }
+    // kontoen som koblet til
+    final name = user.toLowerCase();
+    if (name.isNotEmpty) {
+      for (final u in homeUsers) {
+        if (u.username.toLowerCase() == name || u.title.toLowerCase() == name) return u;
+      }
+    }
+    for (final u in homeUsers) {
+      if (u.admin) return u;
+    }
+    return null;
+  }
+
+  /// spør «Hvem ser på?» første gang Plex-fanen åpnes etter at appen har startet
+  bool get askUser => _prefs.getBool(_askKey) ?? false;
+
+  void setAskUser(bool value) {
+    unawaited(_prefs.setBool(_askKey, value));
+    _notify();
+  }
+
+  /// Brukerne i Plex Home, hentet fra plex.tv (ett forsøk om gangen). Fikk ikke kontakt: det som var hentet før.
+  Future<List<PlexHomeUser>> loadHomeUsers() => _homeLoading ??= _loadHome().whenComplete(() {
+        _homeLoading = null;
+      });
+
+  /// brukerne i Plex Home, hentet én gang etter at appen startet
+  Future<void> ensureHomeUsers() async {
+    if (!_homeLoaded && linked) await loadHomeUsers();
+  }
+
+  Future<List<PlexHomeUser>> _loadHome() async {
+    final token = _homeToken ?? _token;
+    if (token == null) return homeUsers;
+    try {
+      final list = await tv.homeUsers(token);
+      // logget ut eller inn imens
+      if (token != (_homeToken ?? _token)) return homeUsers;
+      homeUsers = list;
+      _homeLoaded = true;
+      debugPrint('Plex: ${list.length} ${list.length == 1 ? 'bruker' : 'brukere'} i Plex Home');
+    } on PlexException catch (e) {
+      debugPrint('Plex: fikk ikke hentet brukerne i Plex Home (${e.network ? 'ingen kontakt' : 'HTTP ${e.status}'})');
+      if (!e.network && token == (_homeToken ?? _token)) {
+        homeUsers = const [];
+        _homeLoaded = true;
+      }
+    }
+    _notify();
+    return homeUsers;
+  }
+
+  /// Bytter til [u] i Plex Home ([pin] når brukeren har PIN-kode): serverne hentes med den brukerens innlogging, og
+  /// samme server brukes når brukeren har tilgang til den. Kaster PlexException ([PlexException.pin]: PIN-koden
+  /// mangler eller er feil).
+  Future<void> switchUser(PlexHomeUser u, {String? pin}) async {
+    final home = _homeToken ?? _token;
+    if (home == null) throw PlexException(tr('Fyrlys er ikke koblet til Plex.'));
+    final token = await tv.switchUser(home, u.uuid, pin: pin);
+    final list = await tv.servers(token);
+    if (list.isEmpty) {
+      throw PlexException(tr('{name} har ikke tilgang til noen Plex-server.', {'name': u.title}));
+    }
+    // logget ut eller inn imens
+    if (home != (_homeToken ?? _token)) throw PlexException(tr('Plex-serveren ble byttet.'));
+    final before = server?.id;
+    _gen++;
+    _homeToken = home;
+    _token = token;
+    user = u.title;
+    homeUser = u;
+    servers = list;
+    server = list.firstWhere((s) => s.id == before, orElse: () => list.first);
+    _reset();
+    await _save();
+    debugPrint('Plex: byttet bruker i Plex Home${u.restricted ? ' (administrert)' : ''}');
+    _notify();
+  }
+
+  // ── rekkefølgen på bibliotekene ──
 
   /// rekkefølgen du har valgt («<server>/<bibliotek>», for alle serverne)
   List<String> get _order => _prefs.getStringList(_orderKey) ?? const [];
@@ -191,6 +303,8 @@ class PlexAccount extends ChangeNotifier {
       user = plexText(j['user']);
       server = s;
       _base = plexPath(j['base']);
+      _homeToken = plexPath(j['home']);
+      homeUser = PlexHomeUser.fromJson(j['homeUser']);
     } on FormatException {
       // kobles til på nytt
     }
@@ -205,7 +319,15 @@ class PlexAccount extends ChangeNotifier {
       await _prefs.remove(_plainKey);
       return;
     }
-    final json = jsonEncode({'token': token, 'user': user, 'server': s.toJson(), if (_base != null) 'base': _base});
+    final home = _homeToken;
+    final json = jsonEncode({
+      'token': token,
+      'user': user,
+      'server': s.toJson(),
+      if (_base != null) 'base': _base,
+      if (home != null && home != token) 'home': home,
+      if (homeUser case final u?) 'homeUser': u.toJson(),
+    });
     final protected = _secrets.protect(json);
     if (protected != null && _secrets.unprotect(protected) == json) {
       await _prefs.setString(_protectedKey, protected);
@@ -243,10 +365,20 @@ class PlexAccount extends ChangeNotifier {
     user = name;
     servers = list;
     server = list.first;
+    _resetHome();
     _reset();
     await _save();
     debugPrint('Plex: logget inn (${list.length} ${list.length == 1 ? 'server' : 'servere'})');
     _notify();
+    // brukerne i Plex Home, så du kan velge hvem som ser på
+    unawaited(loadHomeUsers());
+  }
+
+  void _resetHome() {
+    _homeToken = null;
+    homeUser = null;
+    homeUsers = const [];
+    _homeLoaded = false;
   }
 
   void _reset() {
@@ -285,6 +417,7 @@ class PlexAccount extends ChangeNotifier {
     user = '';
     server = null;
     servers = const [];
+    _resetHome();
     _reset();
     await _save();
     debugPrint('Plex: koblet fra');
@@ -443,6 +576,7 @@ class PlexAccount extends ChangeNotifier {
       if (api != null) '${tierName(api.tier)} (${api.base.startsWith('https') ? 'https' : 'http'})',
       if (api != null) tr('{n} biblioteker', {'n': libraries.length}),
       if (server case final s?) s.owned ? tr('egen server') : tr('delt server'),
+      if (hasHome) tr('Plex Home: {n} brukere', {'n': homeUsers.length}),
       if (server?.version case final v? when v.isNotEmpty) 'Plex Media Server $v',
     ].join(' · ');
   }

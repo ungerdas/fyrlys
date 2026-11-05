@@ -38,6 +38,11 @@ class FakePlex {
   static const accountToken = 'konto-nokkel';
   static const serverToken = 'server-nokkel';
 
+  /// Ola i Plex Home (administrert bruker med PIN-koden [olaPin]): innloggingen og den på serveren
+  static const olaToken = 'ola-nokkel';
+  static const olaServerToken = 'ola-server-nokkel';
+  static const olaPin = '1234';
+
   bool localWorks = true;
   bool lanHttpWorks = true;
   bool remoteWorks = true;
@@ -52,6 +57,9 @@ class FakePlex {
   /// et tredje bibliotek med filmer (lagt til på serveren)
   bool homeVideos = false;
 
+  /// kontoen har Plex Home med Ola (ellers er Kari alene)
+  bool home = false;
+
   final requests = <http.Request>[];
   late final MockClient client = MockClient(_handle);
 
@@ -61,13 +69,15 @@ class FakePlex {
           if (r.url.path == path) r.url.queryParameters,
       ];
 
-  static Map<String, Object?> serverJson({String id = 'srv1', String name = 'Hjemme', bool owned = true}) => {
+  static Map<String, Object?> serverJson(
+          {String id = 'srv1', String name = 'Hjemme', bool owned = true, String token = serverToken}) =>
+      {
         'name': name,
         'product': 'Plex Media Server',
         'productVersion': '1.41.0',
         'provides': 'server',
         'clientIdentifier': id,
-        'accessToken': serverToken,
+        'accessToken': token,
         'owned': owned,
         'lastSeenAt': '2026-11-01T10:00:00Z',
         'connections': [
@@ -201,14 +211,7 @@ class FakePlex {
     requests.add(r);
     final u = r.url;
     if (u.host == 'plex.tv') return _plexTv(r);
-    if (u.host == 'clients.plex.tv') {
-      if (r.headers['X-Plex-Token'] != accountToken) return _json({'error': 'nei'}, 401);
-      return _json([
-        serverJson(id: 'venn', name: 'Vennens server', owned: false),
-        serverJson(),
-        {'name': 'Telefonen', 'provides': 'client,player', 'clientIdentifier': 'tlf', 'accessToken': 'x'},
-      ]);
-    }
+    if (u.host == 'clients.plex.tv') return _clients(r);
     final origin = '${u.scheme}://${u.host}:${u.port}';
     final works = switch (origin) {
       local => localWorks,
@@ -219,8 +222,68 @@ class FakePlex {
     if (!works) throw const SocketException('ingen kontakt');
     if (u.path == '/identity') return _json(_container({'machineIdentifier': 'srv1'}));
     final token = r.headers['X-Plex-Token'] ?? u.queryParameters['X-Plex-Token'];
-    if (token != serverToken) return _json({'error': 'nei'}, 401);
-    return _server(r);
+    if (token != serverToken && token != olaServerToken) return _json({'error': 'nei'}, 401);
+    return _server(r, ola: token == olaServerToken);
+  }
+
+  /// brukerne i Plex Home
+  List<Map<String, Object?>> get homeUsers => [
+        {
+          'id': 1,
+          'uuid': 'kari-uuid',
+          'title': 'Kari',
+          'username': 'kari',
+          'thumb': 'https://plex.tv/users/kari-uuid/avatar?c=1',
+          'admin': true,
+          'restricted': false,
+          'protected': false,
+          'guest': false,
+        },
+        if (home)
+          {
+            'id': 2,
+            'uuid': 'ola-uuid',
+            'title': 'Ola',
+            'username': '',
+            'thumb': '',
+            'admin': false,
+            'restricted': true,
+            'protected': true,
+            'guest': false,
+          },
+      ];
+
+  http.Response _clients(http.Request r) {
+    final path = r.url.path;
+    final token = r.headers['X-Plex-Token'];
+    if (path == '/api/v2/resources') {
+      // Ola ser bare serveren i hjemmet, med sin egen innlogging der
+      if (token == olaToken) return _json([serverJson(owned: false, token: olaServerToken)]);
+      if (token != accountToken) return _json({'error': 'nei'}, 401);
+      return _json([
+        serverJson(id: 'venn', name: 'Vennens server', owned: false),
+        serverJson(),
+        {'name': 'Telefonen', 'provides': 'client,player', 'clientIdentifier': 'tlf', 'accessToken': 'x'},
+      ]);
+    }
+    if (token != accountToken) return _json({'error': 'nei'}, 401);
+    if (r.method == 'GET' && path == '/api/v2/home/users') {
+      return _json({'id': 9, 'name': 'Hjemmet', 'users': homeUsers});
+    }
+    if (r.method == 'POST' && path == '/api/v2/home/users/kari-uuid/switch') {
+      return _json({'uuid': 'kari-uuid', 'title': 'Kari', 'authToken': accountToken});
+    }
+    if (r.method == 'POST' && path == '/api/v2/home/users/ola-uuid/switch' && home) {
+      if (r.url.queryParameters['pin'] != olaPin) {
+        return _json({
+          'errors': [
+            {'code': 1041, 'message': 'Invalid PIN', 'status': 403},
+          ],
+        }, 403);
+      }
+      return _json({'uuid': 'ola-uuid', 'title': 'Ola', 'authToken': olaToken});
+    }
+    return _json({'error': 'ukjent'}, 404);
   }
 
   http.Response _plexTv(http.Request r) {
@@ -239,7 +302,8 @@ class FakePlex {
     return _json({'error': 'ukjent'}, 404);
   }
 
-  http.Response _server(http.Request r) {
+  /// [ola]: Ola i Plex Home spør (han har ikke sett noe ennå)
+  http.Response _server(http.Request r, {bool ola = false}) {
     final u = r.url;
     final q = u.queryParameters;
     switch (u.path) {
@@ -269,6 +333,7 @@ class FakePlex {
         return _json(_container({'Directory': <Object>[]}));
       case '/hubs/continueWatching/items':
         if (oldServer) return _json({'error': 'ukjent'}, 404);
+        if (ola) return _json(_container({'Metadata': <Object>[]}));
         return _json(_container({'Metadata': [started, season1[1]]}));
       case '/library/onDeck':
         return _json(_container({'Metadata': [season1[1]]}));

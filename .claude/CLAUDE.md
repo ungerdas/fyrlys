@@ -443,14 +443,25 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   sesong/episode fra bibliotekene som vises (hubens og hvert elements `librarySectionID`), uten hubIdentifier med
   continue/ondeck; `PlexHub.canShowAll` = `more` og en `key` som begynner med /), `hubItems` («Vis alle»: `key`
   med X-Plex-Container-Start/Size, `PlexHubPage` med `fetched`/`total`),
-  `file` (nøkkelen som hode), `stream` (undertekstfiler)), `plex_account.dart` (`PlexAccount` i `Session.plex`, felles for
+  `file` (nøkkelen som hode), `stream` (undertekstfiler); `PlexTv.homeUsers` (`clients.plex.tv/api/v2/home/users`) og
+  `switchUser` (POST `…/home/users/<uuid>/switch` med kontoens innlogging og `pin`; 403 med feilkode 1041 eller uten
+  kode = PIN-koden mangler eller er feil, `PlexException.pin`; svaret har `authToken`); `PlexHomeUser` i
+  plex_models (friendlyName, ellers title), `plex_account.dart` (`PlexAccount` i `Session.plex`, felles for
   alle IPTV-innloggingene: kryptert i `plex_protected` (ellers `plex_plain`), `plex_client_id`, `plex_replace_vod`
   (på), `plex_hidden_libraries` (2.1.37, eieren 4.11: «vil ha mulighet til å ta vekk» biblioteker; «<server>/<nøkkel>»;
   `isHidden`, `setHidden`, `shownLibraries`, `shownSections`), `plex_library_order` (2.1.41, eieren 5.11: «Ønsker
   muligheten til å endre på rekkefølgen her» om sidemenyen; hele rekkefølgen for serveren, «<server>/<nøkkel>», andre
   serveres står igjen; `libraries` sorteres med `_inOrder` i `_connect`, nye biblioteker sist; `moveLibrary(l, step)`
   ett steg blant alle, også de skjulte; pilene bare i valget av biblioteker, eieren 5.11 om pilene i sidemenyen i
-  2.1.41: «ønsker ikke knappene synlig hele tiden, kun når jeg går inn på innstillinger i høyre hjørne»); `connect` (adressen fra sist først når den var i hjemmenettet, så `pickConnection`, så serverlista fra plex.tv
+  2.1.41: «ønsker ikke knappene synlig hele tiden, kun når jeg går inn på innstillinger i høyre hjørne»); Plex Home
+  (2.1.43, eieren 5.11: «jeg har plex home og vil da gjerne kunne velge hvem som skal se på»): `_token` er
+  innloggingen til den som ser på, `_homeToken` kontoen som koblet til (lagret som `home` når de er ulike), og med den
+  hentes og byttes brukerne (`loadHomeUsers`, én gang per kjøring med `ensureHomeUsers` fra Plex-fanen og
+  innstillingene, og etter `signIn`); `switchUser(u, pin:)` henter brukerens innlogging, så serverne med den (samme
+  server når brukeren har tilgang; hver bruker har sin egen nøkkel på serveren, med sin «Fortsett å se» og det den har
+  sett), og lagrer `homeUser`; `currentHomeUser` (valgt, ellers kontoens brukernavn, ellers admin), `hasHome` (flere
+  enn én), `askUser` (`plex_ask_user`, av) og `askedThisRun`; navnene logges ikke, rapporten har bare antallet;
+  `connect` (adressen fra sist først når den var i hjemmenettet, så `pickConnection`, så serverlista fra plex.tv
   på nytt; delt forsøk, `_gen` ved bytte; `_api` byttes først når det nye svarer), `run` (ny adresse og ett nytt
   forsøk når forbindelsen brøt, felles for alle som feilet samtidig), `reportLine` og loggen uten servernavn/
   adresser (`_errorKind`; `error` i appen har navnet); `PlexReporter`: timeline playing/paused/stopped, og `/:/scrobble` bare når serveren ikke har sett deg gå
@@ -476,7 +487,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `plex_login.dart` (PIN-dialogen: åpner nettleseren, sjekker hvert 2. s; serverlista; `showPlexLibraries`, ListTile med
   avkrysning `vis-bibliotek:<nøkkel>` og pilene `flytt-opp:<nøkkel>`/`flytt-ned:<nøkkel>` (`plexMoveButton` i
   `plex_widgets.dart`, som «Dine kategorier» på TV-siden), kobler til først når bibliotekene ikke er hentet), `plex_widgets.dart` (`PlexRow` med
-  `onAll`/`allKey`).
+  `onAll`/`allKey`), `plex_users.dart` (2.1.43: `showPlexUsers` = «Hvem ser på?» med `plex-bruker:<uuid>`, PIN-feltet
+  `plex-pin` (fire siffer byttes med en gang, `readOnly` mens det byttes), `PlexAvatar`); Plex-fanen har den som ser
+  på øverst i sidemenyen (`hvem-ser-pa`, også ved nedtrekkslista) når `hasHome`, og nøkkelen til sidene har
+  `homeUser`; Innstillinger → Plex: «Bruker i Plex Home» (`bytt-plex-bruker`) og «Spør hvem som ser på når
+  Plex-fanen åpnes».
   `home_page.dart`: `_Section.plex`; Filmer/Serier skjules når Plex erstatter dem. Innstillinger → Plex (koble til/fra,
   bytt server, «Plex erstatter Filmer og Serier»). Testet i `plex_test.dart` og `plex_ui_test.dart` med en falsk
   Plex-server (`plex_fake.dart`); ikke prøvd mot en ekte Plex-server: PIN-innloggingen, adressevalget (plex.direct,
@@ -660,6 +675,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 5.11.2026: 2.1.41: rekkefølgen på bibliotekene i Plex-fanen (se Plex under Arkitektur). Testet med tester og den
   falske Plex-serveren (`homeVideos` gir et tredje bibliotek). Eieren tok den i bruk samme dag (bilde: TV-serier over
   Filmer), men ville ikke ha pilene i sidemenyen hele tiden; 2.1.42 har dem bare i valget av biblioteker.
+- 5.11.2026: 2.1.43: Plex Home, velg hvem som ser på (se Plex under Arkitektur). Testet med tester og den falske
+  Plex-serveren (`home`: Kari og Ola med PIN 1234); ikke prøvd mot plex.tv: svaret fra `/home/users` og `switch`,
+  PIN-feilen og om administrerte brukere får serveren i `resources`.
 - Åpent (31.10): 2.1.23 er ikke bekreftet på PC-en hans (infoen skal vise «(deinterlacet)», og vanlige kanaler og
   arkivet skal virke som før). Arkivet bruker ca. 10 s på å starte; eieren sa «kjør på» om å gjøre det raskere, og
   vi venter på en måling av hvor lenge mpv bruker med ulike valg (HLS/TS, kortere `demuxer-lavf-analyzeduration`/

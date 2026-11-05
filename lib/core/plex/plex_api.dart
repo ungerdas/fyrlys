@@ -12,13 +12,15 @@ import '../../l10n/tr.dart';
 import '../../platform.dart';
 import 'plex_models.dart';
 
-/// En feil fra Plex med en forklaring som kan vises. [network]: fikk ikke kontakt (ikke et svar fra Plex).
+/// En feil fra Plex med en forklaring som kan vises. [network]: fikk ikke kontakt (ikke et svar fra Plex). [pin]:
+/// brukeren i Plex Home trenger PIN-koden, eller den var feil.
 class PlexException implements Exception {
-  const PlexException(this.message, {this.status, this.network = false});
+  const PlexException(this.message, {this.status, this.network = false, this.pin = false});
 
   final String message;
   final int? status;
   final bool network;
+  final bool pin;
 
   @override
   String toString() => message;
@@ -167,6 +169,50 @@ class PlexTv {
       for (final j in plexList(raw is List ? raw : plexMap(raw)['MediaContainer']))
         if (PlexServer.fromJson(j) case final s?) s,
     ]);
+  }
+
+  /// Brukerne i Plex Home til kontoen med innloggingen [token] (bare den selv når kontoen ikke har et Plex Home).
+  Future<List<PlexHomeUser>> homeUsers(String token) async {
+    final res = await _send(() => _http.get(Uri.parse('$_clients/home/users'), headers: info.headers(token)));
+    if (res.statusCode >= 400) {
+      throw PlexException(tr('plex.tv svarte ikke som ventet (HTTP {code}).', {'code': res.statusCode}),
+          status: res.statusCode);
+    }
+    return [
+      for (final j in plexList(plexMap(_json(res))['users']))
+        if (PlexHomeUser.fromJson(j) case final u?) u,
+    ];
+  }
+
+  /// Innloggingen til Plex Home-brukeren [uuid], hentet med kontoens innlogging [token] ([pin] når brukeren har PIN).
+  /// Feil eller manglende PIN gir en PlexException med [PlexException.pin].
+  Future<String> switchUser(String token, String uuid, {String? pin}) async {
+    final query = pin == null || pin.isEmpty ? '' : '?pin=${Uri.encodeQueryComponent(pin)}';
+    final http.Response res;
+    try {
+      res = await _http
+          .post(Uri.parse('$_clients/home/users/${Uri.encodeComponent(uuid)}/switch$query'), headers: info.headers(token))
+          .timeout(const Duration(seconds: 15));
+    } on Object catch (e) {
+      if (!_networkError(e)) rethrow;
+      debugPrint('Plex: fikk ikke kontakt med plex.tv ($e)');
+      throw PlexException(tr('Fikk ikke kontakt med plex.tv. Sjekk nettet og prøv igjen.'), network: true);
+    }
+    final j = _json(res);
+    // 1041: PIN-koden mangler eller er feil
+    final codes = [for (final e in plexList(plexMap(j)['errors'])) plexInt(e['code'])];
+    if (res.statusCode == 403 && (codes.isEmpty || codes.contains(1041))) {
+      throw PlexException(tr('Feil PIN-kode. Prøv igjen.'), status: 403, pin: true);
+    }
+    if (res.statusCode == 401) {
+      throw PlexException(tr('Plex godtok ikke innloggingen. Koble til Plex på nytt.'), status: 401);
+    }
+    final userToken = plexText(plexMap(j)['authToken']);
+    if (res.statusCode >= 400 || userToken.isEmpty) {
+      throw PlexException(tr('plex.tv svarte ikke som ventet (HTTP {code}).', {'code': res.statusCode}),
+          status: res.statusCode);
+    }
+    return userToken;
   }
 }
 

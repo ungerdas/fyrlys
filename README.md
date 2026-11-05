@@ -30,7 +30,7 @@ Appen er på norsk eller engelsk (som Windows eller telefonen; byttes under tann
 - Pause og spol tilbake i direktesendinger
 - NRK1, NRK2, NRK3 og NRK Super fra NRK sine egne direktesendinger, én kanal hver (leverandørens strøm er reserven)
 - Filmer og serier med «Fortsett å se» (Xtream Codes)
-- Plex: filmene og seriene på Plex-serveren din i en egen fane, med «Fortsett å se», sett/ikke sett, hopp over intro og neste episode (tannhjulet → Plex)
+- Plex: filmene og seriene på Plex-serveren din i en egen fane, med «Fortsett å se», sett/ikke sett, hopp over intro og neste episode (tannhjulet → Plex). Med Plex Home velger du hvem som ser på
 - Flere innlogginger, hver med sine egne favoritter, og multiview med en kanal fra hvert abonnement
 - mpv som avspiller: de fleste formater, lydspor og undertekster
 - Minispiller som ligger øverst (Windows), bildeformat og lydforsinkelse per kanal

@@ -15,6 +15,7 @@ import '../motion.dart';
 import 'plex_detail_page.dart';
 import 'plex_login.dart' show showPlexLibraries;
 import 'plex_play.dart';
+import 'plex_users.dart';
 import 'plex_widgets.dart';
 
 class PlexView extends StatefulWidget {
@@ -65,7 +66,14 @@ class _PlexViewState extends State<PlexView> {
       await plex.connect(force: force);
     } on PlexException {
       // vises fra plex.status og plex.error
+      return;
     }
+    // Plex Home: brukerne hentes én gang, og «Hvem ser på?» kommer første gang fanen åpnes, når det er slått på
+    await plex.ensureHomeUsers();
+    if (!mounted) return;
+    if (!plex.askUser || plex.askedThisRun || !plex.hasHome) return;
+    plex.askedThisRun = true;
+    await showPlexUsers(context, plex);
   }
 
   Future<void> _open(PlexItem item) async {
@@ -138,9 +146,9 @@ class _PlexViewState extends State<PlexView> {
                 refresh: _refresh,
                 onOpen: _open,
               );
-    // en ny server gir nye sider (bibliotekene og radene er ikke de samme), og Hjem og søket hentes på nytt når et
-    // bibliotek skjules eller vises igjen
-    final server = plex.server?.id ?? '';
+    // en ny server eller en annen bruker i Plex Home gir nye sider (bibliotekene, radene og det som er sett, er ikke de
+    // samme), og Hjem og søket hentes på nytt når et bibliotek skjules eller vises igjen
+    final server = '${plex.server?.id ?? ''}:${plex.homeUser?.uuid ?? ''}';
     final shown = [for (final l in plex.shownLibraries) l.key].join(',');
     final page = searching ? 'søk:$server:$place:$shown' : (library == null ? '$server:home:$shown' : '$server:$place');
     final switched = SmoothSwitch(child: KeyedSubtree(key: ValueKey(page), child: content));
@@ -166,6 +174,7 @@ class _PlexViewState extends State<PlexView> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
+        if (plex.hasHome) _who(),
         _tile('home', tr('Hjem'), Icons.home_outlined, place),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 8, 0),
@@ -192,6 +201,48 @@ class _PlexViewState extends State<PlexView> {
             ),
           ),
       ],
+    );
+  }
+
+  /// Hvem som ser på (Plex Home), øverst i sidemenyen: et trykk gir «Hvem ser på?».
+  Widget _who() {
+    final scheme = Theme.of(context).colorScheme;
+    final u = plex.currentHomeUser;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+      child: Tooltip(
+        message: tr('Bytt bruker'),
+        waitDuration: const Duration(milliseconds: 600),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            key: const ValueKey('hvem-ser-pa'),
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => unawaited(showPlexUsers(context, plex)),
+            child: SizedBox(
+              height: 48,
+              child: Row(
+                children: [
+                  const SizedBox(width: 8),
+                  PlexAvatar(user: u, name: plex.user, size: 32),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      u?.title ?? plex.user,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Icon(Icons.swap_horiz, size: 20, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -262,6 +313,14 @@ class _PlexViewState extends State<PlexView> {
                 onChanged: (v) => setState(() => _place = v ?? 'home'),
               ),
             ),
+            if (plex.hasHome)
+              IconButton(
+                key: const ValueKey('hvem-ser-pa'),
+                tooltip: tr('Bytt bruker'),
+                visualDensity: VisualDensity.compact,
+                icon: PlexAvatar(user: plex.currentHomeUser, name: plex.user, size: 26),
+                onPressed: () => unawaited(showPlexUsers(context, plex)),
+              ),
             _choose(),
           ],
         ),

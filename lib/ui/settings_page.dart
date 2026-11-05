@@ -16,6 +16,7 @@ import 'language_dialog.dart';
 import 'login_page.dart';
 import 'motion.dart';
 import 'plex/plex_login.dart';
+import 'plex/plex_users.dart';
 import 'report_page.dart';
 
 /// «Logg ut av …?» (true: ja)
@@ -76,6 +77,8 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     s.addListener(_onSession);
+    // brukerne i Plex Home, så du kan velge hvem som ser på
+    unawaited(s.plex.ensureHomeUsers());
   }
 
   @override
@@ -287,6 +290,25 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Text(tr('Bytt server')),
         ),
       ),
+      // Plex Home: hvem som ser på
+      if (plex.hasHome) ...[
+        ListTile(
+          leading: PlexAvatar(user: plex.currentHomeUser, name: plex.user, size: 32),
+          title: Text(tr('Bruker i Plex Home')),
+          subtitle: Text(plex.currentHomeUser?.title ?? plex.user),
+          trailing: TextButton(
+            key: const ValueKey('bytt-plex-bruker'),
+            onPressed: () => unawaited(showPlexUsers(context, plex)),
+            child: Text(tr('Bytt bruker')),
+          ),
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.how_to_reg_outlined),
+          title: Text(tr('Spør hvem som ser på når Plex-fanen åpnes')),
+          value: plex.askUser,
+          onChanged: plex.setAskUser,
+        ),
+      ],
       ListTile(
         leading: const Icon(Icons.video_library_outlined),
         title: Text(tr('Biblioteker i Plex-fanen')),

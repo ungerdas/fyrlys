@@ -369,6 +369,77 @@ void main() {
     });
   });
 
+  group('Plex Home', () {
+    test('brukerne, bytte med PIN-kode, og samme bruker neste gang', () async {
+      final (plex, fake, prefs) = await _account({'plex_plain': FakePlex.saved()});
+      fake.home = true;
+      await plex.connect();
+      expect(plex.hasHome, isFalse);
+      final users = await plex.loadHomeUsers();
+      expect([for (final u in users) u.title], ['Kari', 'Ola']);
+      expect(plex.hasHome, isTrue);
+      expect(users[1].protected, isTrue);
+      expect(users[1].restricted, isTrue);
+      // kontoen som koblet til
+      expect(plex.currentHomeUser?.uuid, 'kari-uuid');
+
+      // uten PIN-kode, og med feil
+      await expectLater(plex.switchUser(users[1]), throwsA(isA<PlexException>().having((e) => e.pin, 'pin', isTrue)));
+      await expectLater(
+        plex.switchUser(users[1], pin: '0000'),
+        throwsA(isA<PlexException>().having((e) => e.pin, 'pin', isTrue)),
+      );
+      expect(plex.user, 'kari');
+      expect(plex.api, isNotNull);
+
+      await plex.switchUser(users[1], pin: FakePlex.olaPin);
+      expect(plex.user, 'Ola');
+      expect(plex.currentHomeUser?.uuid, 'ola-uuid');
+      expect(plex.server?.id, 'srv1');
+      // byttet med kontoens innlogging, og serverne hentet med Olas
+      final switched = fake.requests.lastWhere((r) => r.url.path == '/api/v2/home/users/ola-uuid/switch');
+      expect(switched.headers['X-Plex-Token'], FakePlex.accountToken);
+      expect(switched.url.queryParameters['pin'], FakePlex.olaPin);
+      expect(fake.requests.last.url.path, '/api/v2/resources');
+      expect(fake.requests.last.headers['X-Plex-Token'], FakePlex.olaToken);
+      // på serveren med Olas innlogging der: det han har sett
+      expect((await plex.connect()).token, FakePlex.olaServerToken);
+      expect(await plex.run((api) => api.continueWatching()), isEmpty);
+      expect(plex.reportLine, contains('Plex Home: 2 brukere'));
+      expect(plex.reportLine, isNot(contains('Ola')));
+
+      // neste gang appen starter: Ola, og brukerne hentes med kontoens innlogging
+      final again = PlexAccount(prefs, const NoSecretCodec(), client: fake.client);
+      expect(again.user, 'Ola');
+      expect(again.currentHomeUser?.uuid, 'ola-uuid');
+      expect((await again.connect()).token, FakePlex.olaServerToken);
+      await again.ensureHomeUsers();
+      expect(again.hasHome, isTrue);
+      expect(fake.requests.lastWhere((r) => r.url.path == '/api/v2/home/users').headers['X-Plex-Token'],
+          FakePlex.accountToken);
+
+      // tilbake til Kari (uten PIN-kode)
+      await again.switchUser(again.homeUsers.first);
+      expect(again.user, 'Kari');
+      expect((await again.connect()).token, FakePlex.serverToken);
+      expect(await again.run((api) => api.continueWatching()), hasLength(2));
+
+      // koblet fra: ingen Plex Home
+      await again.logout();
+      expect(again.homeUsers, isEmpty);
+      expect(again.homeUser, isNull);
+    });
+
+    test('uten Plex Home: ingen å bytte til', () async {
+      final (plex, _, _) = await _account({'plex_plain': FakePlex.saved()});
+      await plex.connect();
+      await plex.ensureHomeUsers();
+      expect(plex.homeUsers, hasLength(1));
+      expect(plex.hasHome, isFalse);
+      expect(plex.currentHomeUser?.title, 'Kari');
+    });
+  });
+
   group('framdriften til Plex', () {
     test('Plex merker den som sett selv når den ser deg gå forbi 90 %', () async {
       final (plex, fake, _) = await _account({'plex_plain': FakePlex.saved()});

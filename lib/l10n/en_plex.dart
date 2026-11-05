@@ -9,6 +9,17 @@ const enPlex = <String, String>{
   'Ingen biblioteker med filmer eller serier.': 'No movie or TV libraries.',
   'Nylig lagt til i {library}': 'Recently added in {library}',
   'Velg og sorter biblioteker': 'Choose and order libraries',
+  // Plex Home
+  'Hvem ser på?': "Who's watching?",
+  'Bytt bruker': 'Switch user',
+  'Bruker i Plex Home': 'Plex Home user',
+  'Spør hvem som ser på når Plex-fanen åpnes': "Ask who's watching when the Plex tab opens",
+  'PIN-kode for {name}': 'PIN for {name}',
+  'Skriv PIN-koden (4 siffer).': 'Enter the PIN (4 digits).',
+  'Feil PIN-kode. Prøv igjen.': 'Wrong PIN. Try again.',
+  'Fant ingen brukere i Plex Home.': 'No Plex Home users found.',
+  '{name} har ikke tilgang til noen Plex-server.': "{name} doesn't have access to any Plex server.",
+  'Plex Home: {n} brukere': 'Plex Home: {n} users',
   'Alle bibliotekene er skjult.': 'All libraries are hidden.',
   'Biblioteker i Plex-fanen': 'Libraries in the Plex tab',
   'Det du slår av, vises ikke i sidemenyen, på Hjem eller i søket. Pilene endrer rekkefølgen.':

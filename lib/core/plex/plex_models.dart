@@ -225,6 +225,66 @@ class PlexLibrary {
   int get apiType => shows ? 2 : 1;
 }
 
+/// En bruker i Plex Home (fra plex.tv; lagres også, så den vises før plex.tv har svart).
+class PlexHomeUser {
+  const PlexHomeUser({
+    required this.uuid,
+    required this.title,
+    this.username = '',
+    this.thumb = '',
+    this.admin = false,
+    this.restricted = false,
+    this.protected = false,
+  });
+
+  /// fra plex.tv (`/api/v2/home/users`) eller det som er lagret; null uten id
+  static PlexHomeUser? fromJson(Object? raw) {
+    final j = plexMap(raw);
+    final uuid = plexText(j['uuid']);
+    if (uuid.isEmpty) return null;
+    final username = plexText(j['username']);
+    final friendly = plexText(j['friendlyName']).trim();
+    final title = plexText(j['title']).trim();
+    return PlexHomeUser(
+      uuid: uuid,
+      title: friendly.isNotEmpty ? friendly : (title.isNotEmpty ? title : username),
+      username: username,
+      thumb: plexText(j['thumb']),
+      admin: plexBool(j['admin']),
+      restricted: plexBool(j['restricted']),
+      protected: plexBool(j['protected']),
+    );
+  }
+
+  final String uuid;
+  final String title;
+
+  /// brukernavnet hos Plex (tomt for administrerte brukere)
+  final String username;
+
+  /// bildet (en full adresse hos plex.tv; tomt når det mangler)
+  final String thumb;
+
+  /// den som har Plex Home
+  final bool admin;
+
+  /// administrert bruker (barn og andre uten egen Plex-konto)
+  final bool restricted;
+
+  /// har PIN-kode
+  final bool protected;
+
+  Map<String, Object?> toJson() => {
+        'uuid': uuid,
+        'title': title,
+        if (username.isNotEmpty) 'username': username,
+        if (thumb.isNotEmpty) 'thumb': thumb,
+        'admin': admin,
+        'restricted': restricted,
+        'protected': protected,
+      };
+}
+
 /// En sjanger (eller annet å filtrere på) i et bibliotek.
 class PlexTag {
   const PlexTag({required this.key, required this.title});

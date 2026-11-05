@@ -12,7 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'fakes.dart';
 import 'plex_fake.dart';
 
-Future<(Session, FakePlex)> _start(WidgetTester tester, {bool linked = true}) async {
+Future<(Session, FakePlex)> _start(WidgetTester tester,
+    {bool linked = true, Map<String, Object> prefs = const {}}) async {
   // høyt nok til at alle radene på Hjem får plass
   tester.view.physicalSize = const Size(1400, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -21,6 +22,7 @@ Future<(Session, FakePlex)> _start(WidgetTester tester, {bool linked = true}) as
   SharedPreferences.setMockInitialValues({
     'source': '{"kind":"fake"}',
     if (linked) 'plex_plain': FakePlex.saved(),
+    ...prefs,
   });
   final session = Session(
     await SharedPreferences.getInstance(),
@@ -323,6 +325,81 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getStringList('plex_library_order'), ['srv1/2', 'srv1/1']);
     expect(find.byTooltip('Flytt opp'), findsNothing);
+  });
+
+  testWidgets('Plex Home: hvem ser på, med PIN-kode, og det den brukeren har sett', (tester) async {
+    final (session, fake) = await _start(tester);
+    fake.home = true;
+    await _openPlex(tester);
+    expect(find.byKey(const ValueKey('hvem-ser-pa')), findsOneWidget);
+    expect(find.byKey(const ValueKey('fortsett:11')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('hvem-ser-pa')));
+    await tester.pumpAndSettle();
+    expect(find.text('Hvem ser på?'), findsOneWidget);
+    expect(find.byKey(const ValueKey('plex-bruker:kari-uuid')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('plex-bruker:ola-uuid')));
+    await tester.pumpAndSettle();
+    expect(find.text('PIN-kode for Ola'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('plex-pin')), '0000');
+    await tester.pumpAndSettle();
+    expect(find.text('Feil PIN-kode. Prøv igjen.'), findsOneWidget);
+    expect(session.plex.user, 'kari');
+
+    await tester.enterText(find.byKey(const ValueKey('plex-pin')), FakePlex.olaPin);
+    await tester.pumpAndSettle();
+    expect(find.text('PIN-kode for Ola'), findsNothing);
+    expect(find.text('Hvem ser på?'), findsNothing);
+    expect(session.plex.user, 'Ola');
+    // Hjem for Ola: han har ikke noe å fortsette på, og serveren spørres med hans innlogging
+    expect(find.byKey(const ValueKey('fortsett:11')), findsNothing);
+    expect(find.text('Fortsett å se'), findsNothing);
+    expect(find.text('Nytt fra Kystkanalen'), findsOneWidget);
+    expect(fake.requests.lastWhere((r) => r.url.path == '/hubs/promoted').headers['X-Plex-Token'],
+        FakePlex.olaServerToken);
+
+    // i innstillingene: hvem som ser på, og om det skal spørres
+    await tester.tap(find.byTooltip('Innstillinger'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bruker i Plex Home'), findsOneWidget);
+    expect(find.textContaining('logget inn som Ola'), findsOneWidget);
+    expect(find.byKey(const ValueKey('bytt-plex-bruker')), findsOneWidget);
+    await tester.tap(find.text('Spør hvem som ser på når Plex-fanen åpnes'));
+    await tester.pumpAndSettle();
+    expect(session.plex.askUser, isTrue);
+  });
+
+  testWidgets('Plex Home: «Hvem ser på?» når fanen åpnes, når det er slått på, og bare første gang', (tester) async {
+    final (session, fake) = await _start(tester, prefs: {'plex_ask_user': true});
+    fake.home = true;
+    await _openPlex(tester);
+    expect(find.text('Hvem ser på?'), findsOneWidget);
+    // den som ser på nå: bare lukk
+    await tester.tap(find.byKey(const ValueKey('plex-bruker:kari-uuid')));
+    await tester.pumpAndSettle();
+    expect(find.text('Hvem ser på?'), findsNothing);
+    expect(session.plex.user, 'kari');
+    expect(fake.calls('/api/v2/home/users/kari-uuid/switch'), isEmpty);
+
+    // bytte bruker kobler til på nytt, men spør ikke igjen
+    await tester.tap(find.byKey(const ValueKey('hvem-ser-pa')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('plex-bruker:ola-uuid')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('plex-pin')), FakePlex.olaPin);
+    await tester.pumpAndSettle();
+    expect(session.plex.user, 'Ola');
+    expect(find.text('Hvem ser på?'), findsNothing);
+  });
+
+  testWidgets('uten Plex Home: ingen knapp for å bytte bruker', (tester) async {
+    final (_, fake) = await _start(tester);
+    await _openPlex(tester);
+    expect(fake.calls('/api/v2/home/users'), isNotEmpty);
+    expect(find.byKey(const ValueKey('hvem-ser-pa')), findsNothing);
+    await tester.tap(find.byTooltip('Innstillinger'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bruker i Plex Home'), findsNothing);
   });
 
   testWidgets('et bibliotek: plakatene, sjanger, sortering og søk', (tester) async {
