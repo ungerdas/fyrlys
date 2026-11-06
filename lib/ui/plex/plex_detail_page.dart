@@ -284,6 +284,7 @@ class _PlexDetailPageState extends State<PlexDetailPage> {
             backdrop: plex.image(m.backdrop, width: 1280, height: 720),
             poster: plex.image(m.thumb, width: 300, height: 450),
             title: m.title,
+            logo: plex.logo(m.logo),
             tags: const [],
             chips: _chips(m),
             progress: resumeAt == null ? null : m.progress,
@@ -394,6 +395,7 @@ class _PlexDetailPageState extends State<PlexDetailPage> {
             backdrop: plex.image(show.backdrop, width: 1280, height: 720),
             poster: plex.image(show.thumb, width: 300, height: 450),
             title: show.title,
+            logo: plex.logo(show.logo),
             tags: const [],
             chips: _chips(show),
             actions: Wrap(

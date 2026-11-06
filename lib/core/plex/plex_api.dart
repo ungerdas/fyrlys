@@ -510,6 +510,13 @@ class PlexServerApi {
     }).toString();
   }
 
+  /// En logo ([PlexItem.logo]) slik den er: omkodingen i [image] kan gjøre gjennomsiktige PNG-er om til JPEG.
+  String? logo(String? path) {
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('http')) return path;
+    return _uri(path, {'X-Plex-Token': token}).toString();
+  }
+
   /// Filen avspilleren henter (innloggingen sendes som hode, se [headers]).
   String file(PlexPart part) => '$base${part.key}';
 

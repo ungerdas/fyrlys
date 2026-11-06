@@ -555,6 +555,9 @@ class PlexAccount extends ChangeNotifier {
   String? image(String? path, {required int width, required int height}) =>
       _api?.image(path, width: width, height: height);
 
+  /// logoen med navnet, som den er (null før serveren har svart, og når det ikke er noen)
+  String? logo(String? path) => _api?.logo(path);
+
   /// «i hjemmenettet», «over nettet» eller «via Plex (relay)»
   static String tierName(int tier) => switch (tier) {
         0 => tr('i hjemmenettet'),

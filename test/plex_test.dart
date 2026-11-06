@@ -73,6 +73,22 @@ void main() {
   });
 
   group('det som ligger på serveren', () {
+    test('logoen med navnet: clearLogo, den brede når den finnes', () {
+      expect(PlexItem.fromJson(FakePlex.movie).logo, '/library/metadata/10/clearLogo/1700000000');
+      expect(PlexItem.fromJson(FakePlex.show).logo, '/library/metadata/20/clearLogoWide/1');
+      expect(
+        plexLogo({
+          'Image': [
+            {'type': 'coverPoster', 'url': '/p'},
+            {'type': 'clearLogo', 'url': ''},
+            {'type': 'background', 'url': '/b'},
+          ],
+        }),
+        isNull,
+      );
+      expect(PlexItem.fromJson({'ratingKey': '1', 'type': 'movie', 'title': 'Uten'}).logo, isNull);
+    });
+
     test('en film: bildet, lyden, merkene og hvor du slapp', () {
       final m = PlexItem.fromJson(FakePlex.movie);
       expect(m.type, PlexType.movie);

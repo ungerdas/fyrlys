@@ -1,5 +1,11 @@
 # Endringer
 
+## v2.1.44
+
+- **Logoen til filmen eller serien i Plex-fanen.** Har Plex en logo med navnet (som Plex selv viser), står den på
+  siden for filmen eller serien i stedet for navnet. Uten logo står navnet som før, og i lyst utseende også (de
+  fleste logoene er laget for mørk bakgrunn).
+
 ## v2.1.43
 
 - **Plex Home: velg hvem som ser på.** Har du Plex Home, står den som ser på øverst i sidemenyen i Plex-fanen. Trykk

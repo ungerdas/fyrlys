@@ -428,7 +428,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   nett/2 relay og `lanHttp` (http til en privat adresse i hjemmenettet når …plex.direct stoppes av ruteren; aldri over
   nettet), `PlexLibrary` (movie/show), `PlexItem` (film/serie/sesong/episode: bilder, `viewOffset`/`viewCount`/
   `leafCount`, `onDeck` (ett objekt i `OnDeck.Metadata`), `media`/`part`/`streams`, `markers` (`final` = rulleteksten
-  på slutten), `tech` → `MediaTech`, `resumeAt` via `resumeFrom` (≥ 10 s, ≤ 95 %)), `PlexSort` (serier: «nylig lagt til» = `episode.addedAt:desc`)), `plex_api.dart` (`PlexClientInfo`: hodene
+  på slutten), `tech` → `MediaTech`, `resumeAt` via `resumeFrom` (≥ 10 s, ≤ 95 %), `logo` (2.1.44, eieren 6.11 om
+  detaljsiden: «vil også ha Serie/Filmlogo også hvis det er tilgjengelig»: `plexLogo` = `clearLogoWide`, ellers
+  `clearLogo` fra `Image` i metadataen)), `PlexSort` (serier: «nylig lagt til» = `episode.addedAt:desc`)), `plex_api.dart` (`PlexClientInfo`: hodene
   X-Plex-Product «Fyrlys», fast `X-Plex-Client-Identifier`, enhetsnavn i ASCII, `X-Plex-Language` nb/en (2.1.37: for
   overskriftene serveren lager selv; om den oversetter til nb, er ikke prøvd); `PlexTv`: PIN med `strong=true`,
   `authUrl` (app.plex.tv/auth), `checkPin`, `userName`, `servers` (clients.plex.tv); `pickConnection`: alle adressene
@@ -437,7 +439,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   biblioteker, `items` (sider med X-Plex-Container-Start/Size, `genre`), `genres`, `continueWatching`
   (`/hubs/continueWatching/items`, ellers `/library/onDeck`), `recentlyAdded`, `metadata` (`includeOnDeck`,
   `includeMarkers`), `children`, `related`, `search` (`/hubs/search`, bare film/serie/episode, `sectionId`),
-  `setWatched` (`/:/scrobble`/`unscrobble`), `timeline`, `image` (`/photo/:/transcode`, nøkkelen i adressen),
+  `setWatched` (`/:/scrobble`/`unscrobble`), `timeline`, `image` (`/photo/:/transcode`, nøkkelen i adressen), `logo` (stien som den er, med nøkkelen: omkodingen
+  kan gjøre gjennomsiktige PNG-er om til JPEG),
   `homeHubs` (2.1.37: `/hubs/promoted` med `contentDirectoryID` og `pinnedContentDirectoryID` = bibliotekene som
   vises, `count=20`, `excludeContinueWatching=1`; `parseHubs` i plex_models: rekkefølgen fra Plex, bare film/serie/
   sesong/episode fra bibliotekene som vises (hubens og hvert elements `librarySectionID`), uten hubIdentifier med
@@ -481,7 +484,8 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   har bibliotekene som vises, i rekkefølgen, så de hentes på nytt når noe skjules eller flyttes (`homeHubs` sender
   dem i den rekkefølgen; om Plex ordner radene etter den, er ikke prøvd); flisene i sidemenyen `sidemeny:<id>`, uten
   piler; `velg-biblioteker` har verktøytipset «Velg og sorter biblioteker»; `_refresh` henter på nytt når du kommer tilbake), `plex_detail_page.dart` (film: `DetailHero` fra
-  `vod_detail_page.dart`, Spill av/Fortsett/Fra begynnelsen, sett/ikke sett, «Mer som dette»; serie: sesongene sortert,
+  `vod_detail_page.dart` (med `logo`, bare i mørkt utseende: `_HeroLogo` (`hero-logo`) viser navnet til logoen er
+  lastet og når den feiler, så logoen innenfor 460 × 130 nede til venstre, med navnet som verktøytips), Spill av/Fortsett/Fra begynnelsen, sett/ikke sett, «Mer som dette»; serie: sesongene sortert,
   episodene, «Fortsett SxxEyy» fra OnDeck, meny per episode), `plex_play.dart` (`plexPlayItem`, `plexExtras`,
   `plexExplain` (HTTP-koden), `plexNextSeasons` (sesong 0 hoppes over), `openPlexPlayer`, `playPlexItem`),
   `plex_login.dart` (PIN-dialogen: åpner nettleseren, sjekker hvert 2. s; serverlista; `showPlexLibraries`, ListTile med
@@ -675,6 +679,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 5.11.2026: 2.1.41: rekkefølgen på bibliotekene i Plex-fanen (se Plex under Arkitektur). Testet med tester og den
   falske Plex-serveren (`homeVideos` gir et tredje bibliotek). Eieren tok den i bruk samme dag (bilde: TV-serier over
   Filmer), men ville ikke ha pilene i sidemenyen hele tiden; 2.1.42 har dem bare i valget av biblioteker.
+- 6.11.2026: 2.1.44: logoen til filmen/serien på detaljsiden i Plex-fanen (se Plex under Arkitektur). Eieren likte
+  detaljsiden (bilde 6.11). Testet med tester; om serveren hans har logoer i `Image`, og at PNG-ene vises gjennomsiktige,
+  er ikke prøvd.
 - 5.11.2026: 2.1.43: Plex Home, velg hvem som ser på (se Plex under Arkitektur). Testet med tester og den falske
   Plex-serveren (`home`: Kari og Ola med PIN 1234); ikke prøvd mot plex.tv: svaret fra `/home/users` og `switch`,
   PIN-feilen og om administrerte brukere får serveren i `resources`.

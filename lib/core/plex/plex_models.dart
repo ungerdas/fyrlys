@@ -464,6 +464,23 @@ class PlexMarker {
   final bool? last;
 }
 
+/// Logoen med navnet til en film eller serie (`clearLogo` i `Image`, den brede når den finnes), eller null.
+String? plexLogo(Map<String, Object?> j) {
+  String? logo;
+  String? wide;
+  for (final image in plexList(j['Image'])) {
+    final url = plexPath(image['url']);
+    if (url == null) continue;
+    switch (plexText(image['type'])) {
+      case 'clearLogo':
+        logo ??= url;
+      case 'clearLogoWide':
+        wide ??= url;
+    }
+  }
+  return wide ?? logo;
+}
+
 /// En film, serie, sesong eller episode.
 class PlexItem {
   const PlexItem({
@@ -478,6 +495,7 @@ class PlexItem {
     this.parentThumb,
     this.grandparentThumb,
     this.grandparentArt,
+    this.logo,
     this.parentTitle = '',
     this.grandparentTitle = '',
     this.parentRatingKey,
@@ -520,6 +538,7 @@ class PlexItem {
       parentThumb: plexPath(j['parentThumb']),
       grandparentThumb: plexPath(j['grandparentThumb']),
       grandparentArt: plexPath(j['grandparentArt']),
+      logo: plexLogo(j),
       parentTitle: plexText(j['parentTitle']),
       grandparentTitle: plexText(j['grandparentTitle']),
       parentRatingKey: plexPath(j['parentRatingKey']),
@@ -560,6 +579,9 @@ class PlexItem {
   final String? parentThumb;
   final String? grandparentThumb;
   final String? grandparentArt;
+
+  /// logoen med navnet (gjennomsiktig bilde fra `Image` hos Plex, når serveren har en)
+  final String? logo;
 
   /// en episode: sesongen og serien
   final String parentTitle;

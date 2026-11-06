@@ -746,6 +746,7 @@ class DetailHero extends StatelessWidget {
     required this.title,
     required this.tags,
     required this.chips,
+    this.logo,
     this.actions,
     this.progress,
     this.below = const [],
@@ -754,6 +755,9 @@ class DetailHero extends StatelessWidget {
   final String? backdrop;
   final String? poster;
   final String title;
+
+  /// logoen med navnet (Plex), vist i stedet for navnet når den er lastet (i mørkt utseende)
+  final String? logo;
 
   /// merker fra navnet hos leverandøren («PRE»)
   final List<String> tags;
@@ -846,14 +850,20 @@ class DetailHero extends StatelessWidget {
       ),
     );
 
+    final heading = Text(
+      title,
+      style: (wide ? theme.textTheme.headlineLarge : theme.textTheme.headlineSmall)
+          ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.15),
+    );
+    // logoene er laget for mørk bakgrunn (mange er hvite), så i lyst utseende står navnet
+    final logoUrl = theme.brightness == Brightness.dark ? logo : null;
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: (wide ? theme.textTheme.headlineLarge : theme.textTheme.headlineSmall)
-              ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.15),
-        ),
+        if (logoUrl == null)
+          heading
+        else
+          _HeroLogo(url: logoUrl, title: title, heading: heading, maxWidth: wide ? 460 : 280, maxHeight: wide ? 130 : 84),
         if (chips.isNotEmpty || tags.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 12),
@@ -898,6 +908,50 @@ class DetailHero extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Logoen til filmen eller serien i stedet for navnet: navnet vises til logoen er lastet, og når den ikke kan hentes.
+/// Logoen beholder formen sin innenfor [maxWidth] × [maxHeight], nede til venstre, nær merkene under.
+class _HeroLogo extends StatelessWidget {
+  const _HeroLogo({
+    required this.url,
+    required this.title,
+    required this.heading,
+    required this.maxWidth,
+    required this.maxHeight,
+  });
+
+  final String url;
+  final String title;
+  final Widget heading;
+  final double maxWidth;
+  final double maxHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1;
+    return Image(
+      key: const ValueKey('hero-logo'),
+      image: netImageProvider(url, cacheWidth: (maxWidth * dpr).round()),
+      semanticLabel: title,
+      fit: BoxFit.contain,
+      alignment: Alignment.bottomLeft,
+      filterQuality: FilterQuality.medium,
+      gaplessPlayback: true,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (frame == null && !wasSynchronouslyLoaded) return heading;
+        return Tooltip(
+          message: title,
+          waitDuration: const Duration(milliseconds: 800),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
+            child: child,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) => heading,
     );
   }
 }

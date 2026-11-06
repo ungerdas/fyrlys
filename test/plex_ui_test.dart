@@ -12,6 +12,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'fakes.dart';
 import 'plex_fake.dart';
 
+/// Adressen til et nettbilde (i testene et vanlig nettbilde, ofte pakket ut i mindre størrelse).
+String _imageUrl(ImageProvider<Object> image) {
+  final inner = image is ResizeImage ? image.imageProvider : image;
+  return (inner as NetworkImage).url;
+}
+
 Future<(Session, FakePlex)> _start(WidgetTester tester,
     {bool linked = true, Map<String, Object> prefs = const {}}) async {
   // høyt nok til at alle radene på Hjem får plass
@@ -83,7 +89,8 @@ void main() {
   });
 
   testWidgets('en film: detaljsiden, avspilling med Plex sine hoder, og hvor du er til Plex', (tester) async {
-    final (_, fake) = await _start(tester);
+    // mørkt utseende: logoen fra Plex vises
+    final (_, fake) = await _start(tester, prefs: {'theme': 'dark'});
     final pb = _fakePlayback();
     await _openPlex(tester);
     await tester.tap(find.byKey(const ValueKey('rad:movie.recentlyadded.1:10')));
@@ -95,6 +102,14 @@ void main() {
     expect(find.text('Regi: Ola Regissør'), findsOneWidget);
     expect(find.text('4K'), findsOneWidget);
     expect(find.text('Mer som dette'), findsOneWidget);
+    // logoen fra Plex i stedet for navnet, hentet som den er (navnet står til den er lastet, og her i testene)
+    final logo = tester.widget<Image>(find.byKey(const ValueKey('hero-logo')));
+    expect(logo.semanticLabel, 'Fyrlyset');
+    expect(
+      _imageUrl(logo.image),
+      '${FakePlex.local}/library/metadata/10/clearLogo/1700000000?X-Plex-Token=${FakePlex.serverToken}',
+    );
+    expect(find.text('Fyrlyset'), findsWidgets);
 
     await tester.tap(find.text('Spill av'));
     await _settle(tester);
@@ -187,6 +202,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('En serie om kysten.'), findsOneWidget);
     expect(find.text('Fortsett S01E02'), findsOneWidget);
+    // lyst utseende: navnet i stedet for logoen (logoene er laget for mørk bakgrunn)
+    expect(find.byKey(const ValueKey('hero-logo')), findsNothing);
+    expect(find.text('Kysten'), findsWidgets);
     // sesongene i rekkefølge, med den du er på, valgt
     expect(find.text('Sesong 1'), findsOneWidget);
     expect(find.text('Sesong 2'), findsOneWidget);

@@ -121,6 +121,10 @@ class FakePlex {
     'duration': 6000000,
     'thumb': '/library/metadata/10/thumb/1',
     'art': '/library/metadata/10/art/1',
+    'Image': [
+      {'alt': 'Fyrlyset', 'type': 'coverPoster', 'url': '/library/metadata/10/thumb/1'},
+      {'alt': 'Fyrlyset', 'type': 'clearLogo', 'url': '/library/metadata/10/clearLogo/1700000000'},
+    ],
     'librarySectionID': 1,
     'Genre': [
       {'tag': 'Drama'},
@@ -192,6 +196,10 @@ class FakePlex {
     'childCount': 2,
     'thumb': '/library/metadata/20/thumb/1',
     'art': '/library/metadata/20/art/1',
+    'Image': [
+      {'alt': 'Kysten', 'type': 'clearLogo', 'url': '/library/metadata/20/clearLogo/1'},
+      {'alt': 'Kysten', 'type': 'clearLogoWide', 'url': '/library/metadata/20/clearLogoWide/1'},
+    ],
     'librarySectionID': 2,
   };
 
