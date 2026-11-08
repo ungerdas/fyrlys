@@ -9,6 +9,7 @@ import '../build_info.dart';
 import '../l10n/tr.dart';
 import '../platform.dart';
 import 'android_host.dart';
+import 'app_log.dart';
 
 class UpdateException implements Exception {
   const UpdateException(this.message);
@@ -370,7 +371,10 @@ class Updater extends ChangeNotifier {
       await install();
       return;
     }
-    if (await apply(restart: true)) exit(0);
+    if (await apply(restart: true)) {
+      AppLog.instance.closed();
+      exit(0);
+    }
   }
 
   /// Android: åpner installeringen av APK-en som er lastet ned (Android spør deg, og Fyrlys starter på nytt når den

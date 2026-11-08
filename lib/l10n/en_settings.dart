@@ -158,6 +158,7 @@ const enSettings = <String, String>{
   'Oppdatering': 'Update',
   'Logg': 'Log',
   'Oppdateringsloggen': 'Update log',
+  'Forrige gang Fyrlys kjørte (ble ikke avsluttet som vanlig)': "The last time Fyrlys ran (it didn't close normally)",
   'feilrapport': 'error-report',
 
   // failure.dart: når leverandøren avviser avspillingen

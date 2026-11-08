@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/cache.dart' show SavedLists;
 import '../core/failure.dart';
 import '../core/models.dart';
 import '../core/names.dart';
@@ -12,8 +13,8 @@ import '../core/session.dart';
 import '../core/source.dart';
 import '../l10n/tr.dart';
 import '../theme.dart';
-import 'channel_card.dart';
 import 'channel_number.dart';
+import 'channel_picker.dart';
 import 'playback.dart';
 import 'window_effects.dart';
 
@@ -81,6 +82,9 @@ class _MultiviewState extends State<_Multiview> {
 
   /// kildene denne siden har åpnet (de andre innloggingene), og lukker
   final List<TvSource> _own = [];
+
+  /// kategoriene og kanalene per innlogging, hentet første gang du velger kanal (og husket til siden lukkes)
+  final Map<String, Future<SavedLists>> _lists = {};
   bool _loading = true;
   String? _message;
   int _selected = 0;
@@ -165,6 +169,7 @@ class _MultiviewState extends State<_Multiview> {
       }
     }
     if (!mounted) return;
+    debugPrint('Multiview: ${_slots.length} ${_slots.length == 1 ? 'bilde' : 'bilder'}');
     setState(() {
       _loading = false;
       if (_slots.length < 2) _message = tr('Fant bare én tilkobling. Legg til et abonnement til i innstillingene.');
@@ -368,24 +373,47 @@ class _MultiviewState extends State<_Multiview> {
     _hideTimer = Timer(const Duration(seconds: 3), () => _set(() => _controls = false));
   }
 
-  /// Kanalen i et bilde: favorittene eller alle kanalene i abonnementet det bruker.
+  /// Kategoriene og kanalene til abonnementet et bilde bruker (én gang per innlogging; feilet det, prøves det igjen
+  /// neste gang).
+  Future<SavedLists> _listsFor(_Slot s) {
+    final id = s.login.id;
+    final known = _lists[id];
+    if (known != null) return known;
+    final lists = _session.listsOf(id, s.source);
+    _lists[id] = lists;
+    unawaited(lists.then<void>(
+      (l) => debugPrint('Multiview: ${l.channels.length} kanaler i ${l.categories.length} kategorier'),
+      onError: (Object e) {
+        _lists.remove(id);
+        debugPrint('Multiview: fikk ikke hentet kanalene (${s.source.redact('$e')})');
+      },
+    ));
+    return lists;
+  }
+
+  /// Kanalen i et bilde: mappene som i kanallista (favoritter, sist sett, kategoriene) i abonnementet det bruker.
   Future<void> _pick(int i) async {
     if (i < 0 || i >= _slots.length) return;
     final s = _slots[i];
     _select(i);
     _hideTimer?.cancel();
-    final active = identical(s.source, _session.source);
+    final id = s.login.id;
     final ch = await showDialog<Channel>(
       context: context,
-      builder: (_) => _ChannelPicker(
+      builder: (_) => ChannelPicker(
         title: _session.logins.length > 1 ? tr('Velg kanal · {name}', {'name': s.login.name}) : tr('Velg kanal'),
-        channels: active ? Future.value(_session.channels) : s.source.channels(),
-        favorites: _session.favoritesOf(s.login.id),
+        lists: _listsFor(s),
+        favorites: _session.favoritesOf(id),
+        recent: _session.recentOf(id),
+        pinned: _session.favoriteCategoriesOf(id),
         logoUrl: s.source.logoUrl,
       ),
     );
     if (!mounted) return;
-    if (ch != null) unawaited(_play(s, ch));
+    if (ch != null) {
+      debugPrint('Multiview: bilde ${i + 1} får en ny kanal');
+      unawaited(_play(s, ch));
+    }
     _focus.requestFocus();
     _wake();
   }
@@ -736,106 +764,6 @@ class _MultiviewState extends State<_Multiview> {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Velg en kanal: favorittene (eller alle) i abonnementet, med søk.
-class _ChannelPicker extends StatefulWidget {
-  const _ChannelPicker({required this.title, required this.channels, required this.favorites, required this.logoUrl});
-
-  final String title;
-  final Future<List<Channel>> channels;
-  final List<Channel> favorites;
-  final String? Function(String? icon) logoUrl;
-
-  @override
-  State<_ChannelPicker> createState() => _ChannelPickerState();
-}
-
-class _ChannelPickerState extends State<_ChannelPicker> {
-  String _query = '';
-  late bool _fav = widget.favorites.isNotEmpty;
-
-  List<Channel> _list(List<Channel> all) {
-    final words = _query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    if (words.isEmpty) return _fav ? widget.favorites : all;
-    return [
-      for (final c in all)
-        if (words.every(c.name.toLowerCase().contains)) c,
-    ];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SizedBox(
-        width: 460,
-        height: 520,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              autofocus: true,
-              decoration: InputDecoration(
-                  isDense: true, prefixIcon: const Icon(Icons.search), hintText: tr('Søk etter kanal')),
-              onChanged: (v) => setState(() => _query = v.trim()),
-            ),
-            if (widget.favorites.isNotEmpty && _query.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: SegmentedButton<bool>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(value: true, label: Text(tr('★ Favoritter'))),
-                    ButtonSegment(value: false, label: Text(tr('Alle kanaler'))),
-                  ],
-                  selected: {_fav},
-                  onSelectionChanged: (v) => setState(() => _fav = v.first),
-                ),
-              ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: FutureBuilder<List<Channel>>(
-                future: widget.channels,
-                builder: (context, snap) {
-                  if (snap.hasError) {
-                    final e = snap.error;
-                    return Center(
-                      child: Text(e is SourceException ? e.message : tr('Fikk ikke hentet kanalene.'),
-                          textAlign: TextAlign.center, style: TextStyle(color: scheme.error)),
-                    );
-                  }
-                  final all = snap.data;
-                  if (all == null) return const Center(child: CircularProgressIndicator());
-                  final list = _list(all);
-                  if (list.isEmpty) {
-                    return Center(
-                        child: Text(tr('Fant ingenting.'), style: TextStyle(color: scheme.onSurfaceVariant)));
-                  }
-                  return ListView.builder(
-                    itemCount: list.length,
-                    itemBuilder: (context, i) {
-                      final c = list[i];
-                      return ListTile(
-                        dense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                        leading: ChannelLogo(url: widget.logoUrl(c.icon), name: c.name, width: 46, height: 32),
-                        title: Text(nameParts(c.name).main, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        subtitle: c.number == null ? null : Text(tr('Kanal {n}', {'n': c.number})),
-                        onTap: () => Navigator.of(context).pop(c),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Avbryt')))],
     );
   }
 }

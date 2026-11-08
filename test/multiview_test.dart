@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/app.dart';
+import 'package:fyrlys/core/models.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/theme.dart';
+import 'package:fyrlys/ui/channel_picker.dart';
 import 'package:fyrlys/ui/multiview_page.dart';
 import 'package:fyrlys/ui/playback.dart';
 import 'package:fyrlys/ui/player_page.dart';
@@ -49,7 +51,97 @@ Future<Session> _session(List<FakeSource> made, {List<String> others = const [],
   return s;
 }
 
+/// Kanalvalget alene, åpnet fra en knapp; det du velger, havner i [picked].
+Future<void> _showPicker(
+  WidgetTester tester,
+  List<Category> cats,
+  List<Channel> all, {
+  List<Channel> favorites = const [],
+  List<String> pinned = const [],
+  List<Channel?>? picked,
+}) async {
+  await tester.pumpWidget(MaterialApp(
+    theme: fyrlysTheme(Brightness.dark),
+    home: Builder(
+      builder: (context) => Center(
+        child: FilledButton(
+          onPressed: () async {
+            final c = await showDialog<Channel>(
+              context: context,
+              builder: (_) => ChannelPicker(
+                title: 'Velg kanal',
+                lists: Future.value((categories: cats, channels: all)),
+                favorites: favorites,
+                recent: const [],
+                pinned: pinned,
+                logoUrl: (_) => null,
+              ),
+            );
+            picked?.add(c);
+          },
+          child: const Text('Åpne'),
+        ),
+      ),
+    ),
+  ));
+  await tester.tap(find.text('Åpne'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  testWidgets('kanalvalget: mappene som i kanallista, og søket i alle kanalene (høyst 300 treff)', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final cats = [for (var i = 0; i < 40; i++) Category(id: 'k$i', name: 'Kategori $i')];
+    final all = [for (var i = 0; i < 25000; i++) Channel(id: '$i', name: 'Kanal $i', categoryId: 'k${i % 40}')];
+    final picked = <Channel?>[];
+    await _showPicker(tester, cats, all, favorites: [all[7]], pinned: const ['k3'], picked: picked);
+
+    // favorittene først, og kategoriene du har lagt øverst
+    expect(find.byKey(const ValueKey('kanal:7')), findsOneWidget);
+    expect(find.text('DINE KATEGORIER'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mappe:recent')), findsNothing);
+    // en mappe: bare kanalene i den kategorien
+    await tester.tap(find.byKey(const ValueKey('mappe:k3')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('kanal:3')), findsOneWidget);
+    expect(find.byKey(const ValueKey('kanal:43')), findsOneWidget);
+    expect(find.byKey(const ValueKey('kanal:4')), findsNothing);
+    expect(find.byKey(const ValueKey('kanal:7')), findsNothing);
+
+    // søket gjelder alle kanalene, men viser høyst 300
+    await tester.enterText(find.byType(TextField), 'kanal');
+    await tester.pumpAndSettle();
+    expect(find.text('Viser de 300 første treffene. Skriv mer for å finne færre.'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'kanal 1234');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Viser de'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('kanal:1234')));
+    await tester.pumpAndSettle();
+    expect(picked.single?.id, '1234');
+  });
+
+  testWidgets('kanalvalget i et smalt vindu: mappene først, så kanalene i den du åpner', (tester) async {
+    tester.view.physicalSize = const Size(480, 860);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final cats = [for (var i = 0; i < 3; i++) Category(id: 'k$i', name: 'Kategori $i')];
+    final all = [for (var i = 0; i < 30; i++) Channel(id: '$i', name: 'Kanal $i', categoryId: 'k${i % 3}')];
+    await _showPicker(tester, cats, all);
+
+    expect(find.byKey(const ValueKey('mappe:all')), findsOneWidget);
+    expect(find.byKey(const ValueKey('kanal:1')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('mappe:k1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Kategori 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('kanal:1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('kanal:2')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('til-mappene')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('mappe:all')), findsOneWidget);
+  });
+
   test('flere bilder: med to abonnementer, eller ett med to tilkoblinger', () async {
     final made = <FakeSource>[];
     final one = await _session(made, connections: 1);

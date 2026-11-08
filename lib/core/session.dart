@@ -488,6 +488,35 @@ class Session extends ChangeNotifier {
   /// favorittkanalene til en innlogging (også en som ikke er i bruk)
   List<Channel> favoritesOf(String id) => id == activeLogin ? favorites : _readChannels('favorites@$id');
 
+  /// «sist sett» for en innlogging (også en som ikke er i bruk)
+  List<Channel> recentOf(String id) => id == activeLogin ? recent : _readChannels('recent@$id');
+
+  /// kategoriene du har lagt øverst for en innlogging (også en som ikke er i bruk)
+  List<String> favoriteCategoriesOf(String id) =>
+      id == activeLogin ? favoriteCategories : _prefs.getStringList('favoriteCategories@$id') ?? const [];
+
+  /// Kategoriene og kanalene til en innlogging: lista som er i bruk, eller for en annen innlogging lista fra sist den
+  /// var i bruk (på disk), ellers hentet med [src]. Bare kategorier med kanaler, og NRK samlet som ellers.
+  Future<SavedLists> listsOf(String id, TvSource src) async {
+    if (id == activeLogin && identical(src, source) && channels.isNotEmpty) {
+      return (categories: categories, channels: channels);
+    }
+    final saved = await listCache?.read(id);
+    if (saved != null && saved.channels.isNotEmpty) return _withChannels(saved.categories, saved.channels);
+    final cats = await src.categories();
+    final all = await src.channels();
+    final lists = _withChannels(cats, all);
+    unawaited(listCache?.write(id, lists.categories, lists.channels));
+    return lists;
+  }
+
+  static SavedLists _withChannels(List<Category> cats, List<Channel> all) {
+    final chans = mergePublicChannels(all);
+    final used = {for (final c in chans) c.categoryId};
+    final seen = <String>{};
+    return (categories: [for (final c in cats) if (used.contains(c.id) && seen.add(c.id)) c], channels: chans);
+  }
+
   /// Lista fra sist vises med en gang, og den nye hentes i bakgrunnen.
   Future<void> _startLists(TvSource src) async {
     final cache = listCache;

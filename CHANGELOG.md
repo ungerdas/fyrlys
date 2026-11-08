@@ -1,5 +1,16 @@
 # Endringer
 
+## v2.1.45
+
+- **Kanalvalget i multiview har mapper**, som kanallista ellers: favorittene, sist sett, alle kanalene, kategoriene du
+  har lagt øverst og resten av kategoriene. Bare mappen du åpner, vises, og søket finner kanalene i hele
+  abonnementet (de 300 første treffene; skriv mer for å finne færre). Kanallista til et abonnement som ikke er i
+  bruk, hentes én gang (fra sist, når den finnes), ikke hver gang du velger kanal.
+- Bildene hentes høyst åtte om gangen. Ruller du fort gjennom tusenvis av kanaler, ble det ellers like mange
+  forbindelser på en gang.
+- Krasjer Fyrlys, er slutten av loggen fra den gangen med i feilrapporten neste gang (tannhjulet → Hjelp →
+  Feilrapport).
+
 ## v2.1.44
 
 - **Logoen til filmen eller serien i Plex-fanen.** Har Plex en logo med navnet (som Plex selv viser), står den på

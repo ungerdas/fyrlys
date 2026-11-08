@@ -73,6 +73,14 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
   if (lines.isEmpty) out.writeln('–');
   lines.forEach(out.writeln);
 
+  final previous = AppLog.instance.previousRun;
+  if (previous.isNotEmpty) {
+    out
+      ..writeln()
+      ..writeln('## ${tr('Forrige gang Fyrlys kjørte (ble ikke avsluttet som vanlig)')}');
+    previous.forEach(out.writeln);
+  }
+
   final log = updateLog ?? await _tail(updater);
   if (log != null && log.trim().isNotEmpty) {
     out

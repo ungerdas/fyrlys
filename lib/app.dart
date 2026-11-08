@@ -2,6 +2,7 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 
+import 'core/app_log.dart';
 import 'core/session.dart';
 import 'core/updater.dart';
 import 'l10n/tr.dart';
@@ -37,6 +38,7 @@ class _FyrlysAppState extends State<FyrlysApp> with WidgetsBindingObserver {
     // en nedlastet oppdatering legges inn når du lukker appen (skriptet venter til den er lukket)
     final updater = widget.updater;
     if (updater != null) await updater.apply(restart: false);
+    AppLog.instance.closed();
     return AppExitResponse.exit;
   }
 

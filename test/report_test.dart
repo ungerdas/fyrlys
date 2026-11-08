@@ -64,6 +64,48 @@ void main() {
     expect(text, isNot(contains('\r')));
   });
 
+  test('loggen på disk: slutten fra forrige gang er med når appen ikke ble avsluttet som vanlig', () async {
+    final dir = Directory.systemTemp.createTempSync('fyrlys-logg');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}${Platform.pathSeparator}logg.txt');
+
+    // første gang: ingenting fra før, og det som alt er logget, kommer med i fila
+    final first = AppLog()..add('Fyrlys 2.1.45', at: DateTime(2026, 11, 8, 12));
+    first.attach(file);
+    expect(first.previousRun, isEmpty);
+    first
+      ..add('Multiview: 2 bilder', at: DateTime(2026, 11, 8, 12, 1))
+      ..add('mpv: Failed to open http://iptv.example/live/kari/hemmelig/1.ts', at: DateTime(2026, 11, 8, 12, 2));
+    expect(file.readAsLinesSync(), [
+      '12:00:00 Fyrlys 2.1.45',
+      '12:01:00 Multiview: 2 bilder',
+      '12:02:00 mpv: Failed to open http://***/live/***/***/1.ts',
+    ]);
+
+    // krasjet (uten sluttlinja): slutten er med neste gang
+    final second = AppLog()..attach(file);
+    expect(second.previousRun, contains('12:01:00 Multiview: 2 bilder'));
+    expect(second.previousRun.last, contains('/live/***/***/1.ts'));
+    second
+      ..add('ny start')
+      ..closed();
+
+    // avsluttet som vanlig: ingenting fra forrige gang
+    final third = AppLog()..attach(file);
+    expect(third.previousRun, isEmpty);
+
+    // i feilrapporten
+    SharedPreferences.setMockInitialValues({'source': '{"kind":"fake"}'});
+    final s = Session(await SharedPreferences.getInstance(), sourceFactory: (_) async => FakeSource(connections: 1));
+    await s.restore();
+    AppLog.instance.previousRun = second.previousRun;
+    addTearDown(() => AppLog.instance.previousRun = const []);
+    final text = await buildReport(s, now: DateTime(2026, 11, 8, 13), windows: 'Windows');
+    expect(text, contains('## Forrige gang Fyrlys kjørte (ble ikke avsluttet som vanlig)'));
+    expect(text, contains('12:01:00 Multiview: 2 bilder'));
+    expect(text, isNot(contains('hemmelig')));
+  });
+
   test('Windows 11 heter Windows 11 (Windows sier selv «Windows 10» med bygg 22000 og høyere)', () {
     expect(windowsName('"Windows 10 Pro" 10.0 (Build 26100)'), '"Windows 11 Pro" 10.0 (Build 26100)');
     expect(windowsName('"Windows 10 Home" 10.0 (Build 22000)'), '"Windows 11 Home" 10.0 (Build 22000)');

@@ -89,6 +89,39 @@ void main() {
     expect(calls, 3);
   });
 
+  test('høyst åtte bilder hentes samtidig, og de som har ventet lengst, gis opp når køen er full', () async {
+    var running = 0;
+    var most = 0;
+    final gate = Completer<void>();
+    final client = MockClient((req) async {
+      running++;
+      if (running > most) most = running;
+      await gate.future;
+      running--;
+      return http.Response.bytes(Uint8List.fromList([1, 2, 3]), 200, headers: {'content-type': 'image/png'});
+    });
+    final store = ImageStore(dir, client: client);
+    final n = ImageStore.parallel + ImageStore.maxWaiting + 2;
+    final results = [
+      for (var i = 0; i < n; i++)
+        store.bytes('http://logo/$i.png').then((_) => true, onError: (Object _) => false),
+    ];
+    // alle har kommet til køen (først ser de etter bildet på disken)
+    for (var i = 0; i < 400 && (running < ImageStore.parallel || store.waiting < ImageStore.maxWaiting); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(running, ImageStore.parallel);
+    expect(store.waiting, ImageStore.maxWaiting);
+    gate.complete();
+    final ok = await Future.wait(results);
+    expect(most, ImageStore.parallel);
+    expect(ok.where((v) => !v), hasLength(2));
+    expect(store.waiting, 0);
+    // et bilde som ble gitt opp, er ikke en feil ved bildet: det hentes når det vises igjen
+    final dropped = ok.indexOf(false);
+    expect(await store.bytes('http://logo/$dropped.png'), [1, 2, 3]);
+  });
+
   test('bildebufferet holdes under grensen: de eldste slettes', () async {
     final store = ImageStore(dir, maxBytes: 250);
     final now = DateTime.now();

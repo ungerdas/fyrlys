@@ -49,6 +49,17 @@ Future<void> _start() async {
   if (await updater.beforeStart()) exit(0);
   // Bare én Fyrlys: starter du den en gang til, kommer vinduet som er åpent fram (før noe ryddes på disken).
   if (!isAndroid && await SingleInstance.isSecond(onShow: () => unawaited(_bringToFront()))) exit(0);
+  // Loggen også på disk, så slutten av den kommer med i feilrapporten om appen krasjer (ikke på Android: der stoppes
+  // appen uten at den får vite det, og hver gang ville sett ut som et krasj).
+  if (!isAndroid) {
+    try {
+      AppLog.instance
+          .attach(File('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}logg.txt'));
+      if (AppLog.instance.previousRun.isNotEmpty) debugPrint('Forrige gang ble ikke Fyrlys avsluttet som vanlig');
+    } on Object {
+      // bare i minnet
+    }
+  }
   MediaKit.ensureInitialized();
   if (!isAndroid) await windowManager.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();

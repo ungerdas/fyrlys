@@ -96,6 +96,7 @@ const enHome = <String, String>{
   'Kanalen stoppet.': 'The channel stopped.',
   'Velg kanal': 'Choose a channel',
   'Velg kanal · {name}': 'Choose a channel · {name}',
+  'Viser de {n} første treffene. Skriv mer for å finne færre.': 'Showing the first {n} results. Type more to narrow it down.',
   'Annen kanal': 'Another channel',
   'Bytt kanal (C)': 'Change channel (C)',
   'Alle bildene (Enter)': 'All views (Enter)',

@@ -106,6 +106,41 @@ class ImageStore {
   final Map<String, Future<Uint8List>> _pending = {};
   final Map<String, DateTime> _failed = {};
 
+  /// Så mange bilder hentes fra nettet samtidig. Resten venter, de nyeste først (det som vises nå): ruller du fort
+  /// gjennom tusenvis av kanaler, ble det ellers like mange forbindelser på en gang.
+  static const parallel = 8;
+
+  /// Så mange kan vente; de som har ventet lengst, gis opp (du har rullet forbi dem), og hentes igjen når de vises.
+  static const maxWaiting = 200;
+
+  int _running = 0;
+  final List<Completer<void>> _waiting = [];
+
+  /// bildene som venter på å bli hentet (testene)
+  int get waiting => _waiting.length;
+
+  Future<void> _turn() {
+    if (_running < parallel) {
+      _running++;
+      return Future.value();
+    }
+    final c = Completer<void>();
+    _waiting.add(c);
+    if (_waiting.length > maxWaiting) {
+      _waiting.removeAt(0).completeError(const ImageStoreException('gitt opp: for mange bilder i kø'));
+    }
+    return c.future;
+  }
+
+  void _done() {
+    // plassen går videre til den nyeste som venter
+    if (_waiting.isNotEmpty) {
+      _waiting.removeLast().complete();
+    } else {
+      _running--;
+    }
+  }
+
   File fileFor(String url) => File('${dir.path}${Platform.pathSeparator}${stableHash(url)}');
 
   /// Bildet som bytes: fra disken, eller fra nettet (og lagres). Samme bilde hentes bare én gang om gangen.
@@ -135,6 +170,13 @@ class ImageStore {
       throw ImageStoreException('$url ble ikke funnet nylig');
     }
     try {
+      await _turn();
+    } on ImageStoreException {
+      // gitt opp i køen: ikke en feil ved bildet, så det prøves igjen neste gang det vises
+      if (old != null) return old;
+      rethrow;
+    }
+    try {
       final res = await _client.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
       final type = res.headers['content-type'] ?? '';
       if (res.statusCode != 200 || res.bodyBytes.isEmpty || type.startsWith('text/')) {
@@ -149,6 +191,8 @@ class ImageStore {
       // et gammelt bilde er bedre enn ingen
       if (old != null) return old;
       rethrow;
+    } finally {
+      _done();
     }
   }
 

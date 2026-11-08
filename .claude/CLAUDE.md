@@ -147,7 +147,9 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - `core/cache.dart` – det som tas vare på mellom gangene (2.1.3): `ListCache` (`FileListCache` i
   `getApplicationSupportDirectory()/lister`, én JSON per kilde med nøkkelen `kind|label`; `MemoryListCache` i testene)
   og `ImageStore` (bildene i `getApplicationCacheDirectory()/bilder`, filnavn `stableHash(url)`, fornyes etter 14 dager,
-  det gamle brukes når nettet feiler, 404 huskes i 10 min, `prune()` ved start holder det under 300 MB). Settes opp i
+  det gamle brukes når nettet feiler, 404 huskes i 10 min, `prune()` ved start holder det under 300 MB; 2.1.45: høyst
+  `parallel` 8 nedlastinger samtidig, resten venter med de nyeste først, og de eldste over `maxWaiting` 200 gis opp
+  uten å regnes som feil). Settes opp i
   `main.dart` (path_provider); uten dem (testene) hentes alt som før.
 - `core/session.dart` – tilstanden (ChangeNotifier): innloggingene (2.1.14, `SavedLogin`): lista i `logins` (id, navn,
   slag), den i bruk i `login`, og hver innlogging (`toPrefs()` som JSON) kryptert med DPAPI i `login_protected:<id>`
@@ -217,7 +219,13 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   den i bruk deles, de andre åpnes og lukkes av siden), avspiller (`setup()` uten det store bufferet), kanal, EPG
   (hvert minutt) og nye forsøk (HLS → TS, tre per minutt). Lyd bare i det valgte (`_applyVolumes`, volumet fra
   Session), klikk = velg, dobbeltklikk/Enter = stort bilde (`_big`), C = kanalvalg (`_ChannelPicker`: favorittene til
-  den innloggingen via `Session.favoritesOf`, ellers alle, med søk), 1–4/piler, M, F, Esc. `Session.canMultiview` (to
+  den innloggingen via `Session.favoritesOf`, ellers alle, med søk; fra 2.1.45 `ChannelPicker` i
+  `ui/channel_picker.dart`, eieren 8.11: «tror vi må samle i mapper som det ser ut når man velger kanaler til vanlig,
+  den krasjet nå når jeg prøvde»: mappene `mappe:<fav|recent|all|kategori>` som sidemenyen på TV-siden, kanalene
+  `kanal:<id>` bare i mappen som er åpen, søk i alle med høyst `pickerSearchLimit` 300 treff (merknad øverst), smalt
+  vindu (< 640) mappene først og `til-mappene`; lista per innlogging én gang per side (`_listsFor` →
+  `Session.listsOf`: den i bruk, ellers `listCache` fra sist, ellers kilden; `recentOf`, `favoriteCategoriesOf`)),
+  1–4/piler, M, F, Esc. `Session.canMultiview` (to
   innlogginger, eller `_connections` ≥ 2 fra `account()` etter `_attach`) styrer knappen «Multiview» i toppen av
   TV-siden (med kanalen du så sist) og i spilleren (V; `_away` stopper direktesendingen og tar kanalen med,
   `startFull`). Testet i `multiview_test.dart`; fire mpv-er samtidig i ekte bruk er ikke prøvd.
@@ -339,7 +347,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   dobbeltklikk og F gir stort vindu; dra i bildet = `dragWindow`). `_away` går ut av minispilleren før arkivet og
   multiview. `WindowMemory` lagrer ikke mens den er aktiv. Ekte vindu er ikke prøvd.
 - Feilrapport (2.1.20): `core/app_log.dart` (`AppLog` med de 400 siste linjene fra `debugPrint`, `FlutterError` og
-  uventede feil, satt opp i `main.dart`; `scrub` fjerner vertsnavn, IP, `/live|movie|series|timeshift/<bruker>/<passord>`,
+  uventede feil, satt opp i `main.dart`; 2.1.45: på PC også i `<support>/logg.txt` (`attach` etter én-Fyrlys-sjekken,
+  hver linje skrives med en gang, begynner på nytt over 1 MB), `closed()` skriver `closedLine` når appen avsluttes
+  (`didRequestAppExit`, «Start på nytt nå»), og mangler den ved neste start, står de 150 siste linjene i
+  `previousRun` og i rapporten under «Forrige gang Fyrlys kjørte (ble ikke avsluttet som vanlig)»; ikke på Android,
+  der stoppes appen uten å få vite det; `scrub` fjerner vertsnavn, IP, `/live|movie|series|timeshift/<bruker>/<passord>`,
   `username=`/`password=`, e-post og `C:\Users\<navn>`), `core/report.dart` (`buildReport`: versjon, Windows, antall og
   slag innlogginger (ikke navnene), abonnementet, listene, innstillingene, loggen og slutten av oppdateringsloggen;
   `saveReport` i Nedlastinger, `showInExplorer`, `openUrl` byttes ut i testene; `openUrl` på Windows er `shellOpen` i
@@ -679,6 +691,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 5.11.2026: 2.1.41: rekkefølgen på bibliotekene i Plex-fanen (se Plex under Arkitektur). Testet med tester og den
   falske Plex-serveren (`homeVideos` gir et tredje bibliotek). Eieren tok den i bruk samme dag (bilde: TV-serier over
   Filmer), men ville ikke ha pilene i sidemenyen hele tiden; 2.1.42 har dem bare i valget av biblioteker.
+- 8.11.2026: 2.1.45: eieren 8.11: multiview krasjet da han valgte kanal («Sikkert fordi det var for mange
+  kanaler»); ingen feilrapport. Kanalvalget har mapper (se `ui/multiview_page.dart`), bildene hentes høyst åtte om
+  gangen (`ImageStore`), og loggen ligger på disk, så slutten kommer med i rapporten etter et krasj. Årsaken til
+  krasjet er ikke funnet: mulig mange samtidige bildenedlastinger ved rask rulling i «Alle kanaler», eller mpv med
+  to bilder. Testet med tester.
 - 6.11.2026: 2.1.44: logoen til filmen/serien på detaljsiden i Plex-fanen (se Plex under Arkitektur). Eieren likte
   detaljsiden (bilde 6.11). Testet med tester; om serveren hans har logoer i `Image`, og at PNG-ene vises gjennomsiktige,
   er ikke prøvd.
