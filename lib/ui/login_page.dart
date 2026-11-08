@@ -53,14 +53,17 @@ class _LoginPageState extends State<LoginPage> {
       }
       if (widget.adding && mounted) Navigator.of(context).pop();
     } on SourceException catch (e) {
+      debugPrint('Innloggingen (${_mode == _Mode.m3u ? 'M3U-lenke' : 'Xtream Codes'}) feilet (${e.failure.name}): '
+          '${e.message}');
       if (mounted) {
         setState(() {
           _busy = false;
           _message = e.message;
         });
       }
-    } on Object {
+    } on Object catch (e) {
       // noe uventet (f.eks. en adresse som ikke lar seg tolke): ikke bli stående på «Kobler til …»
+      debugPrint('Innloggingen feilet: ${e.runtimeType}');
       if (mounted) {
         setState(() {
           _busy = false;

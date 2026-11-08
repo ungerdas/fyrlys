@@ -23,19 +23,51 @@ const enCore = <String, String>{
   'Ugyldig serveradresse': 'Invalid server address',
   'Fant ikke serien': 'Series not found',
   'Skriv inn brukernavn og passord': 'Enter username and password',
-  'Feil brukernavn eller passord': 'Incorrect username or password',
+  'Feil brukernavn eller passord, eller abonnementet er ikke aktivert ennå. Sjekk store og små bokstaver.':
+      "Incorrect username or password, or the subscription isn't activated yet. Check upper and lower case.",
   '{user} på {host}': '{user} on {host}',
-  'Får ikke kontakt med IPTV-serveren': "Can't reach the IPTV server",
-  'Serveren avviste innloggingen': 'The server rejected the login',
+  'Serveren vil ha https på denne porten. Skriv https:// foran adressen.':
+      'The server wants https on this port. Put https:// in front of the address.',
+  'Adressen er bak en nettleserkontroll (Cloudflare) som stopper IPTV-apper. Spør leverandøren om en '
+          'serveradresse for apper.':
+      'The address is behind a browser check (Cloudflare) that stops IPTV apps. Ask the provider for a server '
+          'address for apps.',
+  'Serveren avviste innloggingen (HTTP {code}). Sjekk at abonnementet er aktivt.':
+      'The server rejected the login (HTTP {code}). Check that the subscription is active.',
+  'Fant ikke Xtream Codes på adressen (HTTP 404). Sjekk serveradressen.':
+      "Couldn't find Xtream Codes at the address (HTTP 404). Check the server address.",
   'IPTV-serveren svarte HTTP {code}': 'The IPTV server responded with HTTP {code}',
+  'Serveren svarte tomt. Sjekk brukernavn og passord, og at abonnementet er aktivert.':
+      'The server sent an empty response. Check the username and password, and that the subscription is activated.',
+  'Adressen svarte med en nettside, ikke som en IPTV-server. Bruk serveradressen for Xtream Codes fra '
+          'leverandøren, ikke adressen til nettsiden deres.':
+      "The address returned a web page, not an IPTV server. Use the Xtream Codes server address from the provider, "
+          'not the address of their website.',
   'Serveren svarte ikke som en Xtream-server': "The server didn't respond like an Xtream server",
   'Kanalen har ikke TV-arkiv': "This channel doesn't have a TV archive",
+
+  // net_problem.dart
+  'Serveren svarer ikke. Sjekk adressen og porten, eller prøv igjen senere.':
+      "The server isn't responding. Check the address and port, or try again later.",
+  'Serveren svarer ikke på https på denne porten. Prøv adressen med http:// foran.':
+      "The server doesn't answer https on this port. Try the address with http:// in front.",
+  'Sertifikatet til serveren godtas ikke, så den sikre tilkoblingen (https) ble stoppet. Har du fått en '
+          'adresse med http:// fra leverandøren, bruk den.':
+      "The server's certificate isn't trusted, so the secure connection (https) was stopped. If the provider gave "
+          'you an address with http://, use that.',
+  'Den sikre tilkoblingen (https) til serveren feilet.': 'The secure connection (https) to the server failed.',
+  'Fant ikke serveren. Sjekk at adressen er skrevet riktig.':
+      "Couldn't find the server. Check that the address is spelled correctly.",
+  'Serveren tar ikke imot tilkoblinger på porten i adressen. Sjekk porten (tallet etter kolon).':
+      "The server doesn't accept connections on the port in the address. Check the port (the number after the colon).",
+  'Får ikke kontakt med serveren. Sjekk nettforbindelsen.': "Can't reach the server. Check your network connection.",
+  'Serveren brøt forbindelsen. Prøv igjen om litt.': 'The server closed the connection. Try again in a moment.',
+  'Får ikke kontakt med IPTV-serveren': "Can't reach the IPTV server",
 
   // m3u_source.dart
   'Lim inn M3U-lenken': 'Paste the M3U link',
   'Ugyldig lenke': 'Invalid link',
   'M3U-liste fra {host}': 'M3U list from {host}',
-  'Får ikke hentet M3U-lista': "Couldn't download the M3U list",
   'Får ikke hentet TV-guiden': "Couldn't download the TV guide",
   'Serveren avviste M3U-lista (HTTP {code})': 'The server denied access to the M3U list (HTTP {code})',
   'Serveren avviste TV-guiden (HTTP {code})': 'The server denied access to the TV guide (HTTP {code})',

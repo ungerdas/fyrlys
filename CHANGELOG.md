@@ -1,5 +1,20 @@
 # Endringer
 
+## v2.1.46
+
+- **Innloggingen sier hva som er galt.** I stedet for «Får ikke kontakt med IPTV-serveren» står det nå om navnet på
+  serveren ikke finnes, om porten er stengt, om serveren ikke svarer, om adressen skal ha http:// eller https://
+  foran, om sertifikatet ikke godtas, om adressen er en nettside og ikke en IPTV-server, eller om serveren svarte
+  tomt. Feil brukernavn eller passord sies med en gang, og en M3U-lenke som ikke svarer, prøves bare én gang.
+- **Stenger serveren ute VLC, prøver Fyrlys som en annen klient.** Fyrlys presenterer seg som VLC overfor
+  IPTV-leverandøren. Avviser serveren det, prøves to andre klient-ID-er (User-Agent), og den som virker, huskes for
+  innloggingen og brukes også for strømmene.
+- Innloggingen tåler flere slags servere: «auth» som *true* eller tekst, og svar med et BOM-tegn eller advarsler fra
+  PHP foran.
+- Kommer det ikke noe bilde fra en kanal (verken som HLS eller som MPEG-TS), sier beskjeden hvorfor når leverandøren
+  forteller det: alle tilkoblingene i bruk, eller at kanalen avvises (med HTTP-koden).
+- Feilrapporten viser klient-ID-en innloggingen bruker.
+
 ## v2.1.45
 
 - **Kanalvalget i multiview har mapper**, som kanallista ellers: favorittene, sist sett, alle kanalene, kategoriene du

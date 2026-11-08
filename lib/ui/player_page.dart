@@ -446,14 +446,24 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       _ended(tr('Kanalen stoppet (bildet sto fast).'));
     } else if (!_started && still > const Duration(seconds: 30)) {
       _lastMove = now;
-      if (!_nextUrl()) {
-        unawaited(_pb.stop());
-        _set(() {
-          _status = tr('Fikk ikke bilde fra kanalen.');
-          _buffering = false;
-        });
-      }
+      debugPrint('TV: ikke noe bilde etter ${still.inSeconds} s (adresse ${_url + 1} av ${t.urls.length})');
+      if (!_nextUrl()) unawaited(_noPicture(t.urls[_url]));
     }
+  }
+
+  /// Ingen av adressene ga bilde, og avspilleren sa ikke hvorfor: spør leverandøren (alle tilkoblingene i bruk, eller
+  /// HTTP-koden for [url]), så beskjeden sier mer enn at det ikke kom noe bilde.
+  Future<void> _noPicture(String url) async {
+    final my = _seq;
+    await _pb.stop();
+    final src = _source;
+    final fallback = tr('Fikk ikke bilde fra kanalen.');
+    final text = src == null ? fallback : await explainFailure(src, url, fallback: fallback);
+    if (!mounted || my != _seq || _started || _status != null) return;
+    _set(() {
+      _status = text;
+      _buffering = false;
+    });
   }
 
   /// Kodek og dekoding vises i infoen når bildet har kommet i gang, og oppdateres hvert 5. s (bitrate og tapte

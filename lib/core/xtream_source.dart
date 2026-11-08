@@ -2,17 +2,105 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
 import '../l10n/tr.dart';
 import 'failure.dart' show httpStatus;
 import 'models.dart';
+import 'net_problem.dart';
 import 'public_streams.dart';
 import 'source.dart';
 import 'vod.dart';
 
 /// Mange IPTV-leverandører avviser ukjente klienter, så appen presenterer seg som VLC.
 const xtreamUserAgent = 'VLC/3.0.21 LibVLC/3.0.21';
+
+/// Prøves etter tur ved innloggingen når serveren ikke vil svare VLC (HTTP 401/403/404, et tomt svar, en nettside
+/// eller en forbindelse som lukkes): noen leverandører stenger VLC ute, andre alt annet enn kjente apper. Den som
+/// virker, huskes for innloggingen og brukes også for strømmene.
+const loginUserAgents = [xtreamUserAgent, 'okhttp/4.12.0', 'Fyrlys'];
+
+/// JSON fra player_api.php, også når serveren har skrevet noe foran (et BOM-tegn eller advarsler fra PHP).
+Object? decodeJsonLenient(String text) {
+  try {
+    return jsonDecode(text);
+  } on FormatException {
+    final starts = [text.indexOf('{'), text.indexOf('[')]..sort();
+    for (final start in starts) {
+      if (start <= 0) continue;
+      try {
+        return jsonDecode(text.substring(start));
+      } on FormatException {
+        // prøv fra neste
+      }
+    }
+    rethrow;
+  }
+}
+
+/// `auth` i user_info: 1 hos de fleste, men noen svarer true eller «1»; mangler den, avgjør `status`.
+bool xtreamAuthorized(Map<Object?, Object?> info) {
+  final auth = info['auth'];
+  if (auth == null) return '${info['status']}'.toLowerCase() == 'active';
+  return auth == true || '$auth' == '1' || '$auth'.toLowerCase() == 'true';
+}
+
+/// En side fra Cloudflare som vil se en nettleser (eller har stengt ute klienten), ikke svaret fra serveren.
+bool _cloudflareCheck(String lower) =>
+    lower.contains('cdn-cgi/challenge-platform') ||
+    lower.contains('cf-chl') ||
+    (lower.contains('cloudflare') &&
+        (lower.contains('just a moment') || lower.contains('attention required') || lower.contains('been blocked')));
+
+/// Hva som er galt med svaret fra player_api.php ([code] og [text]), eller null når det kan tolkes.
+SourceException? xtreamResponseProblem(int code, String text) {
+  final body = text.trimLeft();
+  final lower = (body.length > 8000 ? body.substring(0, 8000) : body).toLowerCase();
+  if (code == 400 && lower.contains('plain http request was sent to https port')) {
+    return SourceException(tr('Serveren vil ha https på denne porten. Skriv https:// foran adressen.'),
+        failure: SourceFailure.unreachable);
+  }
+  if (code >= 400 && _cloudflareCheck(lower)) {
+    return SourceException(
+        tr('Adressen er bak en nettleserkontroll (Cloudflare) som stopper IPTV-apper. Spør leverandøren om en '
+            'serveradresse for apper.'),
+        failure: SourceFailure.rejected);
+  }
+  if (code == 401 || code == 403) {
+    return SourceException(tr('Serveren avviste innloggingen (HTTP {code}). Sjekk at abonnementet er aktivt.', {'code': code}),
+        failure: SourceFailure.rejected);
+  }
+  if (code == 404) {
+    return SourceException(tr('Fant ikke Xtream Codes på adressen (HTTP 404). Sjekk serveradressen.'),
+        failure: SourceFailure.notXtream);
+  }
+  if (code >= 400) return SourceException(tr('IPTV-serveren svarte HTTP {code}', {'code': code}));
+  if (body.isEmpty) {
+    return SourceException(tr('Serveren svarte tomt. Sjekk brukernavn og passord, og at abonnementet er aktivert.'),
+        failure: SourceFailure.rejected);
+  }
+  return null;
+}
+
+/// Svaret var ikke JSON: en nettside (eller en kontroll fra Cloudflare) eller noe helt annet.
+SourceException xtreamNotJson(String text) {
+  final body = text.trimLeft();
+  final lower = (body.length > 8000 ? body.substring(0, 8000) : body).toLowerCase();
+  if (_cloudflareCheck(lower)) {
+    return SourceException(
+        tr('Adressen er bak en nettleserkontroll (Cloudflare) som stopper IPTV-apper. Spør leverandøren om en '
+            'serveradresse for apper.'),
+        failure: SourceFailure.rejected);
+  }
+  if (lower.startsWith('<')) {
+    return SourceException(
+        tr('Adressen svarte med en nettside, ikke som en IPTV-server. Bruk serveradressen for Xtream Codes fra '
+            'leverandøren, ikke adressen til nettsiden deres.'),
+        failure: SourceFailure.notXtream);
+  }
+  return SourceException(tr('Serveren svarte ikke som en Xtream-server'), failure: SourceFailure.notXtream);
+}
 
 class XtreamLogin {
   const XtreamLogin(this.server, this.user, this.password);
@@ -244,13 +332,15 @@ List<EpgEntry> parseArchive(Object? d, {required DateTime now, required int days
 
 /// IPTV-leverandøren direkte (Xtream Codes).
 class XtreamSource implements TvSource {
-  XtreamSource({required this.server, required this.user, required this.password, http.Client? client})
-      : _http = client ?? http.Client();
+  XtreamSource({required this.server, required this.user, required this.password, String? userAgent, http.Client? client})
+      : _http = client ?? http.Client(),
+        _headers = Map.unmodifiable({'User-Agent': userAgent ?? xtreamUserAgent});
 
   final String server;
   final String user;
   final String password;
   final http.Client _http;
+  Map<String, String> _headers;
   Map<Object?, Object?>? _info;
 
   /// serverens klokke mot UTC (for TV-arkivet), og om den er spurt
@@ -273,10 +363,28 @@ class XtreamSource implements TvSource {
     if (u.isEmpty || p.isEmpty) throw SourceException(tr('Skriv inn brukernavn og passord'));
     final src = XtreamSource(server: l.server, user: u, password: p, client: client);
     try {
-      final info = await src._userInfo();
-      if (info == null || '${info['auth']}' != '1') throw SourceException(tr('Feil brukernavn eller passord'));
-      src._info = info;
-      return src;
+      SourceException? first;
+      for (var i = 0; i < loginUserAgents.length; i++) {
+        src._headers = Map.unmodifiable({'User-Agent': loginUserAgents[i]});
+        try {
+          final info = await src._userInfo();
+          if (info == null || !xtreamAuthorized(info)) {
+            throw SourceException(
+                tr('Feil brukernavn eller passord, eller abonnementet er ikke aktivert ennå. Sjekk store og små '
+                    'bokstaver.'),
+                failure: SourceFailure.wrongLogin);
+          }
+          if (i > 0) debugPrint('Xtream: innloggingen virket som klient ${i + 1} av ${loginUserAgents.length}');
+          src._info = info;
+          return src;
+        } on SourceException catch (e) {
+          // avvist, tomt eller en nettside: kanskje stenger serveren ute VLC, så prøv som en annen klient
+          if (e.failure != SourceFailure.rejected && e.failure != SourceFailure.notXtream) rethrow;
+          debugPrint('Xtream: innloggingen som klient ${i + 1} av ${loginUserAgents.length} ga ${e.failure.name}');
+          first ??= e;
+        }
+      }
+      throw first!;
     } on SourceException {
       src.dispose();
       rethrow;
@@ -289,8 +397,11 @@ class XtreamSource implements TvSource {
   @override
   String get label => tr('{user} på {host}', {'user': user, 'host': Uri.tryParse(server)?.host ?? server});
 
+  /// klienten serveren godtar (User-Agent), VLC med mindre innloggingen fant en annen
+  String get userAgent => _headers['User-Agent'] ?? xtreamUserAgent;
+
   @override
-  Map<String, String> get httpHeaders => const {'User-Agent': xtreamUserAgent};
+  Map<String, String> get httpHeaders => _headers;
 
   @override
   bool get hasVod => true;
@@ -302,20 +413,36 @@ class XtreamSource implements TvSource {
       if (action != null) 'action': action,
       ...params,
     });
+    // til loggen (aldri adressen: den har brukernavn og passord); ikke for programinfoen, som hentes for mange
+    // kanaler om gangen
+    final what = 'player_api.php (${action ?? 'innlogging'})';
+    void note(String line) {
+      if (action != 'get_short_epg' && action != 'get_simple_data_table') debugPrint('$what: $line');
+    }
+
     final http.Response r;
     try {
       r = await _http.get(uri, headers: httpHeaders).timeout(timeout);
-    } on Exception {
-      throw SourceException(tr('Får ikke kontakt med IPTV-serveren'));
+    } on Exception catch (e) {
+      note('ingen svar (${errorKind(e)})');
+      throw SourceException(
+        connectionProblem(e),
+        failure: closedByServer(e) ? SourceFailure.rejected : SourceFailure.unreachable,
+      );
     }
-    if (r.statusCode == 401 || r.statusCode == 403) throw SourceException(tr('Serveren avviste innloggingen'));
-    if (r.statusCode >= 400) throw SourceException(tr('IPTV-serveren svarte HTTP {code}', {'code': r.statusCode}));
+    final type = r.headers['content-type'] ?? 'uten type';
     final text = utf8.decode(r.bodyBytes, allowMalformed: true);
+    final problem = xtreamResponseProblem(r.statusCode, text);
+    if (problem != null) {
+      note('HTTP ${r.statusCode}, $type, ${r.bodyBytes.length} byte');
+      throw problem;
+    }
     try {
       // kanallista kan være mange megabyte: tolkes i bakgrunnen, så bildet ikke henger imens
-      return text.length > 200000 ? await Isolate.run(() => jsonDecode(text)) : jsonDecode(text);
+      return text.length > 200000 ? await Isolate.run(() => decodeJsonLenient(text)) : decodeJsonLenient(text);
     } on Object {
-      throw SourceException(tr('Serveren svarte ikke som en Xtream-server'));
+      note('ikke JSON (HTTP ${r.statusCode}, $type, ${r.bodyBytes.length} byte)');
+      throw xtreamNotJson(text);
     }
   }
 
@@ -561,7 +688,13 @@ class XtreamSource implements TvSource {
   }
 
   @override
-  Map<String, String> toPrefs() => {'kind': kind, 'server': server, 'user': user, 'password': password};
+  Map<String, String> toPrefs() => {
+        'kind': kind,
+        'server': server,
+        'user': user,
+        'password': password,
+        if (userAgent != xtreamUserAgent) 'ua': userAgent,
+      };
 
   @override
   void dispose() => _http.close();

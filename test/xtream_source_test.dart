@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fyrlys/core/models.dart';
@@ -112,30 +114,155 @@ void main() {
     expect(src.toPrefs(), {'kind': 'xtream', 'server': 'http://iptv.example:8080', 'user': 'bob', 'password': 'hemmelig'});
   });
 
-  test('feil passord', () async {
-    final client = MockClient((req) async => json({
-          'user_info': {'auth': 0},
-        }));
+  test('feil passord: sies med en gang, uten nye forsøk', () async {
+    var calls = 0;
+    final client = MockClient((req) async {
+      calls++;
+      return json({
+        'user_info': {'auth': 0},
+      });
+    });
     await expectLater(
       XtreamSource.login('iptv.example', 'bob', 'feil', client: client),
-      throwsA(isA<SourceException>().having((e) => e.message, 'message', 'Feil brukernavn eller passord')),
+      throwsA(isA<SourceException>()
+          .having((e) => e.message, 'message',
+              'Feil brukernavn eller passord, eller abonnementet er ikke aktivert ennå. Sjekk store og små bokstaver.')
+          .having((e) => e.failure, 'failure', SourceFailure.wrongLogin)),
     );
+    expect(calls, 1);
   });
 
-  test('ingen kontakt med serveren', () async {
-    final client = MockClient((req) async => throw http.ClientException('nede'));
-    await expectLater(
-      XtreamSource.login('iptv.example', 'bob', 'x', client: client),
-      throwsA(isA<SourceException>().having((e) => e.message, 'message', contains('kontakt'))),
-    );
+  group('innloggingen sier hva som er galt', () {
+    /// Feilmeldingen når serveren svarer med [respond], og hvor mange forespørsler det ble.
+    Future<(String, int)> failure(Future<http.Response> Function(http.Request req) respond) async {
+      var calls = 0;
+      final client = MockClient((req) {
+        calls++;
+        return respond(req);
+      });
+      try {
+        await XtreamSource.login('iptv.example:8080', 'bob', 'x', client: client);
+      } on SourceException catch (e) {
+        return (e.message, calls);
+      }
+      fail('innloggingen virket');
+    }
+
+    test('ingen svar: navnet, porten, tiden og https (ingen nye forsøk, det hjelper ikke)', () async {
+      expect(
+        await failure((_) async => throw SocketException("Failed host lookup: 'iptv.example'",
+            osError: OSError('Finner ikke verten.', 11001))),
+        ('Fant ikke serveren. Sjekk at adressen er skrevet riktig.', 1),
+      );
+      expect(
+        (await failure((_) async => throw SocketException('Connection refused', osError: OSError('Avvist', 1225)))).$1,
+        'Serveren tar ikke imot tilkoblinger på porten i adressen. Sjekk porten (tallet etter kolon).',
+      );
+      expect(
+        (await failure((_) async => throw SocketException('Connection refused', osError: OSError('refused', 111)))).$1,
+        startsWith('Serveren tar ikke imot tilkoblinger'),
+      );
+      expect(
+        (await failure((_) async => throw TimeoutException('treg'))).$1,
+        'Serveren svarer ikke. Sjekk adressen og porten, eller prøv igjen senere.',
+      );
+      expect(
+        (await failure((_) async => throw HandshakeException(
+            'Handshake error in client', OSError('WRONG_VERSION_NUMBER(tls_record.cc:242)', 268435703)))).$1,
+        'Serveren svarer ikke på https på denne porten. Prøv adressen med http:// foran.',
+      );
+      expect(
+        (await failure((_) async => throw HandshakeException('Handshake error in client',
+            OSError('CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate(handshake.cc:393)', 1)))).$1,
+        startsWith('Sertifikatet til serveren godtas ikke'),
+      );
+      expect(await failure((_) async => throw http.ClientException('nede')), ('Får ikke kontakt med IPTV-serveren', 1));
+    });
+
+    test('svar som ikke er Xtream: en nettside, Cloudflare, http mot https, 404 og tomt', () async {
+      expect(
+        await failure((_) async => http.Response('<!DOCTYPE html><html><head><title>Min side</title></head></html>', 200)),
+        (
+          'Adressen svarte med en nettside, ikke som en IPTV-server. Bruk serveradressen for Xtream Codes fra '
+              'leverandøren, ikke adressen til nettsiden deres.',
+          loginUserAgents.length,
+        ),
+      );
+      expect(
+        (await failure((_) async => http.Response(
+            '<html><head><title>Just a moment...</title></head><body><script src="/cdn-cgi/challenge-platform/x.js">'
+            '</script></body></html>',
+            403))).$1,
+        startsWith('Adressen er bak en nettleserkontroll (Cloudflare)'),
+      );
+      expect(
+        await failure((_) async =>
+            http.Response('<html><head><title>400 The plain HTTP request was sent to HTTPS port</title></head></html>', 400)),
+        ('Serveren vil ha https på denne porten. Skriv https:// foran adressen.', 1),
+      );
+      expect(
+        (await failure((_) async => http.Response('Not Found', 404))).$1,
+        'Fant ikke Xtream Codes på adressen (HTTP 404). Sjekk serveradressen.',
+      );
+      expect(
+        await failure((_) async => http.Response('', 200)),
+        (
+          'Serveren svarte tomt. Sjekk brukernavn og passord, og at abonnementet er aktivert.',
+          loginUserAgents.length,
+        ),
+      );
+      // avvist hver gang: det serveren svarte VLC, etter at de andre også er prøvd
+      expect(
+        await failure((_) async => http.Response('<center>nginx</center>', 403)),
+        ('Serveren avviste innloggingen (HTTP 403). Sjekk at abonnementet er aktivt.', loginUserAgents.length),
+      );
+    });
   });
 
-  test('serveren svarer ikke med JSON', () async {
-    final client = MockClient((req) async => http.Response('<html>hei</html>', 200));
-    await expectLater(
-      XtreamSource.login('iptv.example', 'bob', 'x', client: client),
-      throwsA(isA<SourceException>().having((e) => e.message, 'message', contains('Xtream'))),
+  test('stenger serveren ute VLC, prøves en annen klient, og den brukes videre (også for strømmene)', () async {
+    final agents = <String?>[];
+    final client = MockClient((req) async {
+      final agent = req.headers['User-Agent'];
+      agents.add(agent);
+      if (agent == xtreamUserAgent) return http.Response('', 200);
+      if (agent == loginUserAgents[1]) throw http.ClientException('Connection closed before full header was received');
+      if (req.url.queryParameters['action'] == 'get_live_streams') {
+        return json([
+          {'num': 1, 'name': 'TV 2', 'stream_id': 102, 'category_id': '1'},
+        ]);
+      }
+      return json({
+        'user_info': {'auth': 1, 'status': 'Active'},
+      });
+    });
+    final src = await XtreamSource.login('iptv.example:8080', 'bob', 'hemmelig', client: client);
+    expect(agents, loginUserAgents);
+    expect(src.userAgent, loginUserAgents[2]);
+    expect(src.httpHeaders, {'User-Agent': loginUserAgents[2]});
+    expect((await src.channels()).single.name, 'TV 2');
+    expect(agents.last, loginUserAgents[2]);
+    expect(src.toPrefs(), containsPair('ua', loginUserAgents[2]));
+    expect(XtreamSource(server: 's', user: 'u', password: 'p', userAgent: src.toPrefs()['ua']).httpHeaders,
+        {'User-Agent': loginUserAgents[2]});
+  });
+
+  test('auth som true, «1» eller bare status, og JSON med BOM eller PHP-advarsler foran', () async {
+    Future<String> loginWith(String body) async {
+      final src = await XtreamSource.login('iptv.example', 'bob', 'x', client: MockClient((_) async => http.Response.bytes(utf8.encode(body), 200)));
+      return src.userAgent;
+    }
+
+    expect(await loginWith('{"user_info":{"auth":true}}'), xtreamUserAgent);
+    expect(await loginWith('{"user_info":{"auth":"1"}}'), xtreamUserAgent);
+    expect(await loginWith('{"user_info":{"status":"Active"}}'), xtreamUserAgent);
+    expect(await loginWith('\uFEFF{"user_info":{"auth":1}}'), xtreamUserAgent);
+    expect(
+      await loginWith('<br />\n<b>Warning</b>:  Undefined index in /var/www/player_api.php on line 12<br />\n'
+          '{"user_info":{"auth":1,"status":"Active"}}'),
+      xtreamUserAgent,
     );
+    expect(decodeJsonLenient('[1, 2]'), [1, 2]);
+    expect(() => decodeJsonLenient('<html>{ikke json}</html>'), throwsFormatException);
   });
 
   test('passord med spesialtegn kodes i adressene, og innloggingen vises aldri i feiltekster', () {

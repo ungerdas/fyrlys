@@ -47,6 +47,8 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
     } on Object catch (e) {
       out.writeln('${tr('Abonnement')}: ${tr('fikk ikke svar')} ($e)');
     }
+    // klienten leverandøren godtok (VLC, med mindre innloggingen måtte prøve en annen)
+    out.writeln('User-Agent: ${src.httpHeaders['User-Agent'] ?? '–'}');
     final archive = s.channels.where((c) => c.hasArchive).length;
     out.writeln('${tr('Kanaler')}: ${s.channels.length} · ${tr('kategorier')}: ${s.categories.length}'
         ' · ${tr('TV-arkiv')}: $archive · ${tr('filmer og serier')}: ${onOff(src.hasVod)}');

@@ -7,6 +7,7 @@ import 'package:fyrlys/core/public_streams.dart';
 import 'package:fyrlys/core/secrets.dart';
 import 'package:fyrlys/core/session.dart';
 import 'package:fyrlys/core/source.dart';
+import 'package:fyrlys/core/xtream_source.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -202,6 +203,53 @@ void main() {
       );
       expect(s.source?.kind, 'm3u');
       expect(s.source?.hasVod, isFalse);
+    });
+
+    test('svarer ikke adressen i en Xtream-lenke, prøves ikke lista der også, og feilen sier hvorfor', () async {
+      final s = await session();
+      var calls = 0;
+      await expectLater(
+        http.runWithClient(
+          () => s.loginM3u('http://xt.example:8080/get.php?username=kari&password=hemmelig&type=m3u_plus'),
+          () => MockClient((r) async {
+            calls++;
+            throw SocketException("Failed host lookup: 'xt.example'", osError: OSError('Name or service not known', -2));
+          }),
+        ),
+        throwsA(isA<SourceException>()
+            .having((e) => e.message, 'message', 'Fant ikke serveren. Sjekk at adressen er skrevet riktig.')),
+      );
+      expect(calls, 1);
+      expect(s.source, isNull);
+    });
+
+    test('feil passord i en Xtream-lenke: det Xtream-serveren sa, ikke det lista ga', () async {
+      final s = await session();
+      await expectLater(
+        http.runWithClient(
+          () => s.loginM3u('http://xt.example:8080/get.php?username=kari&password=feil&type=m3u_plus'),
+          () => MockClient((r) async => r.url.path.endsWith('get.php') ? http.Response('', 403) : xtream(r, auth: false)),
+        ),
+        throwsA(isA<SourceException>().having((e) => e.failure, 'failure', SourceFailure.wrongLogin)),
+      );
+      expect(s.source, isNull);
+    });
+
+    test('en server som stenger ute VLC: klienten som virket, huskes til neste gang', () async {
+      final s = await session();
+      await http.runWithClient(
+        () => s.loginXtream('xt.example:8080', 'kari', 'hemmelig'),
+        () => MockClient((r) async => r.headers['User-Agent'] == xtreamUserAgent ? http.Response('', 403) : xtream(r)),
+      );
+      expect(s.source?.httpHeaders, {'User-Agent': loginUserAgents[1]});
+      final prefs = await SharedPreferences.getInstance();
+      expect(jsonDecode(prefs.getString('login_source:${s.activeLogin}')!), containsPair('ua', loginUserAgents[1]));
+
+      final next = Session(prefs);
+      await http.runWithClient(next.restore, () => MockClient((r) async => xtream(r)));
+      expect(next.activeLogin, s.activeLogin);
+      expect(next.source?.httpHeaders, {'User-Agent': loginUserAgents[1]});
+      next.source!.dispose();
     });
 
     test('en vanlig M3U-lenke, med EPG-lenke, huskes til neste gang', () async {

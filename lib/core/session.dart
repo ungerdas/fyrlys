@@ -318,7 +318,7 @@ class Session extends ChangeNotifier {
         final user = s['user'];
         final password = s['password'];
         if (server == null || user == null || password == null) return null;
-        return XtreamSource(server: server, user: user, password: password);
+        return XtreamSource(server: server, user: user, password: password, userAgent: s['ua']);
     }
     return null;
   }
@@ -329,15 +329,27 @@ class Session extends ChangeNotifier {
     final address = M3uSource.normalize(link);
     final login = cleanServer(address);
     final path = Uri.parse(address).path;
+    SourceException? xtream;
     if (login.user != null && login.password != null && (path.endsWith('get.php') || path.endsWith('player_api.php'))) {
       try {
         await _use(await XtreamSource.login(address, '', ''));
         return;
-      } on SourceException {
-        // ikke en Xtream-server likevel: lista leses som den er
+      } on SourceException catch (e) {
+        // ingen svar fra adressen: lista ligger på samme sted, så det er ikke noe mer å prøve
+        if (e.failure == SourceFailure.unreachable) rethrow;
+        // ellers kanskje ikke en Xtream-server likevel: lista leses som den er
+        xtream = e;
       }
     }
-    await _use(await M3uSource.connect(address, epgUrl: epg));
+    try {
+      await _use(await M3uSource.connect(address, epgUrl: epg));
+    } on SourceException {
+      // feil innlogging, eller avvist: det Xtream-serveren svarte, sier mer enn det lista ga
+      if (xtream != null && (xtream.failure == SourceFailure.wrongLogin || xtream.failure == SourceFailure.rejected)) {
+        throw xtream;
+      }
+      rethrow;
+    }
   }
 
   Future<void> loginXtream(String server, String user, String password) async =>

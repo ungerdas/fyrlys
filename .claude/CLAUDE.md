@@ -127,6 +127,21 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   begynner (et helt minutt). `Channel.archiveDays`/`hasArchive` (JSON `arc`). Bare Xtream; M3U har det ikke.
   - `core/xtream_source.dart` – Xtream Codes (port av `xtream.py`): `player_api.php`,
     User-Agent som VLC, strøm `/live/<bruker>/<passord>/<id>.m3u8` og `.ts` som reserve, EPG i base64.
+    Innloggingen (2.1.46, eieren 8.11 fikk ikke lagt inn et nytt abonnement, men kanalene kom til slutt): feilene har
+    `SourceFailure` (`source.dart`: unreachable/rejected/notXtream/wrongLogin/other). `xtreamResponseProblem`
+    (HTTP 400 «plain HTTP request was sent to HTTPS port», Cloudflare-sider, 401/403, 404, tomt svar) og
+    `xtreamNotJson` (nettside, ellers «ikke som en Xtream-server"); `decodeJsonLenient` tåler BOM og PHP-advarsler
+    foran JSON-en; `xtreamAuthorized` godtar auth 1/«1»/true (uten auth: status Active). Ved rejected/notXtream
+    prøves `loginUserAgents` etter tur (VLC, `okhttp/4.12.0`, `Fyrlys`), aldri ved feil passord (sperring for mange
+    forsøk); den som virket, står som `ua` i `toPrefs` (bare når den ikke er VLC, så id-en er den samme) og brukes for
+    alt (`httpHeaders`). `core/net_problem.dart`: `connectionProblem` (navnet finnes ikke, 111/61/10061/1225
+    avvist, 110/60/10060/121 tidsavbrudd, ingen rute, https mot en http-port, sertifikat; uten vertsnavnet, fordi
+    `scrub` bare tar vertsnavn i adresser og meldingen kan havne i loggen og feilrapporten), `closedByServer` (en
+    forbindelse som lukkes uten svar regnes som avvist, nginx «444»), `errorKind` til loggen (aldri adressen:
+    `_ClientSocketException.toString()` har hele adressen med brukernavn og passord). `_api` logger feil (ikke for
+    `get_short_epg`/`get_simple_data_table`, som hentes for mange kanaler). `Session.loginM3u`: unreachable fra
+    Xtream-forsøket kastes med en gang (lista ligger på samme sted), og feiler lista også, vises Xtream-feilen når den
+    var wrongLogin eller rejected.
     Arkivet: `tv_archive`/`tv_archive_duration` i get_live_streams, programmene fra `get_simple_data_table`
     (`parseArchive`: begynt de siste N dagene, `has_archive` 0 = ikke lagret, det som går nå kan alltid ses fra start),
     strømmen `/timeshift/<bruker>/<passord>/<minutter>/<ÅÅÅÅ-MM-DD:TT-MM>/<id>.m3u8` (så `.ts`), på minuttet, ut
@@ -691,6 +706,13 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 5.11.2026: 2.1.41: rekkefølgen på bibliotekene i Plex-fanen (se Plex under Arkitektur). Testet med tester og den
   falske Plex-serveren (`homeVideos` gir et tredje bibliotek). Eieren tok den i bruk samme dag (bilde: TV-serier over
   Filmer), men ville ikke ha pilene i sidemenyen hele tiden; 2.1.42 har dem bare i valget av biblioteker.
+- 8.11.2026: 2.1.46: eieren 8.11 fikk ikke lagt inn et nytt IPTV-abonnement (Xtream Codes etter leverandørens
+  guide), men kanalene kom til slutt (trolig bare treg første henting av en stor liste; feilmeldingen han så, er ikke
+  kjent). Innloggingen sier nå hva som er galt, og prøver andre klient-ID-er når VLC avvises (se `xtream_source.dart`
+  under Arkitektur). Testet med tester; ikke prøvd mot en server som faktisk stenger ute VLC. Samme kveld, med det nye
+  abonnementet: TV-spilleren sto og spant på en kanal («HLS rett fra leverandøren», ikke noe bilde); spurt om
+  feilrapport og om en NRK-kanal virker. TV-spilleren: kommer det ikke bilde fra den siste adressen på 30 s, spør
+  `_noPicture` leverandøren (`explainFailure`) før beskjeden vises.
 - 8.11.2026: 2.1.45: eieren 8.11: multiview krasjet da han valgte kanal («Sikkert fordi det var for mange
   kanaler»); ingen feilrapport. Kanalvalget har mapper (se `ui/multiview_page.dart`), bildene hentes høyst åtte om
   gangen (`ImageStore`), og loggen ligger på disk, så slutten kommer med i rapporten etter et krasj. Årsaken til

@@ -3,12 +3,14 @@ import 'dart:io' show gzip;
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
 import '../l10n/tr.dart';
 import 'cache.dart' show stableHash;
 import 'failure.dart' show httpStatus;
 import 'models.dart';
+import 'net_problem.dart';
 import 'public_streams.dart';
 import 'source.dart';
 import 'vod.dart';
@@ -267,8 +269,10 @@ class M3uSource implements TvSource {
     final http.Response r;
     try {
       r = await _http.get(Uri.parse(address), headers: httpHeaders).timeout(const Duration(minutes: 3));
-    } on Exception {
-      throw SourceException(guide ? tr('Får ikke hentet TV-guiden') : tr('Får ikke hentet M3U-lista'));
+    } on Exception catch (e) {
+      debugPrint('${guide ? 'TV-guiden' : 'M3U-lista'}: ingen svar (${errorKind(e)})');
+      if (guide) throw SourceException(tr('Får ikke hentet TV-guiden'));
+      throw SourceException(connectionProblem(e), failure: SourceFailure.unreachable);
     }
     final code = {'code': r.statusCode};
     if (r.statusCode == 401 || r.statusCode == 403) {

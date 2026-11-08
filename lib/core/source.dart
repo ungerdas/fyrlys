@@ -1,10 +1,29 @@
 import 'models.dart';
 import 'vod.dart';
 
+/// Hva slags feil det var, der det betyr noe for hva som prøves videre ved innloggingen.
+enum SourceFailure {
+  /// ikke noe svar fra adressen (navnet finnes ikke, porten er stengt, tidsavbrudd, https som ikke virker): å prøve
+  /// den samme adressen på en annen måte hjelper ikke
+  unreachable,
+
+  /// serveren svarte, men avviste forespørselen (HTTP 401/403) eller svarte tomt
+  rejected,
+
+  /// serveren svarte, men ikke som en Xtream-server (en nettside, HTTP 404, ikke JSON)
+  notXtream,
+
+  /// leverandøren sa at brukernavnet eller passordet er feil
+  wrongLogin,
+
+  other,
+}
+
 class SourceException implements Exception {
-  const SourceException(this.message);
+  const SourceException(this.message, {this.failure = SourceFailure.other});
 
   final String message;
+  final SourceFailure failure;
 
   @override
   String toString() => message;
