@@ -710,9 +710,15 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   guide), men kanalene kom til slutt (trolig bare treg første henting av en stor liste; feilmeldingen han så, er ikke
   kjent). Innloggingen sier nå hva som er galt, og prøver andre klient-ID-er når VLC avvises (se `xtream_source.dart`
   under Arkitektur). Testet med tester; ikke prøvd mot en server som faktisk stenger ute VLC. Samme kveld, med det nye
-  abonnementet: TV-spilleren sto og spant på en kanal («HLS rett fra leverandøren», ikke noe bilde); spurt om
-  feilrapport og om en NRK-kanal virker. TV-spilleren: kommer det ikke bilde fra den siste adressen på 30 s, spør
-  `_noPicture` leverandøren (`explainFailure`) før beskjeden vises.
+  abonnementet: TV-spilleren sto og spant på en kanal («HLS rett fra leverandøren», ikke noe bilde). TV-spilleren:
+  kommer det ikke bilde fra den siste adressen på 30 s, spør `_noPicture` leverandøren (`explainFailure`) før
+  beskjeden vises. Loggen (lest rett fra PC-en hans med mappetilgang til `%APPDATA%\Fyrlys\Fyrlys`, `logg.txt`) viste
+  at strømserveren ikke svarte (ingen svar, eller «curl: error: Could not connect to server»), mens lista kom fra
+  leverandøren som vanlig; ingen app virket hjemme, men det virket på mobilnett, så hjemme med AdGuard av, og med
+  AdGuard på igjen (også dagen etter, da DNS-minnet i Windows var gått ut). Trolig midlertidig hos leverandøren (nytt
+  abonnement), ikke AdGuard. Tilbudt, ikke laget: en beskjed når lista svarer, men strømserveren ikke gjør det. Å
+  lese loggen: «playlist: Reading plaintext playlist» kommer ved hver åpning (media_kit åpner med `loadlist` fra en
+  midlertidig fil) og er ufarlig; mpv-en (zhongfly) henter http med curl, så nettfeilene heter «curl: …».
 - 8.11.2026: 2.1.45: eieren 8.11: multiview krasjet da han valgte kanal («Sikkert fordi det var for mange
   kanaler»); ingen feilrapport. Kanalvalget har mapper (se `ui/multiview_page.dart`), bildene hentes høyst åtte om
   gangen (`ImageStore`), og loggen ligger på disk, så slutten kommer med i rapporten etter et krasj. Årsaken til
