@@ -94,6 +94,7 @@ class _ChannelCardState extends State<ChannelCard> {
                 style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
               ),
             TextSpan(text: parts.main),
+            if (ch.quality != null) qualitySpan(ch.quality!),
           ]),
           maxLines: lines,
           overflow: TextOverflow.ellipsis,
@@ -223,6 +224,36 @@ class _ChannelCardState extends State<ChannelCard> {
                   ),
               ],
             ),
+    );
+  }
+}
+
+/// Kvaliteten etter navnet («720p», «H265», «4K»), når den ikke er den vanlige (se tidyChannelName).
+InlineSpan qualitySpan(String quality) => WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: Padding(padding: const EdgeInsets.only(left: 6), child: QualityBadge(quality)),
+    );
+
+/// Et lite merke med kvaliteten.
+class QualityBadge extends StatelessWidget {
+  const QualityBadge(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      key: ValueKey('kvalitet:$text'),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.outline),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 10, height: 1.2, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
+      ),
     );
   }
 }

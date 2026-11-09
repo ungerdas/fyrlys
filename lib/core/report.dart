@@ -52,6 +52,9 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
     final archive = s.channels.where((c) => c.hasArchive).length;
     out.writeln('${tr('Kanaler')}: ${s.channels.length} · ${tr('kategorier')}: ${s.categories.length}'
         ' · ${tr('TV-arkiv')}: $archive · ${tr('filmer og serier')}: ${onOff(src.hasVod)}');
+    final shown = s.shownCountries;
+    final countries = shown == null ? tr('alle') : ([for (final c in shown) c.isEmpty ? '–' : c]..sort()).join(', ');
+    out.writeln('${tr('Land som vises')}: $countries · ${tr('Ryddige navn')}: ${onOff(s.tidyNames)}');
   }
   if (s.error != null) out.writeln('${tr('Feil i listene')}: ${s.error}');
   out.writeln('Plex: ${s.plex.reportLine}');

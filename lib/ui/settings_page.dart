@@ -12,6 +12,7 @@ import '../core/updater.dart';
 import '../l10n/dates.dart';
 import '../l10n/tr.dart';
 import '../platform.dart';
+import 'country_dialog.dart';
 import 'language_dialog.dart';
 import 'login_page.dart';
 import 'motion.dart';
@@ -183,7 +184,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               _Section(title: tr('Utseende'), children: [_theme(), _language()]),
               _Section(title: tr('Avspilling'), children: _playback()),
-              _Section(title: tr('Kanaler og TV-guide'), children: [_lists()]),
+              _Section(title: tr('Kanaler og TV-guide'), children: [..._channelLists(), _lists()]),
               if (u != null && u.enabled)
                 _Section(
                   title: tr('Oppdateringer'),
@@ -451,6 +452,28 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     ];
   }
+
+  /// Hvilke land som vises, og ryddige navn.
+  List<Widget> _channelLists() => [
+        if (s.hasCountries)
+          ListTile(
+            key: const ValueKey('velg-land'),
+            leading: const Icon(Icons.public),
+            title: Text(tr('Land som vises')),
+            subtitle: Text(countriesSummary(s.shownCountries)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => unawaited(showCountryDialog(context, s)),
+          ),
+        SwitchListTile(
+          key: const ValueKey('rydd-navn'),
+          secondary: const Icon(Icons.auto_fix_high),
+          title: Text(tr('Ryddige kanalnavn')),
+          subtitle: Text(tr('«NOR: TV 2 [720p]» blir «TV 2» med et lite merke for kvaliteten. Kategoriene ryddes på samme '
+              'måte.')),
+          value: s.tidyNames,
+          onChanged: (v) => unawaited(s.setTidyNames(v)),
+        ),
+      ];
 
   Widget _lists() => ListTile(
         leading: const Icon(Icons.refresh),

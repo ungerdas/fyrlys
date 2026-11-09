@@ -35,9 +35,12 @@ final _countryAfter = RegExp(r'[\[\(]?\s*\b(no|nor|norge|norway)\b\s*[\]\)]?\s*$
 /// Kvalitet og slikt, også i klammer: «HD», «FHD», «(1080i)», «[HEVC]», «50fps».
 final _qualityWords = RegExp(r'\b(fhd|uhd|hd|sd|4k|hevc|h\.?26[45]|\d{3,4}[pi]|50 ?fps)\b');
 
-/// Kanalnavnet uten land, kvalitet og tegn: «NO: NRK 1 FHD» og «NRK 1 HD NO» → «nrk1».
+/// Et annet merke foran navnet: «GOLD: NRK1 [1080p]», «VIP: NRK2».
+final _tagBefore = RegExp(r'^\s*[a-z][a-z0-9+]{1,7}\s*:\s*');
+
+/// Kanalnavnet uten land, kvalitet og tegn: «NO: NRK 1 FHD», «GOLD: NRK1 [1080p]» og «NRK 1 HD NO» → «nrk1».
 String _clean(String name) {
-  var n = name.toLowerCase().replaceFirst(_countryBefore, '');
+  var n = name.toLowerCase().replaceFirst(_countryBefore, '').replaceFirst(_tagBefore, '');
   n = n.replaceAll(_qualityWords, ' ').replaceFirst(_countryAfter, '').replaceAll(RegExp(r'[^a-z0-9]'), '');
   // det som er igjen av «|NO| NRK1» og «NRK1HD»
   return n.replaceFirst(RegExp(r'^(norway|norge|nor|no)(?=nrk)'), '').replaceFirst(RegExp(r'(fhd|uhd|hd|sd|4k)$'), '');
@@ -90,8 +93,9 @@ int _rank(Channel c) {
 }
 
 /// Leverandørens varianter av NRK1, NRK2, NRK3 og NRK Super blir én kanal hver, der den første varianten sto
-/// (NRK Super rett etter NRK3). Den beste varianten gir id, logo, guide og arkiv, slik at favoritter og
-/// «sist sett» på den beholdes. Er det bare én, og den ikke er delt, står den som den er. Kan kjøres flere ganger.
+/// (NRK Super rett etter NRK3). Ligger variantene i flere kategorier (en for 1080p og en for 720p), står den i
+/// kategorien til den beste. Den beste varianten gir id, logo, guide og arkiv, slik at favoritter og «sist sett» på
+/// den beholdes. Er det bare én, og den ikke er delt, står den som den er. Kan kjøres flere ganger.
 List<Channel> mergePublicChannels(List<Channel> channels) {
   final groups = <String, List<Channel>>{};
   for (final c in channels) {
@@ -100,6 +104,12 @@ List<Channel> mergePublicChannels(List<Channel> channels) {
     }
   }
   if (groups.isEmpty) return channels;
+  // plassen: den første varianten i kategorien til den beste
+  final place = <String, Channel>{};
+  for (final e in groups.entries) {
+    final category = _ranked(e.value).first.categoryId;
+    place[e.key] = e.value.firstWhere((c) => c.categoryId == category);
+  }
   final used = <String>{};
   final done = <String>{};
   final out = <Channel>[];
@@ -110,19 +120,24 @@ List<Channel> mergePublicChannels(List<Channel> channels) {
       continue;
     }
     for (final k in keys) {
-      if (done.add(k)) out.add(_merge(k, groups[k]!, used));
+      if (identical(place[k], c) && done.add(k)) out.add(_merge(k, groups[k]!, used, c.categoryId));
     }
   }
   return out;
 }
 
-Channel _merge(String key, List<Channel> variants, Set<String> used) {
+/// Variantene med den beste først (se [_rank]); like gode i den rekkefølgen de står.
+List<Channel> _ranked(List<Channel> variants) {
   int order(Channel a, Channel b) {
     final d = _rank(b).compareTo(_rank(a));
     return d != 0 ? d : variants.indexOf(a).compareTo(variants.indexOf(b));
   }
 
-  final ranked = [...variants]..sort(order);
+  return [...variants]..sort(order);
+}
+
+Channel _merge(String key, List<Channel> variants, Set<String> used, String categoryId) {
+  final ranked = _ranked(variants);
   final best = ranked.first;
   if (variants.length == 1 && publicStreamKeys(best.name).length == 1 && used.add(best.id)) return best;
   // id-en til den beste varianten som ikke er tatt (NRK3 og NRK Super deler variantene av «NRK 3/SUPER»)
@@ -134,7 +149,7 @@ Channel _merge(String key, List<Channel> variants, Set<String> used) {
   return Channel(
     id: id,
     name: publicNames[key]!,
-    categoryId: variants.first.categoryId,
+    categoryId: categoryId,
     icon: pick.icon ?? best.icon,
     number: first.first.number,
     hasEpg: pick.hasEpg,

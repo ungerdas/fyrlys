@@ -205,4 +205,21 @@ const enSettings = <String, String>{
   'Som telefonen': 'Same as the phone',
   '{version} er klar til å installeres': '{version} is ready to install',
   '{version} er lastet ned. Trykk Installer.': '{version} is downloaded. Tap Install.',
+
+  // settings_page.dart, country_dialog.dart og home_page.dart: landene og navnene
+  'Ryddige kanalnavn': 'Tidy channel names',
+  '«NOR: TV 2 [720p]» blir «TV 2» med et lite merke for kvaliteten. Kategoriene ryddes på samme måte.':
+      '«NOR: TV 2 [720p]» becomes «TV 2» with a small quality badge. Categories are tidied the same way.',
+  'Velg land': 'Choose countries',
+  'Alle land': 'All countries',
+  '{names} og {n} til': '{names} and {n} more',
+  'Kategoriene fra landene du krysser av, vises. Favorittene og «Sist sett» står som før.':
+      'Categories from the countries you tick are shown. Favourites and «Recently watched» stay as they are.',
+  'Alle': 'All',
+  'Ingen': 'None',
+  '1 kategori': '1 category',
+  '{n} kategorier': '{n} categories',
+  '1 kanal': '1 channel',
+  '{n} kanaler': '{n} channels',
+  'Bruk': 'Apply',
 };

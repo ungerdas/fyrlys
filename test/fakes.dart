@@ -19,10 +19,14 @@ class FakeSource implements TvSource {
     this.withArchive = false,
     this.connections = 0,
     this.list,
+    this.categoryList,
   });
 
   /// andre kanaler enn de vanlige tre
   final List<Channel>? list;
+
+  /// andre kategorier enn «Norge» og «Sport»
+  final List<Category>? categoryList;
 
   /// tilkoblinger i abonnementet (0: oppgir det ikke)
   int connections;
@@ -64,7 +68,7 @@ class FakeSource implements TvSource {
 
   @override
   Future<List<Category>> categories({bool force = false}) async =>
-      const [Category(id: '1', name: 'Norge'), Category(id: '2', name: 'Sport')];
+      categoryList ?? const [Category(id: '1', name: 'Norge'), Category(id: '2', name: 'Sport')];
 
   @override
   Future<List<Channel>> channels({bool force = false}) async => list ?? [

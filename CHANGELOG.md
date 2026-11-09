@@ -1,5 +1,19 @@
 # Endringer
 
+## v2.1.47
+
+- **Velg hvilke land som vises.** Fyrlys finner landene i kategorinavnene («NO: …», «SE: …», «UK | …», «Norway -
+  …») og lar deg krysse av for dem du vil se: tannhjulet → Kanaler og TV-guide → «Land som vises», eller kloden ved
+  «Alle kategorier» på TV-siden. Resten skjules fra kategoriene, «Alle kanaler», søket og TV-guiden. Favorittene og
+  «Sist sett» står som før, og valget gjelder innloggingen du bruker.
+- **Ryddige kanalnavn.** «NOR: TV 2 [720p]» blir «TV 2» med et lite 720p-merke, og «VIP: NRK1 ØSTLANDET [1080p]» blir
+  «NRK1 ØSTLANDET» (1080p er det vanlige og får ikke merke). Kategoriene ryddes på samme måte: «NO: VIAPLAY [PPV
+  EVENTS] [1080p]» blir «VIAPLAY · PPV EVENTS». Vises flere land, står landet igjen foran kategorinavnet. Kan slås
+  av i innstillingene.
+- NRK1, NRK2, NRK3 og NRK Super kjennes igjen også med et merke foran navnet («VIP: NRK1 [1080p]»), så de spilles fra
+  NRK. Ligger variantene i flere kategorier (en for 1080p og en for 720p), står den samlede kanalen der den beste var.
+- Feilrapporten viser hvilke land som vises, og om navnene ryddes.
+
 ## v2.1.46
 
 - **Innloggingen sier hva som er galt.** I stedet for «Får ikke kontakt med IPTV-serveren» står det nå om navnet på

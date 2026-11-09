@@ -17,6 +17,7 @@ import 'plex/plex_account.dart';
 import 'public_streams.dart';
 import 'secrets.dart';
 import 'source.dart';
+import 'tidy.dart';
 import 'vod.dart';
 import 'xtream_source.dart';
 
@@ -117,6 +118,10 @@ class Session extends ChangeNotifier {
   List<Channel> channels = const [];
   Map<String, int> categoryCounts = const {};
   bool loading = false;
+
+  /// lista slik leverandøren sendte den (det over er den, med landene du har valgt og ryddige navn)
+  List<Category> _rawCategories = const [];
+  List<Channel> _rawChannels = const [];
   String? error;
 
   List<Channel> favorites = const [];
@@ -436,6 +441,9 @@ class Session extends ChangeNotifier {
     categories = const [];
     channels = const [];
     categoryCounts = const {};
+    _rawCategories = const [];
+    _rawChannels = const [];
+    _countryGroups = null;
     _byId = const {};
     _filtered.clear();
     _epg.clear();
@@ -461,6 +469,9 @@ class Session extends ChangeNotifier {
     categories = const [];
     channels = const [];
     categoryCounts = const {};
+    _rawCategories = const [];
+    _rawChannels = const [];
+    _countryGroups = null;
     favorites = const [];
     favoriteCategories = const [];
     recent = const [];
@@ -508,25 +519,96 @@ class Session extends ChangeNotifier {
       id == activeLogin ? favoriteCategories : _prefs.getStringList('favoriteCategories@$id') ?? const [];
 
   /// Kategoriene og kanalene til en innlogging: lista som er i bruk, eller for en annen innlogging lista fra sist den
-  /// var i bruk (på disk), ellers hentet med [src]. Bare kategorier med kanaler, og NRK samlet som ellers.
+  /// var i bruk (på disk), ellers hentet med [src]. Som lista ellers vises (se [_prepare]).
   Future<SavedLists> listsOf(String id, TvSource src) async {
     if (id == activeLogin && identical(src, source) && channels.isNotEmpty) {
       return (categories: categories, channels: channels);
     }
     final saved = await listCache?.read(id);
-    if (saved != null && saved.channels.isNotEmpty) return _withChannels(saved.categories, saved.channels);
+    if (saved != null && saved.channels.isNotEmpty) return _prepare(id, saved.categories, saved.channels);
     final cats = await src.categories();
     final all = await src.channels();
-    final lists = _withChannels(cats, all);
-    unawaited(listCache?.write(id, lists.categories, lists.channels));
-    return lists;
+    unawaited(listCache?.write(id, cats, all));
+    return _prepare(id, cats, all);
   }
 
-  static SavedLists _withChannels(List<Category> cats, List<Channel> all) {
-    final chans = mergePublicChannels(all);
+  /// Lista til innloggingen [id] slik den vises: bare landene du har valgt (se [setShownCountries]), NRK samlet til én
+  /// kanal hver, ryddige navn (se [tidyNames]), og bare kategorier med kanaler.
+  SavedLists _prepare(String? id, List<Category> rawCategories, List<Channel> rawChannels) {
+    final countryOfCategory = {for (final c in rawCategories) c.id: countryOf(c.name) ?? ''};
+    var cats = rawCategories;
+    var all = rawChannels;
+    final shown = id == null ? null : _shownCountriesOf(id);
+    if (shown != null) {
+      final kept = [for (final c in all) if (shown.contains(countryOfCategory[c.categoryId] ?? '')) c];
+      // ingen av landene finnes (leverandøren har byttet navn på kategoriene): heller alt enn ingenting
+      if (kept.isNotEmpty) {
+        cats = [for (final c in cats) if (shown.contains(countryOfCategory[c.id])) c];
+        all = kept;
+      }
+    }
+    var chans = mergePublicChannels(all);
+    if (tidyNames) {
+      // flere land: koden står igjen foran kategorinavnet («SE · SPORT»), ellers blir to kategorier like
+      final countries = {for (final c in cats) countryOfCategory[c.id]}..remove('');
+      final several = countries.length > 1;
+      cats = [
+        for (final c in cats) Category(id: c.id, name: tidyCategoryName(c.name, keepCountry: several), count: c.count),
+      ];
+      chans = [
+        for (final c in chans)
+          if (tidyChannelName(c.name) case final t when t.name != c.name || t.quality != null)
+            c.tidied(name: t.name, quality: t.quality)
+          else
+            c,
+      ];
+    }
     final used = {for (final c in chans) c.categoryId};
     final seen = <String>{};
     return (categories: [for (final c in cats) if (used.contains(c.id) && seen.add(c.id)) c], channels: chans);
+  }
+
+  // ── land og navn ──
+
+  /// Ryddige navn: «NOR: TV 2 [720p]» → «TV 2» med et 720p-merke (se tidyChannelName). På som standard.
+  bool get tidyNames => _prefs.getBool('tidy_names') ?? true;
+
+  Future<void> setTidyNames(bool on) async {
+    await _prefs.setBool('tidy_names', on);
+    _represent();
+  }
+
+  /// Landene som vises i innloggingen i bruk (kodene fra countryOf, '' = kategoriene uten land), null: alle.
+  Set<String>? get shownCountries => activeLogin == null ? null : _shownCountriesOf(activeLogin!);
+
+  Set<String>? _shownCountriesOf(String id) {
+    final list = _prefs.getStringList('countries@$id');
+    return list == null ? null : list.toSet();
+  }
+
+  /// Viser bare [codes] (null: alle land) i innloggingen i bruk.
+  Future<void> setShownCountries(Set<String>? codes) async {
+    final id = activeLogin;
+    if (id == null) return;
+    if (codes == null) {
+      await _prefs.remove('countries@$id');
+    } else {
+      await _prefs.setStringList('countries@$id', codes.toList()..sort());
+    }
+    _represent();
+  }
+
+  /// Landene i hele lista fra leverandøren (også de som er skjult), til valget av land.
+  List<CountryGroup> get countryGroupsInList => _countryGroups ??= countryGroups(_rawCategories, _rawChannels);
+  List<CountryGroup>? _countryGroups;
+
+  /// Lista har kanaler fra flere land (da kan du velge hvilke som vises).
+  bool get hasCountries => countryGroupsInList.where((g) => g.code.isNotEmpty).length > 1;
+
+  /// Lista vises på nytt etter at landene eller navnene er endret.
+  void _represent() {
+    if (_rawChannels.isNotEmpty) _applyLists(_rawCategories, _rawChannels);
+    notifyListeners();
   }
 
   /// Lista fra sist vises med en gang, og den nye hentes i bakgrunnen.
@@ -561,7 +643,8 @@ class Session extends ChangeNotifier {
       if (source != src) return;
       final first = channels.isEmpty;
       _applyLists(cats, chans);
-      unawaited(listCache?.write(_cacheKey(src), categories, channels));
+      // slik leverandøren sendte den, så andre land og navnene kan vises uten å hente på nytt
+      unawaited(listCache?.write(_cacheKey(src), cats, chans));
       if (first) _prefetchEpg();
     } on SourceException catch (e) {
       debugPrint('Listene: ${src.redact(e.message)}');
@@ -579,14 +662,17 @@ class Session extends ChangeNotifier {
   }
 
   void _applyLists(List<Category> cats, List<Channel> all) {
-    // leverandørens varianter av NRK1, NRK2, NRK3 og NRK Super blir én kanal hver (spilles fra NRK)
-    final chans = mergePublicChannels(all);
+    if (!identical(cats, _rawCategories) || !identical(all, _rawChannels)) _countryGroups = null;
+    _rawCategories = cats;
+    _rawChannels = all;
+    // landene du har valgt, NRK samlet (spilles fra NRK) og ryddige navn
+    final shown = _prepare(activeLogin, cats, all);
+    final chans = shown.channels;
     final counts = <String, int>{};
     for (final c in chans) {
       counts[c.categoryId] = (counts[c.categoryId] ?? 0) + 1;
     }
-    final seen = <String>{};
-    categories = [for (final c in cats) if ((counts[c.id] ?? 0) > 0 && seen.add(c.id)) c];
+    categories = shown.categories;
     channels = chans;
     categoryCounts = counts;
     _byId = {for (final c in chans) c.id: c};

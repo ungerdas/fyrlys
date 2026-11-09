@@ -12,6 +12,7 @@ import 'archive_page.dart';
 import 'cast_ui.dart';
 import 'channel_card.dart';
 import 'channel_number.dart';
+import 'country_dialog.dart';
 import 'guide_view.dart';
 import 'motion.dart';
 import 'multiview_page.dart';
@@ -74,8 +75,11 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  /// startsiden søker i alle kanalene
-  String get _listFilter => _filter == 'home' ? 'all' : _filter;
+  /// startsiden søker i alle kanalene, og en kategori som er skjult (landet er valgt bort), blir alle kanalene
+  String get _listFilter => _filter == 'home' || _hiddenCategory ? 'all' : _filter;
+
+  bool get _hiddenCategory =>
+      !const {'home', 'all', 'fav', 'recent'}.contains(_filter) && !s.categories.any((c) => c.id == _filter);
 
   List<Channel> get _visible {
     final words = _query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
@@ -91,7 +95,7 @@ class _HomePageState extends State<HomePage> {
         'all' || 'home' => tr('Alle kanaler'),
         'fav' => tr('Favoritter'),
         'recent' => tr('Sist sett'),
-        _ => s.categoryName(_filter),
+        _ => _hiddenCategory ? tr('Alle kanaler') : s.categoryName(_filter),
       };
 
   void _play(List<Channel> list, int i) {
@@ -587,13 +591,18 @@ class _HomePageState extends State<HomePage> {
   Widget _sidebar() {
     final scheme = Theme.of(context).colorScheme;
     final g = _groups();
-    Widget head(String text) => Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 16, 6),
-          child: Text(
-            text.toUpperCase(),
-            style: TextStyle(fontSize: 12, letterSpacing: 0.8, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
-          ),
-        );
+    Widget head(String text, {Widget? action}) {
+      final label = Text(
+        text.toUpperCase(),
+        style: TextStyle(fontSize: 12, letterSpacing: 0.8, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
+      );
+      if (action == null) return Padding(padding: const EdgeInsets.fromLTRB(20, 18, 16, 6), child: label);
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 10, 6, 0),
+        child: Row(children: [Expanded(child: label), action]),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
@@ -611,7 +620,11 @@ class _HomePageState extends State<HomePage> {
             first: i == 0,
             last: i == g.pinned.length - 1,
           ),
-        head(g.pinned.isEmpty ? tr('Kategorier · ☆ legger dem øverst') : tr('Alle kategorier')),
+        head(
+          g.pinned.isEmpty ? tr('Kategorier · ☆ legger dem øverst') : tr('Alle kategorier'),
+          // landene i lista: bare de du vil se
+          action: s.hasCountries ? _countriesButton('velg-land-sidemeny', small: true) : null,
+        ),
         for (final c in g.rest) _categoryTile(c.id, c.name, s.categoryCounts[c.id] ?? 0, pinnable: true),
       ],
     );
@@ -674,6 +687,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Valget av land som vises (se showCountryDialog).
+  Widget _countriesButton(String key, {bool small = false}) => IconButton(
+        key: ValueKey(key),
+        tooltip: tr('Velg land'),
+        icon: Icon(Icons.public, size: small ? 18 : null),
+        visualDensity: small ? VisualDensity.compact : null,
+        onPressed: () => unawaited(showCountryDialog(context, s)),
+      );
+
   Widget _miniButton(IconData icon, String tooltip, VoidCallback? onPressed, {Color? color}) => IconButton(
         tooltip: tooltip,
         onPressed: onPressed,
@@ -722,6 +744,7 @@ class _HomePageState extends State<HomePage> {
               icon: Icon(s.isFavoriteCategory(value) ? Icons.star : Icons.star_border),
               onPressed: () => unawaited(s.toggleFavoriteCategory(value)),
             ),
+          if (s.hasCountries) _countriesButton('velg-land-liste'),
         ],
       ),
     );

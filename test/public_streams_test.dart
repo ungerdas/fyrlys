@@ -111,6 +111,26 @@ void main() {
     expect(mergePublicChannels(merged).map((c) => '${c.id} ${c.name}'), merged.map((c) => '${c.id} ${c.name}'));
   });
 
+  test('et merke foran navnet («VIP: NRK1 [1080p]»), og varianter i flere kategorier', () {
+    expect(publicStreamKey('VIP: NRK1 [1080p]'), 'nrk1');
+    expect(publicStreamKeys('VIP: NRK3/SUPER [1080p]'), ['nrk3', 'nrksuper']);
+    expect(publicStreamKeys('VIP: NRK1 ØSTLANDET [1080p]'), isEmpty);
+    expect(publicStreamKeys('VIP: NRK2 LYDTEKST [1080p]'), isEmpty);
+    // NRK1 i en kategori for 720p og en for 1080p: den samlede står i 1080p-kategorien, der den varianten sto
+    final merged = mergePublicChannels(const [
+      Channel(id: '1', name: 'NRK1', categoryId: '720', number: '1'),
+      Channel(id: '2', name: 'TV 2 [720p]', categoryId: '720', number: '2'),
+      Channel(id: '3', name: 'VIP: AKVARIUM [1080p]', categoryId: '1080', number: '3'),
+      Channel(id: '4', name: 'VIP: NRK1 [1080p]', categoryId: '1080', number: '4'),
+    ]);
+    expect(merged.map((c) => '${c.id} ${c.name} ${c.categoryId}'), [
+      '2 TV 2 [720p] 720',
+      '3 VIP: AKVARIUM [1080p] 1080',
+      '4 NRK1 1080',
+    ]);
+    expect(merged.last.number, '1');
+  });
+
   test('bare én «NRK 3/SUPER»: NRK Super får en egen id som peker på den', () {
     final merged = mergePublicChannels(const [Channel(id: '9', name: 'NRK 3/SUPER NO')]);
     expect(merged.map((c) => '${c.id} ${c.name}'), ['9 NRK3', '9~nrksuper NRK Super']);

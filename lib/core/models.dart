@@ -24,6 +24,7 @@ class Channel {
     this.number,
     this.hasEpg = true,
     this.archiveDays = 0,
+    this.quality,
   });
 
   factory Channel.fromJson(Map<String, Object?> j) => Channel(
@@ -34,6 +35,7 @@ class Channel {
         number: j['num']?.toString(),
         hasEpg: j['epg'] != false,
         archiveDays: j['arc'] is int ? j['arc'] as int : 0,
+        quality: j['q'] is String ? j['q'] as String : null,
       );
 
   final String id;
@@ -50,6 +52,21 @@ class Channel {
 
   bool get hasArchive => archiveDays > 0;
 
+  /// Kvaliteten når den ikke er den vanlige («720p», «H265», «4K»), tatt ut av navnet (se tidyChannelName).
+  final String? quality;
+
+  /// Samme kanal med et ryddigere navn.
+  Channel tidied({required String name, String? quality}) => Channel(
+        id: id,
+        name: name,
+        categoryId: categoryId,
+        icon: icon,
+        number: number,
+        hasEpg: hasEpg,
+        archiveDays: archiveDays,
+        quality: quality,
+      );
+
   Map<String, Object?> toJson() => {
         'id': id,
         'name': name,
@@ -58,6 +75,7 @@ class Channel {
         'num': number,
         'epg': hasEpg,
         if (archiveDays > 0) 'arc': archiveDays,
+        if (quality != null) 'q': quality,
       };
 }
 

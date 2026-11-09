@@ -166,6 +166,30 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   `parallel` 8 nedlastinger samtidig, resten venter med de nyeste først, og de eldste over `maxWaiting` 200 gis opp
   uten å regnes som feil). Settes opp i
   `main.dart` (path_provider); uten dem (testene) hentes alt som før.
+- `core/tidy.dart` (2.1.47, eieren 9.11 om et nytt abonnement med 53 605 kanaler fra ca. 80 land, «så fryktelig
+  rotete oppsett»; valgte «Bare land jeg velger» og «Rene kanalnavn», ikke skillelinjer som overskrifter eller rydding
+  i eventene): `tidyChannelName` (merket foran: «NOR: », «VIP: », «UK | », «|NO| », «[NO] », ikke «LIVE:»/«NEXT:»;
+  kvaliteten i klammer/parentes ut, `quality` = «720p»/«H265»/«4K»/«480p»/«HD»/«SD», null for 1080p/1080i/FHD; navn
+  uten slike merker står uendret), `tidyCategoryName` (landet foran ut, merker i klammer blir deler med « · »,
+  kvaliteten bak, «AND» mellom kvalitetene bort, bare kvalitet → landets navn: «NO: [720p] AND [H265]» → «Norge · 720p ·
+  H265»; `keepCountry` når flere land vises: «SE · SPORT»; uten land foran og kvalitet uendret), `countryOf` (kode foran
+  med «:»/«|»/klammer, `normalizeCountry` (NOR → NO, USA → US, ESP → ES …), hele navnet eller «Navn - …» fra
+  `_countryNames`, kode bak fra `_codesAfter`; ellers null), `countryLabel` (norske navn for ca. 30 koder, ellers
+  koden; '' = «Uten land»), `countryGroups` (`CountryGroup`: kode, kategorier, kanaler, et eksempel; alfabetisk,
+  «Uten land» sist). `Channel.quality` (JSON `q`) og `tidied()`. I `Session`: `_rawCategories`/`_rawChannels` (lista
+  slik leverandøren sendte den; listene på disk er nå de rå, ikke de sammenslåtte) og `_prepare(id, …)`: land
+  (`countries@<innlogging>`, `shownCountries`/`setShownCountries`; ingen treff → alt), NRK samlet, så navnene
+  (`tidy_names`, på som standard, `tidyNames`/`setTidyNames`), og bare kategorier med kanaler; brukes av `_applyLists`
+  og `listsOf` (multiview). `_represent()` viser på nytt etter et valg. `countryGroupsInList` (huskes til lista
+  byttes), `hasCountries` (minst to land). `ui/country_dialog.dart`: `showCountryDialog` («Land som vises»,
+  `land:<kode>` ('-' for uten land), `land-alle`, `land-ingen`, `land-bruk`; alle avkrysset = null, også land som
+  kommer til senere), `countriesSummary`. Innstillinger → Kanaler og TV-guide: `velg-land` og `rydd-navn`; TV-siden:
+  kloden `velg-land-sidemeny` ved «Alle kategorier» og `velg-land-liste` ved nedtrekkslista. Er kategorien du sto i
+  skjult, vises alle kanalene (`_hiddenCategory`). `QualityBadge`/`qualitySpan` i `channel_card.dart` (nøkkel
+  `kvalitet:<tekst>`) etter navnet på kortene og i kanallista i spilleren. Feilrapporten: «Land som vises» og
+  «Ryddige navn». NRK: `_tagBefore` i `public_streams.dart` («VIP: NRK1 [1080p]» → nrk1), og den samlede kanalen står
+  der den første varianten i den beste variantens kategori sto (før: der den første sto). Testet i `tidy_test.dart`
+  og `public_streams_test.dart`; regexene er også prøvd (i Python) mot den lagrede lista hans.
 - `core/session.dart` – tilstanden (ChangeNotifier): innloggingene (2.1.14, `SavedLogin`): lista i `logins` (id, navn,
   slag), den i bruk i `login`, og hver innlogging (`toPrefs()` som JSON) kryptert med DPAPI i `login_protected:<id>`
   via `core/secrets.dart` (`SecretCodec`; `DpapiCodec` = CryptProtectData/CryptUnprotectData med FFI; `NoSecretCodec`
@@ -706,6 +730,11 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 5.11.2026: 2.1.41: rekkefølgen på bibliotekene i Plex-fanen (se Plex under Arkitektur). Testet med tester og den
   falske Plex-serveren (`homeVideos` gir et tredje bibliotek). Eieren tok den i bruk samme dag (bilde: TV-serier over
   Filmer), men ville ikke ha pilene i sidemenyen hele tiden; 2.1.42 har dem bare i valget av biblioteker.
+- 9.11.2026: 2.1.47: land og ryddige navn (se `core/tidy.dart` under Arkitektur). Eieren spurte om jeg kunne se
+  mappene og kanalene fra M3U-lenka; lista ble i stedet lest fra kanallista Fyrlys har lagret på PC-en hans
+  (`%APPDATA%\Fyrlys\Fyrlys\lister`, uten innlogging). Den har land foran kategoriene («NO: …»), et merke og
+  kvaliteten i kanalnavnene, 960 skillelinjer som kanaler («✶⋆✶ … ✶⋆✶») og 7 461 tomme event-plasser. Testet med
+  tester; ikke prøvd på PC-en hans. Samme dag virket strømmene fra det nye abonnementet hjemme, også med AdGuard på.
 - 8.11.2026: 2.1.46: eieren 8.11 fikk ikke lagt inn et nytt IPTV-abonnement (Xtream Codes etter leverandørens
   guide), men kanalene kom til slutt (trolig bare treg første henting av en stor liste; feilmeldingen han så, er ikke
   kjent). Innloggingen sier nå hva som er galt, og prøver andre klient-ID-er når VLC avvises (se `xtream_source.dart`

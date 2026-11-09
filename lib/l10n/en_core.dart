@@ -46,6 +46,43 @@ const enCore = <String, String>{
   'Serveren svarte ikke som en Xtream-server': "The server didn't respond like an Xtream server",
   'Kanalen har ikke TV-arkiv': "This channel doesn't have a TV archive",
 
+  // tidy.dart: landene i kategorinavnene
+  'Uten land': 'No country',
+  'Norge': 'Norway',
+  'Sverige': 'Sweden',
+  'Danmark': 'Denmark',
+  'Finland': 'Finland',
+  'Storbritannia': 'United Kingdom',
+  'USA': 'USA',
+  'Tyskland': 'Germany',
+  'Nederland': 'Netherlands',
+  'Frankrike': 'France',
+  'Spania': 'Spain',
+  'Italia': 'Italy',
+  'Polen': 'Poland',
+  'Portugal': 'Portugal',
+  'Tyrkia': 'Turkey',
+  'Belgia': 'Belgium',
+  'Tsjekkia': 'Czechia',
+  'Hellas': 'Greece',
+  'Brasil': 'Brazil',
+  'Romania': 'Romania',
+  'Østerrike': 'Austria',
+  'Australia': 'Australia',
+  'Sveits': 'Switzerland',
+  'Kroatia': 'Croatia',
+  'Canada': 'Canada',
+  'Irland': 'Ireland',
+  'Arabisk': 'Arabic',
+  'Eks-Jugoslavia': 'Former Yugoslavia',
+  'Afrika': 'Africa',
+  'Internasjonalt': 'International',
+
+  // report.dart: landene og navnene
+  'Land som vises': 'Countries shown',
+  'alle': 'all',
+  'Ryddige navn': 'Tidy names',
+
   // net_problem.dart
   'Serveren svarer ikke. Sjekk adressen og porten, eller prøv igjen senere.':
       "The server isn't responding. Check the address and port, or try again later.",

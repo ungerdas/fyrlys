@@ -423,6 +423,7 @@ class _SideRowState extends State<_SideRow> {
                 style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
               ),
             TextSpan(text: parts.main),
+            if (ch.quality != null) qualitySpan(ch.quality!),
           ]),
           maxLines: lines,
           overflow: TextOverflow.ellipsis,
