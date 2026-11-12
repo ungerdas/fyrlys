@@ -454,8 +454,10 @@ jobs:
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
           defines="--dart-define=FYRLYS_TIZEN=true --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}"
-          # versjonen i pakken (« version=», ikke «api-version=»)
-          sed -i "s/ version=\"[0-9.]*\"/ version=\"$version\"/" tizen/tizen-manifest.xml
+          # versjonen i pakken: bare i <manifest> (ikke «<?xml version», og ikke «api-version=»)
+          sed -i "/<manifest /s/ version=\"[0-9.]*\"/ version=\"$version\"/" tizen/tizen-manifest.xml
+          python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse('tizen/tizen-manifest.xml')"
+          head -n 2 tizen/tizen-manifest.xml
           mkdir -p out
           dbus-run-session -- bash -eo pipefail -c "
             echo tizen | gnome-keyring-daemon --unlock > /dev/null
