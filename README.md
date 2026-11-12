@@ -120,4 +120,8 @@ flutter create --org no.fyrlys --project-name fyrlys --platforms=windows,android
 flutter run
 ```
 
+Samsung-TV-pakkene bygges med [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen) og TV-ens egen avspiller
+([video_player_avplay](https://pub.dev/packages/video_player_avplay)): `flutter-tizen build tpk --dart-define=FYRLYS_TIZEN=true`
+(med `api-version` i `tizen/tizen-manifest.xml` for TV-en, se workflowen).
+
 Avspilleren er [mpv](https://mpv.io) (libmpv, LGPL), fra [mpv-winbuild](https://github.com/zhongfly/mpv-winbuild).

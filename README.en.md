@@ -114,4 +114,8 @@ flutter create --org no.fyrlys --project-name fyrlys --platforms=windows,android
 flutter run
 ```
 
+The Samsung TV packages are built with [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen) and the TV's own
+player ([video_player_avplay](https://pub.dev/packages/video_player_avplay)): `flutter-tizen build tpk --dart-define=FYRLYS_TIZEN=true`
+(with the TV's `api-version` in `tizen/tizen-manifest.xml`, see the workflow).
+
 The player is [mpv](https://mpv.io) (libmpv, LGPL), from [mpv-winbuild](https://github.com/zhongfly/mpv-winbuild).

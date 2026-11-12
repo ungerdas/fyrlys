@@ -1,8 +1,9 @@
-# Analyse og tester ved hver endring, og bygg for Windows og Android (arm64, arm og x86_64), med versjon og byggnummer i appen.
+# Analyse og tester ved hver endring, og bygg for Windows, Android (arm64, arm og x86_64) og Samsung-TV (Tizen), med
+# versjon og byggnummer i appen.
 # Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-oppsett.exe,
-# Fyrlys-windows.zip og Fyrlys-android.apk, faste navn; Windows-appen oppdaterer seg selv fra zip-fila, Android-appen
-# laster ned APK-en), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og byggnummeret står
-# skjult i den (<!-- bygg N -->); appen ser etter nye versjoner der.
+# Fyrlys-windows.zip, Fyrlys-android.apk og Fyrlys-tizen-*.tpk, faste navn; Windows-appen oppdaterer seg selv fra
+# zip-fila, Android-appen laster ned APK-en, TV-en sier fra), som blir «Latest». Teksten er avsnittet for versjonen i
+# CHANGELOG.md, og byggnummeret står skjult i den (<!-- bygg N -->); appen ser etter nye versjoner der.
 # Er versjonen ikke endret, byttes filene i releasen den har fra før.
 # APK-en signeres med Fyrlys-nøkkelen (hemmelighetene ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD og
 # ANDROID_KEY_ALIAS), så nye versjoner kan installeres oppå de gamle. Uten nøkkelen bygges den, men legges ikke ut.
@@ -459,22 +460,35 @@ jobs:
           python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse('tizen/tizen-manifest.xml')"
           head -n 2 tizen/tizen-manifest.xml
           mkdir -p out
-          dbus-run-session -- bash -eo pipefail -c "
-            echo tizen | gnome-keyring-daemon --unlock > /dev/null
-            for target in 6.0:2021 6.5:2022-2025 10.0:2026; do
-              api=\${target%%:*}
-              years=\${target#*:}
-              if [ \"\$api\" = 10.0 ] && [ ! -d \"$HOME/tizen-studio/platforms/tizen-10.0\" ]; then
-                echo 'Hopper over Tizen 10.0 (pakken mangler)'
-                continue
-              fi
-              sed -i \"s/api-version=\\\"[0-9.]*\\\"/api-version=\\\"\$api\\\"/\" tizen/tizen-manifest.xml
-              grep -o 'api-version=\"[0-9.]*\"' tizen/tizen-manifest.xml
-              rm -rf build/tizen/tpk
-              flutter-tizen build tpk --release --device-profile tv --security-profile fyrlys $defines 2>&1 | tee build-\$api.log
-              cp build/tizen/tpk/*.tpk out/Fyrlys-tizen-\$years.tpk
-            done
-          "
+          # én pakke per Tizen-versjon; Tizen 10.0 (TV-er fra 2026) er nytt i Tizen SDK, så feiler den, kommer de andre
+          # likevel (med en advarsel og slutten av loggen)
+          cat > tv-build.sh <<'EOS'
+          set -eo pipefail
+          echo tizen | gnome-keyring-daemon --unlock > /dev/null
+          warn() {
+            msg=$(printf '%s\n\n%s' "$2" "$(tail -n 40 "$3" 2>/dev/null)" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::warning title=$1::$msg"
+          }
+          for target in 6.0:2021 6.5:2022-2025 10.0:2026; do
+            api=${target%%:*}
+            years=${target#*:}
+            if [ "$api" = 10.0 ] && [ ! -d "$HOME/tizen-studio/platforms/tizen-10.0" ]; then
+              warn "Tizen 10.0" "Pakken for Tizen 10.0 mangler, så Fyrlys-tizen-2026.tpk lages ikke" packages10.log
+              continue
+            fi
+            sed -i "s/api-version=\"[0-9.]*\"/api-version=\"$api\"/" tizen/tizen-manifest.xml
+            grep -o 'api-version="[0-9.]*"' tizen/tizen-manifest.xml
+            rm -rf build/tizen/tpk
+            if flutter-tizen build tpk --release --device-profile tv --security-profile fyrlys $DEFINES 2>&1 | tee "build-$api.log"; then
+              cp build/tizen/tpk/*.tpk "out/Fyrlys-tizen-$years.tpk"
+            elif [ "$api" = 10.0 ]; then
+              warn "Tizen 10.0" "Fyrlys-tizen-2026.tpk ble ikke bygget" "build-$api.log"
+            else
+              exit 1
+            fi
+          done
+          EOS
+          DEFINES="$defines" dbus-run-session -- bash tv-build.sh
           ls -la out
           for f in out/*.tpk; do echo "== $f"; unzip -l "$f" | grep -E 'lib/|Runner|tizen-manifest' | head -n 40; done
       - uses: actions/upload-artifact@v7
