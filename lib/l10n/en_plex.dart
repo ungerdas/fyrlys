@@ -128,4 +128,8 @@ const enPlex = <String, String>{
   'Fyrlys glemmer Plex-innloggingen på denne PC-en. Det du har sett, ligger på Plex-serveren.':
       'Fyrlys forgets the Plex sign-in on this PC. What you have watched stays on the Plex server.',
   'Koble fra': 'Disconnect',
+
+  // plex_login.dart: Samsung-TV-en (koden skrives inn på plex.tv/link)
+  'Gå til plex.tv/link på telefonen eller PC-en, logg inn og skriv inn koden:':
+      'Go to plex.tv/link on your phone or PC, sign in and enter the code:',
 };

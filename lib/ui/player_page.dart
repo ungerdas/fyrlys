@@ -84,6 +84,9 @@ class _Player extends StatefulWidget {
 class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   late final Playback _pb = (widget.page.playback ?? playbackFactory)();
   final FocusNode _focus = FocusNode(debugLabel: 'spiller');
+
+  /// knappene under bildet (TV-en: fjernkontrollen kommer dit med grønn eller Info)
+  final _barScope = FocusScopeNode(debugLabel: 'knappene');
   final FocusNode _searchFocus = FocusNode(debugLabel: 'søk i kanallista');
   final FocusNode _sideFocus = FocusNode(debugLabel: 'kanallista', skipTraversal: true);
   final GlobalKey _stageKey = GlobalKey(debugLabel: 'bildet');
@@ -261,6 +264,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _bannerTimer?.cancel();
     unawaited(_pb.dispose());
     _focus.dispose();
+    _barScope.dispose();
     _searchFocus.dispose();
     _sideFocus.dispose();
     if (_shownFull == true) unawaited(_windowFull(false));
@@ -284,9 +288,9 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!isAndroid) return;
+    if (!pausesInBackground) return;
     if (state == AppLifecycleState.paused && !_suspended && !_casting && !_visiting) {
-      // Telefonen: appen er lagt bort. Gi fra deg tilkoblingen, og start kanalen igjen når du kommer tilbake.
+      // Telefonen (og TV-en): appen er lagt bort. Gi fra deg tilkoblingen, og start kanalen igjen når du kommer tilbake.
       _suspended = true;
       _seq++;
       _zapTimer?.cancel();
@@ -318,7 +322,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     // lagt bort (telefonen) mens noe var på vei: startes igjen når du kommer tilbake
     if (src == null || !mounted || _suspended) return;
     // telefonen: castingen stoppet mens appen var lagt bort; ikke spill her i bakgrunnen
-    if (isAndroid && !_casting && _inBackground) {
+    if (pausesInBackground && !_casting && _inBackground) {
       _suspended = true;
       return;
     }
@@ -504,7 +508,24 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     _hideTimer?.cancel();
     if (!_controls) _set(() => _controls = true);
     _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (_playing && _status == null && !_sideOpen && !_dragging) _set(() => _controls = false);
+      if (_playing && _status == null && !_sideOpen && !_dragging && !_barScope.hasFocus) {
+        _set(() => _controls = false);
+      }
+    });
+  }
+
+  /// TV-en: fokus til den første knappen under bildet (fjernkontrollen når ikke knappene ellers). Neste bilde, så
+  /// knappene er der.
+  void _focusBar() {
+    _wake();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      for (final n in _barScope.traversalDescendants) {
+        // den første knappen, ikke tidslinja (der spoler ←/→)
+        if (n.context?.findAncestorWidgetOfExactType<Slider>() != null) continue;
+        n.requestFocus();
+        return;
+      }
     });
   }
 
@@ -1126,6 +1147,15 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   static final _playKeys = {LogicalKeyboardKey.space, LogicalKeyboardKey.keyK, LogicalKeyboardKey.mediaPlayPause};
   static final _okKeys = {LogicalKeyboardKey.enter, LogicalKeyboardKey.numpadEnter, LogicalKeyboardKey.select};
 
+  /// tastene en knapp under bildet bruker selv (flytte mellom knappene, trykke)
+  static final _barKeys = {
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+    ..._okKeys,
+  };
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
@@ -1168,8 +1198,19 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       }
       return KeyEventResult.handled;
     }
+    // knappene under bildet har fokus (TV-en): piltastene og OK er deres, Tilbake går tilbake til bildet
+    if (_barScope.hasFocus) {
+      if (key == LogicalKeyboardKey.escape) {
+        _focus.requestFocus();
+        return KeyEventResult.handled;
+      }
+      if (_barKeys.contains(key)) return KeyEventResult.ignored;
+    }
     if (_casting) return _onCastKey(key) ? KeyEventResult.handled : KeyEventResult.ignored;
-    if (_upKeys.contains(key)) {
+    if (key == LogicalKeyboardKey.info || key == LogicalKeyboardKey.colorF1Green) {
+      // fjernkontrollen: Info eller grønn = knappene under bildet (lydspor, arkiv, bildeformat …)
+      _focusBar();
+    } else if (_upKeys.contains(key)) {
       _zap(-1);
     } else if (_downKeys.contains(key)) {
       _zap(1);
@@ -1194,13 +1235,26 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
       _toggleFull();
     } else if (key == LogicalKeyboardKey.keyZ) {
       _setFormat(_view.format.next);
-    } else if (key == LogicalKeyboardKey.keyC || key == LogicalKeyboardKey.contextMenu) {
+    } else if (key == LogicalKeyboardKey.keyC ||
+        key == LogicalKeyboardKey.contextMenu ||
+        key == LogicalKeyboardKey.listProgram) {
+      // fjernkontrollen: Menu og kanallisteknappen
       _toggleSide();
-    } else if (key == LogicalKeyboardKey.keyA && _hasArchive) {
+    } else if ((key == LogicalKeyboardKey.keyA || key == LogicalKeyboardKey.colorF0Red) && _hasArchive) {
+      // fjernkontrollen: rød
       unawaited(_openArchive());
+    } else if (key == LogicalKeyboardKey.colorF3Blue && _hasArchive && _startable != null) {
+      // fjernkontrollen: blå = se fra start
+      unawaited(_startOver());
+    } else if (key == LogicalKeyboardKey.colorF2Yellow) {
+      // fjernkontrollen: gul = bildeformat (som Z)
+      _setFormat(_view.format.next);
+    } else if (key == LogicalKeyboardKey.mediaStop) {
+      _close();
     } else if (key == LogicalKeyboardKey.keyV && _session.canMultiview) {
       unawaited(_openMultiview());
-    } else if (key == LogicalKeyboardKey.backspace) {
+    } else if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.navigatePrevious) {
+      // fjernkontrollen: PRE-CH
       _lastChannel();
     } else if (key == LogicalKeyboardKey.keyI) {
       unawaited(_setMini(!_mini));
@@ -1600,6 +1654,21 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
     final volumeIcon = volume == 0 ? Icons.volume_off : (volume < 50 ? Icons.volume_down : Icons.volume_up);
     final shift = _canShift;
     final timeline = shift && _window >= const Duration(seconds: 20);
+    return FocusScope(
+      node: _barScope,
+      child: _barBox(
+          full: full, compact: compact, volume: volume, volumeIcon: volumeIcon, shift: shift, timeline: timeline),
+    );
+  }
+
+  Widget _barBox({
+    required bool full,
+    required bool compact,
+    required double volume,
+    required IconData volumeIcon,
+    required bool shift,
+    required bool timeline,
+  }) {
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -1642,12 +1711,13 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
                   ],
                   if (_session.canMultiview && (!compact || full))
                     _ctl(Icons.grid_view_outlined, tr('Multiview (V)'), () => unawaited(_openMultiview())),
-                  _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
+                  // TV-en: lyden styres med fjernkontrollen
+                  if (!isTizen) _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
                   // telefonen: volumknappene på siden
-                  if (!compact && !isAndroid) _volumeSlider(volume),
+                  if (!compact && isPc) _volumeSlider(volume),
                   if (full) _ctl(Icons.list, tr('Kanaler (C)'), _toggleSide, on: _sideOpen),
                   _tracksButton(),
-                  if (!compact || full)
+                  if (canCast && (!compact || full))
                     _ctl(Icons.cast, tr('Cast til TV (Chromecast)'), () => unawaited(_startCast())),
                   if (MiniWindow.supported && (!compact || full))
                     _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
@@ -2113,7 +2183,7 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
                 runSpacing: 4,
                 children: [
                   // smalt bilde (telefonen): castingen startes herfra
-                  if (_compactNow && !_casting)
+                  if (_compactNow && !_casting && canCast)
                     OutlinedButton.icon(
                       onPressed: () => unawaited(_startCast()),
                       icon: const Icon(Icons.cast, size: 18),

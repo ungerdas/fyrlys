@@ -26,7 +26,9 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
         '${appBuild.isEmpty ? '' : ' (${tr('bygg')} $appBuild${appCommit.isEmpty ? '' : ', ${_short(appCommit)}'})'}')
     ..writeln(isAndroid
         ? 'Android: ${(androidDevice ?? '?').replaceFirst('Android ', '')}'
-        : 'Windows: ${windowsName(windows ?? Platform.operatingSystemVersion)}')
+        : isTizen
+            ? 'Samsung-TV: ${tvDevice ?? 'Tizen'}'
+            : 'Windows: ${windowsName(windows ?? Platform.operatingSystemVersion)}')
     ..writeln('${tr('Språk')}: $appLanguage');
 
   out.writeln();
@@ -100,6 +102,9 @@ Future<String> buildReport(Session s, {Updater? updater, DateTime? now, String? 
 
 /// Telefonen Fyrlys kjører på («Android 15 (API 35) · Google Pixel 8»), satt ved oppstart på Android.
 String? androidDevice;
+
+/// Samsung-TV-en (Tizen-versjonen og modellen), satt i main.dart
+String? tvDevice;
 
 /// Windows-utgaven slik Dart gir den («"Windows 10 Pro" 10.0 (Build 26100)»), med riktig navn: Windows 11 heter
 /// fortsatt «Windows 10» i registeret Dart leser fra, men har byggnummer 22000 og høyere.

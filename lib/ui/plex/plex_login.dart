@@ -10,6 +10,7 @@ import '../../core/plex/plex_api.dart';
 import '../../core/plex/plex_models.dart';
 import '../../core/report.dart' show copyText, openUrl;
 import '../../l10n/tr.dart';
+import '../../platform.dart';
 import 'plex_widgets.dart' show plexMoveButton;
 
 /// true når Fyrlys ble koblet til Plex.
@@ -62,7 +63,8 @@ class _PlexLoginDialogState extends State<_PlexLoginDialog> {
       final pin = await widget.plex.startLogin();
       if (!mounted) return;
       setState(() => _pin = pin);
-      unawaited(openUrl(widget.plex.authUrl(pin)));
+      // TV-en: koden skrives inn på plex.tv/link fra telefonen eller PC-en
+      if (!isTizen) unawaited(openUrl(widget.plex.authUrl(pin)));
       _timer = Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_check(pin)));
     } on PlexException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -110,6 +112,30 @@ class _PlexLoginDialogState extends State<_PlexLoginDialog> {
           const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
           const SizedBox(width: 14),
           Expanded(child: Text(tr('Henter en kode fra Plex …'))),
+        ],
+      );
+    } else if (isTizen) {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(tr('Gå til plex.tv/link på telefonen eller PC-en, logg inn og skriv inn koden:')),
+          const SizedBox(height: 16),
+          Center(
+            child: SelectableText(
+              pin.code,
+              key: const ValueKey('plex-kode'),
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(letterSpacing: 6, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(width: 12),
+              Expanded(child: Text(tr('Venter på Plex …'), style: TextStyle(color: scheme.onSurfaceVariant))),
+            ],
+          ),
         ],
       );
     } else {

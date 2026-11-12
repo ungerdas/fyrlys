@@ -83,12 +83,15 @@ class Updater extends ChangeNotifier {
     String? assetSuffix,
     String? workDir,
     bool? canInstall,
+    bool? installElsewhere,
     String? repo,
     Future<bool> Function(String path)? installApk,
   })  : _client = client ?? http.Client(),
         currentBuild = currentBuild ?? int.tryParse(appBuild),
-        assetSuffix = assetSuffix ?? (isAndroid ? '-android.apk' : (Platform.isWindows ? '-windows.zip' : null)),
+        assetSuffix = assetSuffix ??
+            (isAndroid ? '-android.apk' : (isTizen ? '.tpk' : (Platform.isWindows ? '-windows.zip' : null))),
         canInstall = canInstall ?? (Platform.isWindows || isAndroid),
+        installElsewhere = installElsewhere ?? isTizen,
         repo = repo ?? appRepo,
         workDir = workDir ?? _defaultWorkDir(),
         _installApk = installApk ?? AndroidHost.install;
@@ -104,6 +107,9 @@ class Updater extends ChangeNotifier {
 
   /// kan legge inn oppdateringen selv (Windows), eller laste den ned og åpne installeringen (Android)
   final bool canInstall;
+
+  /// Samsung-TV: en ny versjon installeres fra en PC eller telefon, som første gang; Fyrlys sier bare fra om den
+  final bool installElsewhere;
   final String repo;
 
   /// nedlastinger og skriptet, i %LOCALAPPDATA%\Fyrlys\oppdatering (Android: i appens egen mappe)

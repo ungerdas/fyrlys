@@ -30,8 +30,11 @@ Future<bool> confirmLogout(BuildContext context, SavedLogin login) async {
         isAndroid
             ? tr('Innloggingen slettes fra Fyrlys på denne telefonen. Favorittene og det du har sett, kommer tilbake '
                 'hvis du logger inn igjen.')
-            : tr('Innloggingen slettes fra Fyrlys på denne PC-en. Favorittene og det du har sett, kommer tilbake hvis '
-                'du logger inn igjen.'),
+            : isTizen
+                ? tr('Innloggingen slettes fra Fyrlys på denne TV-en. Favorittene og det du har sett, kommer tilbake '
+                    'hvis du logger inn igjen.')
+                : tr('Innloggingen slettes fra Fyrlys på denne PC-en. Favorittene og det du har sett, kommer tilbake '
+                    'hvis du logger inn igjen.'),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(tr('Avbryt'))),
@@ -356,7 +359,9 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Text(tr('Koble fra Plex?')),
         content: Text(isAndroid
             ? tr('Fyrlys glemmer Plex-innloggingen på denne telefonen. Det du har sett, ligger på Plex-serveren.')
-            : tr('Fyrlys glemmer Plex-innloggingen på denne PC-en. Det du har sett, ligger på Plex-serveren.')),
+            : isTizen
+                ? tr('Fyrlys glemmer Plex-innloggingen på denne TV-en. Det du har sett, ligger på Plex-serveren.')
+                : tr('Fyrlys glemmer Plex-innloggingen på denne PC-en. Det du har sett, ligger på Plex-serveren.')),
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(tr('Avbryt'))),
           FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(tr('Koble fra'))),
@@ -389,7 +394,7 @@ class _SettingsPageState extends State<SettingsPage> {
               showSelectedIcon: false,
               segments: [
                 ButtonSegment(
-                    value: ThemeMode.system, label: Text(isAndroid ? tr('Som telefonen') : tr('Som Windows'))),
+                    value: ThemeMode.system, label: Text(_systemName())),
                 ButtonSegment(value: ThemeMode.dark, label: Text(tr('Mørkt'))),
                 ButtonSegment(value: ThemeMode.light, label: Text(tr('Lyst'))),
               ],
@@ -411,7 +416,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: SegmentedButton<String>(
               showSelectedIcon: false,
               segments: [
-                ButtonSegment(value: 'auto', label: Text(isAndroid ? tr('Som telefonen') : tr('Som Windows'))),
+                ButtonSegment(value: 'auto', label: Text(_systemName())),
                 const ButtonSegment(value: 'no', label: Text('Norsk')),
                 const ButtonSegment(value: 'en', label: Text('English')),
               ],
@@ -433,8 +438,8 @@ class _SettingsPageState extends State<SettingsPage> {
         trailing: const Icon(Icons.chevron_right),
         onTap: () => unawaited(showLanguageDialog(context, s)),
       ),
-      // telefonen: avspilleren der har ingen deinterlacer
-      if (!isAndroid)
+      // telefonen: avspilleren der har ingen deinterlacer; TV-en fjerner striper selv
+      if (isPc)
         SwitchListTile(
           secondary: const Icon(Icons.deblur_outlined),
           title: Text(tr('Fjern striper (deinterlacing)')),
@@ -442,14 +447,15 @@ class _SettingsPageState extends State<SettingsPage> {
           value: picture.deinterlace,
           onChanged: (v) => s.savePicture(picture.copyWith(deinterlace: v)),
         ),
-      SwitchListTile(
-        secondary: const Icon(Icons.motion_photos_on_outlined),
-        title: Text(tr('Jevn bevegelse (prøve)')),
-        subtitle: Text(tr('Tilpasser bildet til skjermens frekvens, så sport og panorering hakker mindre. '
-            'Virker ikke på alle PC-er.')),
-        value: picture.smooth,
-        onChanged: (v) => s.savePicture(picture.copyWith(smooth: v)),
-      ),
+      if (!isTizen)
+        SwitchListTile(
+          secondary: const Icon(Icons.motion_photos_on_outlined),
+          title: Text(tr('Jevn bevegelse (prøve)')),
+          subtitle: Text(tr('Tilpasser bildet til skjermens frekvens, så sport og panorering hakker mindre. '
+              'Virker ikke på alle PC-er.')),
+          value: picture.smooth,
+          onChanged: (v) => s.savePicture(picture.copyWith(smooth: v)),
+        ),
     ];
   }
 
@@ -510,10 +516,16 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ];
 
+  /// «Som Windows» / «Som telefonen» / «Som TV-en»: tema og språk fra systemet
+  static String _systemName() => isAndroid ? tr('Som telefonen') : (isTizen ? tr('Som TV-en') : tr('Som Windows'));
+
   Widget _updates(Updater u) {
     final label = u.available?.label;
     final subtitle = switch (u.state) {
       UpdateState.checking => tr('Ser etter …'),
+      UpdateState.available when u.installElsewhere => tr(
+          'Ny versjon: {version}. Installer den på TV-en fra PC-en eller telefonen, som første gang.',
+          {'version': label ?? ''}),
       UpdateState.available => tr('Ny versjon: {version}', {'version': label ?? ''}),
       UpdateState.downloading => tr('Laster ned {version} … {percent} %',
           {'version': label ?? tr('ny versjon'), 'percent': (u.progress * 100).round()}),

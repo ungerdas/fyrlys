@@ -117,4 +117,8 @@ const enHome = <String, String>{
   '{version} er lastet ned. Trykk Installer, så spør Android om du vil oppdatere.':
       '{version} is downloaded. Tap Install, and Android asks whether you want to update.',
   'Installer': 'Install',
+
+  // home_page.dart og settings_page.dart: ny versjon på Samsung-TV-en
+  'Ny versjon: {version}. Installer den på TV-en fra PC-en eller telefonen, som første gang.':
+      'New version: {version}. Install it on the TV from your PC or phone, as the first time.',
 };

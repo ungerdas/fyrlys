@@ -1,5 +1,5 @@
 name: fyrlys
-description: "Fyrlys – TV fra IPTV-abonnementet ditt, med mpv som avspiller, for Windows."
+description: "Fyrlys – TV fra IPTV-abonnementet ditt, for Windows, Android-telefoner og Samsung-TV-er."
 publish_to: "none"
 version: 2.1.47+1
 
@@ -24,6 +24,12 @@ dependencies:
   clock: ^1.1.1
   # mapper for kanallista fra sist og bildene på disk
   path_provider: ^2.1.5
+  # Samsung-TV (Tizen, bygges med flutter-tizen): TV-ens egen avspiller (AVPlay), Tizen-versjonen og modellen, og
+  # innstillingene og mappene der. Brukes bare på TV-en; på PC-en og telefonen er de med uten å gjøre noe.
+  video_player_avplay: ^0.8.0
+  device_info_plus_tizen: ^1.4.0
+  shared_preferences_tizen: ^2.3.0
+  path_provider_tizen: ^2.3.0
 
 dev_dependencies:
   flutter_test:

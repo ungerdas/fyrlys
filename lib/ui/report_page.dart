@@ -163,7 +163,8 @@ class _ReportPageState extends State<ReportPage> {
                     icon: const Icon(Icons.share),
                     label: Text(tr('Del feilrapport')),
                   )
-                else
+                // TV-en: rapporten står på skjermen (ta et bilde av den)
+                else if (isPc)
                   FilledButton.icon(
                     key: const ValueKey('report-save'),
                     onPressed: _busy ? null : () => unawaited(_save(text)),

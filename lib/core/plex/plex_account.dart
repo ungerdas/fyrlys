@@ -274,6 +274,7 @@ class PlexAccount extends ChangeNotifier {
 
   static String _deviceName() {
     if (isAndroid) return 'Android';
+    if (isTizen) return 'Samsung TV';
     try {
       final host = Platform.localHostname.trim();
       return host.isEmpty ? 'Windows' : host;
@@ -341,7 +342,7 @@ class PlexAccount extends ChangeNotifier {
   // ── innlogging ──
 
   /// En ny PIN; du sier ja hos Plex på [authUrl], og [finishLogin] gir svaret.
-  Future<PlexPin> startLogin() => tv.createPin();
+  Future<PlexPin> startLogin() => tv.createPin(strong: !isTizen);
 
   String authUrl(PlexPin pin) => tv.authUrl(pin);
 

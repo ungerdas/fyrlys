@@ -176,4 +176,11 @@ const enPlayer = <String, String>{
   'Chromecasten fikk ikke hentet filen via telefonen (kode {code}). Prøv igjen, eller se om den spilles på telefonen.':
       "The Chromecast couldn't fetch the file through the phone (code {code}). Try again, or check whether it plays "
           'on the phone.',
+
+  // playback_tizen.dart: TV-ens avspiller (Samsung-TV)
+  'Denne Fyrlys-pakken er for en annen Samsung-TV. TV-en har Tizen {version}: installer {file}.':
+      'This Fyrlys package is for a different Samsung TV. The TV has Tizen {version}: install {file}.',
+  'Strømmen svarte ikke.': "The stream didn't respond.",
+  'stereo': 'stereo',
+  'TV-ens avspiller': "the TV's player",
 };

@@ -125,6 +125,9 @@ class _VodPlayer extends StatefulWidget {
 class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   late final Playback _pb = (widget.page.playback ?? playbackFactory)();
   final FocusNode _focus = FocusNode(debugLabel: 'filmspiller');
+
+  /// knappene under bildet (TV-en: fjernkontrollen kommer dit med ↑ eller ↓)
+  final _barScope = FocusScopeNode(debugLabel: 'knappene');
   final List<StreamSubscription<Object?>> _subs = [];
 
   late int _index = widget.page.index;
@@ -136,8 +139,8 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
   bool _ending = false;
   String? _status;
   bool _controls = true;
-  /// fullskjerm (PC); på telefonen fyller spilleren alltid skjermen
-  late bool _full = widget.page.startFull && !isAndroid;
+  /// fullskjerm (PC); på telefonen og TV-en fyller spilleren alltid skjermen
+  late bool _full = widget.page.startFull && !alwaysFull;
   double? _seekValue;
   bool _dragging = false;
   late double _volume = _session.volume;
@@ -286,6 +289,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     _seekTimer?.cancel();
     unawaited(_pb.dispose());
     _focus.dispose();
+    _barScope.dispose();
     // åpnet fra TV-spilleren i fullskjerm: den fortsetter i fullskjerm, så vinduet blir der
     if (_full && !widget.page.startFull) unawaited(WindowFullscreen.instance.set(false));
     // telefonen: systemlinjene tilbake, med mindre TV-spilleren under er i fullskjerm
@@ -299,7 +303,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!isAndroid) return;
+    if (!pausesInBackground) return;
     // lagt bort → pause (og husk hvor du var); ikke mens det castes
     if (state == AppLifecycleState.paused && _playing && !_casting) {
       _save();
@@ -757,7 +761,7 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
           _save();
           _openTries = 0;
           final life = WidgetsBinding.instance.lifecycleState;
-          if (isAndroid && (life == AppLifecycleState.paused || life == AppLifecycleState.hidden)) {
+          if (pausesInBackground && (life == AppLifecycleState.paused || life == AppLifecycleState.hidden)) {
             // telefonen: ikke spill her i bakgrunnen; fortsetter når du kommer tilbake
             _suspended = true;
           } else {
@@ -1058,7 +1062,21 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     if (!_controls) _set(() => _controls = true);
     if (stay) return;
     _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (_playing && _status == null && !_dragging) _set(() => _controls = false);
+      if (_playing && _status == null && !_dragging && !_barScope.hasFocus) _set(() => _controls = false);
+    });
+  }
+
+  /// TV-en: fokus til den første knappen under bildet. Neste bilde, så knappene er der.
+  void _focusBar() {
+    _wake();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      for (final n in _barScope.traversalDescendants) {
+        // den første knappen, ikke tidslinja (der spoler ←/→)
+        if (n.context?.findAncestorWidgetOfExactType<Slider>() != null) continue;
+        n.requestFocus();
+        return;
+      }
     });
   }
 
@@ -1070,8 +1088,8 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
       unawaited(_setMini(false));
       return;
     }
-    // telefonen: spilleren fyller alltid skjermen
-    if (isAndroid) return;
+    // telefonen og TV-en: spilleren fyller alltid skjermen
+    if (alwaysFull) return;
     setState(() => _full = !_full);
     unawaited(WindowFullscreen.instance.set(_full));
     _wake();
@@ -1103,6 +1121,17 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     LogicalKeyboardKey.enter,
   };
 
+  /// tastene en knapp under bildet bruker selv (flytte mellom knappene, trykke)
+  static final _barKeys = {
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.select,
+  };
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     final keyboard = HardwareKeyboard.instance;
@@ -1110,6 +1139,19 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     final key = event.logicalKey;
     final repeat = event is KeyRepeatEvent;
     _wake();
+    // knappene under bildet har fokus: piltastene og OK er deres, Tilbake går tilbake til bildet
+    if (_barScope.hasFocus) {
+      if (key == LogicalKeyboardKey.escape) {
+        _focus.requestFocus();
+        return KeyEventResult.handled;
+      }
+      if (_barKeys.contains(key)) return KeyEventResult.ignored;
+    }
+    // TV-en: ↑/↓ går til knappene (lyden styres med fjernkontrollen)
+    if (isTizen && (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown)) {
+      if (!repeat) _focusBar();
+      return KeyEventResult.handled;
+    }
     if (_status != null && !repeat && _focus.hasPrimaryFocus && (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select)) {
       // OK når «Prøv igjen» vises: knappen på kortet (den får ikke fokus selv)
       _retry();
@@ -1141,6 +1183,12 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
       _skipMarker();
     } else if (key == LogicalKeyboardKey.keyI) {
       unawaited(_setMini(!_mini));
+    } else if (key == LogicalKeyboardKey.mediaStop) {
+      _close();
+    } else if (key == LogicalKeyboardKey.mediaPlay) {
+      if (!_playing) _togglePlay();
+    } else if (key == LogicalKeyboardKey.mediaPause) {
+      if (_playing) _togglePlay();
     } else if (key == LogicalKeyboardKey.escape) {
       if (_mini) {
         unawaited(_setMini(false));
@@ -1378,7 +1426,9 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
     );
   }
 
-  Widget _bottomBar({required bool compact}) {
+  Widget _bottomBar({required bool compact}) => FocusScope(node: _barScope, child: _barBox(compact: compact));
+
+  Widget _barBox({required bool compact}) {
     final total = _duration.inMilliseconds / 1000;
     final at = _seekValue ?? (_position.inMilliseconds / 1000).clamp(0, total > 0 ? total : 0).toDouble();
     final volume = _muted ? 0.0 : _volume;
@@ -1462,15 +1512,16 @@ class _VodPlayerState extends State<_VodPlayer> with WidgetsBindingObserver {
                   ],
                   const Spacer(),
                   // telefonen: volumknappene på siden (i et smalt bilde er det ikke plass til lyd av)
-                  if (!(isAndroid && compact))
+                  // TV-en: lyden styres med fjernkontrollen
+                  if (!(isAndroid && compact) && !isTizen)
                     _ctl(volumeIcon, _muted ? tr('Lyd på (M)') : tr('Lyd av (M)'), _toggleMute),
-                  if (!compact && !isAndroid) _volumeSlider(volume),
+                  if (!compact && isPc) _volumeSlider(volume),
                   _tracksButton(),
-                  if (!compact || isAndroid)
+                  if (canCast && (!compact || isAndroid))
                     _ctl(Icons.cast, tr('Cast til TV (Chromecast)'), () => unawaited(_startCast())),
                   if (!compact && MiniWindow.supported)
                     _ctl(Icons.picture_in_picture_alt_outlined, tr('Minispiller (I)'), () => unawaited(_setMini(true))),
-                  if (!isAndroid)
+                  if (!alwaysFull)
                     _ctl(_full ? Icons.fullscreen_exit : Icons.fullscreen,
                         _full ? tr('Avslutt fullskjerm (F)') : tr('Fullskjerm (F)'), _toggleFull),
                 ],

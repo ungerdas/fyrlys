@@ -185,24 +185,26 @@ class TracksButton extends StatelessWidget {
         PopupMenuItem<Object>(value: _languages, child: Text(tr('Foretrukne språk …'))),
         const PopupMenuDivider(),
         PopupMenuItem<Object>(enabled: false, child: Text(tr('Bilde'))),
-        // telefonen: avspilleren der har ingen deinterlacer
-        if (!isAndroid)
+        // telefonen: avspilleren der har ingen deinterlacer; TV-en fjerner striper og jevner ut bevegelsen selv
+        if (isPc)
           CheckedPopupMenuItem<Object>(
             value: _deinterlace,
             checked: picture.deinterlace,
             child: Text(tr('Fjern striper (deinterlacing)')),
           ),
-        CheckedPopupMenuItem<Object>(
-          value: _smooth,
-          checked: picture.smooth,
-          child: Text(tr('Jevn bevegelse (prøve)')),
-        ),
+        if (!isTizen)
+          CheckedPopupMenuItem<Object>(
+            value: _smooth,
+            checked: picture.smooth,
+            child: Text(tr('Jevn bevegelse (prøve)')),
+          ),
         if (format != null && onFormat != null)
           PopupMenuItem<Object>(
             value: _format,
             child: Text(tr('Bildeformat: {name} …', {'name': formatName(format!)})),
           ),
-        if (audioDelay != null && onAudioDelay != null)
+        // TV-ens avspiller kan ikke flytte lyden
+        if (audioDelay != null && onAudioDelay != null && !isTizen)
           PopupMenuItem<Object>(
             value: _delay,
             child: Text(tr('Lydforsinkelse: {value} …', {'value': audioDelayText(audioDelay!)})),

@@ -102,6 +102,8 @@ class WindowFullscreen {
   Future<void> set(bool on) {
     if (on == _on) return _queue;
     _on = on;
+    // Samsung-TV: appen fyller alltid skjermen
+    if (isTizen) return _queue;
     if (isAndroid) {
       return _queue = _queue.then((_) async {
         try {
@@ -154,8 +156,8 @@ class MiniWindow {
 
   static final instance = MiniWindow._();
 
-  /// bare på PC (en telefon har ikke vinduer)
-  static bool get supported => !isAndroid;
+  /// bare på PC (en telefon og en TV har ikke vinduer)
+  static bool get supported => isPc;
 
   static const size = Size(480, 270);
   static const _margin = 24.0;
@@ -219,7 +221,7 @@ class MiniWindow {
 
 /// Flytter vinduet med musa (minispilleren har ingen tittellinje).
 void dragWindow() {
-  if (isAndroid) return;
+  if (!isPc) return;
   try {
     windowManager.startDragging().ignore();
   } on Object {

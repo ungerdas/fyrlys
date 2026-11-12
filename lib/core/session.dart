@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../l10n/tr.dart';
+import '../platform.dart';
 import 'cache.dart';
 import 'languages.dart';
 import 'm3u_source.dart';
@@ -502,7 +503,9 @@ class Session extends ChangeNotifier {
   }
 
   /// Flere bilder samtidig går når du har flere abonnementer, eller ett med flere tilkoblinger.
-  bool get canMultiview => logins.length >= 2 || (_connections ?? 0) >= 2;
+  ///
+  /// Ikke på Samsung-TV-en: der finnes TV-ens avspiller bare én gang.
+  bool get canMultiview => !isTizen && (logins.length >= 2 || (_connections ?? 0) >= 2);
 
   /// Kilden for en lagret innlogging: den i bruk, eller en ny for de andre (den som spør, lukker den med dispose).
   Future<TvSource?> sourceFor(String id) async =>
