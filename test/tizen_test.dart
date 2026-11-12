@@ -106,7 +106,7 @@ void main() {
     expect(AvplayPlayback.mimeCodec('audio/x-ac3'), 'AC3');
   });
 
-  testWidgets('TV-spilleren på TV-en: ingen Chromecast, volum, minispiller eller multiview; grønn gir knappene',
+  testWidgets('TV-spilleren på TV-en: ingen Chromecast, volum, minispiller eller multiview; Info gir knappene',
       (tester) async {
     _tv(tester);
     final session = await _session();
@@ -123,9 +123,11 @@ void main() {
     expect(find.byType(Slider), findsNothing);
     expect(session.canMultiview, isFalse);
 
-    // grønn (eller Info): fokus til knappene under bildet, og da bytter ↓ ikke kanal
-    await tester.sendKeyEvent(LogicalKeyboardKey.colorF1Green);
+    // Info (eller grønn): fokus til knappene under bildet, og da bytter ↓ ikke kanal
+    // (testene kjenner ikke fjernkontrollens taster, så den fysiske tasten oppgis)
+    await tester.sendKeyEvent(LogicalKeyboardKey.info, physicalKey: PhysicalKeyboardKey.info);
     await _settle(tester);
+    if (FocusManager.instance.primaryFocus?.debugLabel == 'spiller') debugDumpFocusTree();
     expect(FocusManager.instance.primaryFocus?.debugLabel, isNot('spiller'));
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump(const Duration(seconds: 1));
@@ -174,6 +176,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await _settle(tester);
     expect(fake.volume, 100);
+    if (FocusManager.instance.primaryFocus?.debugLabel == 'filmspiller') debugDumpFocusTree();
     expect(FocusManager.instance.primaryFocus?.debugLabel, isNot('filmspiller'));
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();

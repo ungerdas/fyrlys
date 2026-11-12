@@ -517,16 +517,23 @@ class _PlayerState extends State<_Player> with WidgetsBindingObserver {
   /// TV-en: fokus til den første knappen under bildet (fjernkontrollen når ikke knappene ellers). Neste bilde, så
   /// knappene er der.
   void _focusBar() {
+    final shown = _controls;
     _wake();
+    if (shown && _focusFirstButton()) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      for (final n in _barScope.traversalDescendants) {
-        // den første knappen, ikke tidslinja (der spoler ←/→)
-        if (n.context?.findAncestorWidgetOfExactType<Slider>() != null) continue;
-        n.requestFocus();
-        return;
-      }
+      if (mounted) _focusFirstButton();
     });
+  }
+
+  /// Den første knappen under bildet som kan trykkes, ikke tidslinja (der spoler ←/→).
+  bool _focusFirstButton() {
+    for (final n in _barScope.traversalDescendants) {
+      if (n.context?.findAncestorWidgetOfExactType<Slider>() != null) continue;
+      n.requestFocus();
+      return true;
+    }
+    debugPrint('Knappene under bildet: ingen kan få fokus (${_barScope.descendants.length} i alt)');
+    return false;
   }
 
   void _togglePlay() {
