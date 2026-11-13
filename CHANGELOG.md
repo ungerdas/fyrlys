@@ -1,5 +1,20 @@
 # Endringer
 
+## v2.1.48
+
+- **Fyrlys for Samsung-TV-er** fra 2021 og nyere (Tizen 6.0 til 10.0), med TV-ens egen avspiller. Den ligger ikke i
+  Samsungs appbutikk: last ned pakken for året TV-en er fra (`Fyrlys-tizen-2021.tpk`, `Fyrlys-tizen-2022-2025.tpk`
+  eller `Fyrlys-tizen-2026.tpk`) og installer den fra en PC eller telefon med TV-en i utviklermodus, f.eks. med
+  Apps2Samsung. Hele veiledningen står under «Samsung-TV» på forsiden på GitHub.
+- På TV-en: ↑/↓ bytter kanal, OK gir kanallista, Tilbake går tilbake, grønn eller Info går til knappene under bildet
+  (lydspor, undertekster, bildeformat), rød er TV-arkivet, blå «Se fra start», gul bildeformat, og kanallisteknappen
+  og PRE-CH virker. I filmspilleren går ↑/↓ til knappene.
+- Plex på TV-en: koden skrives inn på plex.tv/link fra telefonen eller PC-en.
+- Nye versjoner: Fyrlys på TV-en sier fra, og du installerer den nye pakken på samme måte.
+- Pause og spoling i direktesendinger, multiview, minispiller, lydforsinkelse og Chromecast finnes ikke på TV-en.
+- PC: har en knapp under bildet fått fokus med tastaturet (Tab), flytter piltastene mellom knappene i stedet for å
+  bytte kanal eller spole, og Esc går tilbake til bildet. Mediestopp lukker spilleren.
+
 ## v2.1.47
 
 - **Velg hvilke land som vises.** Fyrlys finner landene i kategorinavnene («NO: …», «SE: …», «UK | …», «Norway -

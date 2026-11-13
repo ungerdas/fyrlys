@@ -56,8 +56,8 @@ class PlexClientInfo {
         'X-Plex-Product': 'Fyrlys',
         'X-Plex-Version': appVersion.isEmpty ? '0' : appVersion,
         'X-Plex-Client-Identifier': id,
-        'X-Plex-Platform': isAndroid ? 'Android' : 'Windows',
-        'X-Plex-Device': isAndroid ? 'Android' : 'Windows',
+        'X-Plex-Platform': isAndroid ? 'Android' : (isTizen ? 'Tizen' : 'Windows'),
+        'X-Plex-Device': isAndroid ? 'Android' : (isTizen ? 'Samsung TV' : 'Windows'),
         'X-Plex-Device-Name': plexAscii(deviceName),
         // overskriftene Plex lager selv («Nylig lagt til …»), på språket i appen
         'X-Plex-Language': appLanguage == 'en' ? 'en' : 'nb',
@@ -110,9 +110,11 @@ class PlexTv {
     return res;
   }
 
-  /// En ny PIN (gjelder i en halvtime).
-  Future<PlexPin> createPin() async {
-    final res = await _send(() => _http.post(Uri.parse('$_api/pins?strong=true'), headers: info.headers()));
+  /// En ny PIN (gjelder i en halvtime). [strong]: en lang kode til [authUrl]; ellers fire tegn du skriver inn på
+  /// plex.tv/link (TV-en, som ikke har noen nettleser å åpne).
+  Future<PlexPin> createPin({bool strong = true}) async {
+    final res = await _send(
+        () => _http.post(Uri.parse(strong ? '$_api/pins?strong=true' : '$_api/pins'), headers: info.headers()));
     final j = plexMap(_json(res));
     final id = plexInt(j['id']);
     final code = plexText(j['code']);

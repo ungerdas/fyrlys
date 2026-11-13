@@ -222,4 +222,13 @@ const enSettings = <String, String>{
   '1 kanal': '1 channel',
   '{n} kanaler': '{n} channels',
   'Bruk': 'Apply',
+
+  // settings_page.dart: Samsung-TV-en
+  'Innloggingen slettes fra Fyrlys på denne TV-en. Favorittene og det du har sett, kommer tilbake hvis du logger '
+          'inn igjen.':
+      'The login is removed from Fyrlys on this TV. Your favorites and what you have watched come back if you sign '
+          'in again.',
+  'Fyrlys glemmer Plex-innloggingen på denne TV-en. Det du har sett, ligger på Plex-serveren.':
+      'Fyrlys forgets the Plex sign-in on this TV. What you have watched stays on the Plex server.',
+  'Som TV-en': 'Same as the TV',
 };

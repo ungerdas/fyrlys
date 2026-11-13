@@ -406,6 +406,12 @@ class _HomePageState extends State<HomePage> {
     final actions = <Widget>[];
     final close = IconButton(tooltip: tr('Lukk'), icon: const Icon(Icons.close), onPressed: u.dismiss);
     switch (u.state) {
+      case UpdateState.available when u.installElsewhere:
+        // TV-en: installeres fra PC-en eller telefonen, som første gang
+        text = tr('Ny versjon: {version}. Installer den på TV-en fra PC-en eller telefonen, som første gang.',
+            {'version': info?.label ?? ''});
+        if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));
+        actions.add(close);
       case UpdateState.available:
         text = tr('Ny versjon: {version}', {'version': info?.label ?? ''});
         if (info != null && info.notes.isNotEmpty) actions.add(_notesButton(info));

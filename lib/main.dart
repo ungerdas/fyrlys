@@ -16,11 +16,13 @@ import 'core/cache.dart';
 import 'core/report.dart';
 import 'core/session.dart';
 import 'core/single_instance.dart';
+import 'core/tizen_host.dart';
 import 'core/updater.dart';
 import 'l10n/tr.dart';
 import 'platform.dart';
 import 'theme.dart';
 import 'ui/playback.dart';
+import 'ui/playback_tizen.dart';
 import 'ui/window_memory.dart';
 
 Future<void> main() async {
@@ -42,16 +44,16 @@ Future<void> _start() async {
   appLanguage = systemLanguage;
   // En oppdatering som ble lastet ned, men ikke lagt inn da appen ble lukket, legges inn før appen vises;
   // den nye utgaven starter av seg selv.
-  // Android: nedlastingene i appens egen mappe (APK-en installeres derfra)
+  // Android: nedlastingene i appens egen mappe (APK-en installeres derfra). TV-en: sier bare fra om nye versjoner.
   final updater = isAndroid
       ? Updater(workDir: '${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}oppdatering')
       : Updater();
   if (await updater.beforeStart()) exit(0);
   // Bare én Fyrlys: starter du den en gang til, kommer vinduet som er åpent fram (før noe ryddes på disken).
-  if (!isAndroid && await SingleInstance.isSecond(onShow: () => unawaited(_bringToFront()))) exit(0);
+  if (isPc && await SingleInstance.isSecond(onShow: () => unawaited(_bringToFront()))) exit(0);
   // Loggen også på disk, så slutten av den kommer med i feilrapporten om appen krasjer (ikke på Android: der stoppes
-  // appen uten at den får vite det, og hver gang ville sett ut som et krasj).
-  if (!isAndroid) {
+  // appen uten at den får vite det, og hver gang ville sett ut som et krasj; det samme på TV-en).
+  if (isPc) {
     try {
       AppLog.instance
           .attach(File('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}logg.txt'));
@@ -60,11 +62,16 @@ Future<void> _start() async {
       // bare i minnet
     }
   }
-  MediaKit.ensureInitialized();
-  if (!isAndroid) await windowManager.ensureInitialized();
+  if (isTizen) {
+    // Samsung-TV: TV-ens egen avspiller (mpv finnes ikke der), og ingen vinduer
+    playbackFactory = AvplayPlayback.new;
+  } else {
+    MediaKit.ensureInitialized();
+  }
+  if (isPc) await windowManager.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   // samme størrelse og plass som sist, før vinduet vises
-  if (!isAndroid) await WindowMemory.restore(prefs);
+  if (isPc) await WindowMemory.restore(prefs);
   // kanallista fra sist og bildene på disk, så appen er klar med en gang (uten mapper: hentes hver gang)
   ListCache? lists;
   try {
@@ -74,10 +81,12 @@ Future<void> _start() async {
     ImageStore.instance = images;
     unawaited(images.prune());
     // TV-bufferet til avspilleren (pause og spoling): det som ble liggende sist (krasj), ryddes først
-    final mpv = Directory('$cache${Platform.pathSeparator}mpv');
-    if (mpv.existsSync()) mpv.deleteSync(recursive: true);
-    mpv.createSync(recursive: true);
-    MpvPlayback.cacheDir = mpv.path;
+    if (!isTizen) {
+      final mpv = Directory('$cache${Platform.pathSeparator}mpv');
+      if (mpv.existsSync()) mpv.deleteSync(recursive: true);
+      mpv.createSync(recursive: true);
+      MpvPlayback.cacheDir = mpv.path;
+    }
   } on Object {
     // uten disk
   }
@@ -98,6 +107,13 @@ void _keepLog() {
     log.add('$appBuildLabel ${Abi.current()}');
     unawaited(AndroidHost.device().then((d) {
       androidDevice = d;
+      if (d != null) log.add(d);
+    }));
+  } else if (isTizen) {
+    // Tizen-versjonen og modellen (pakken for TV-en må passe til versjonen)
+    log.add('$appBuildLabel Samsung-TV');
+    unawaited(tizenDevice().then((d) {
+      tvDevice = d;
       if (d != null) log.add(d);
     }));
   } else {

@@ -2,7 +2,9 @@
 
 Egen app for Fyrlys, en IPTV-spiller: Flutter med media_kit (mpv) som avspiller, for **Windows og Android-telefoner**
 (eieren 26.10: «vi kjører kun Windows», så Android ble fjernet i 2.1.12; 1.11 ville han ha den tilbake: «Kan du lage
-android mobil versjon? med Chromecast», i samme app og som APK fra GitHub, 2.1.26; Android TV og Linux er ikke med).
+android mobil versjon? med Chromecast», i samme app og som APK fra GitHub, 2.1.26; Android TV og Linux er ikke med),
+og **Samsung-TV-er** (Tizen 6.0–10.0, 2.1.48; eieren 12.11: «Kan man ha appen på Tizen?», så «Kjør.»), med TV-ens egen
+avspiller (AVPlay) i stedet for mpv.
 Den kommer **i tillegg til** Docker-versjonen
 (nettside + server med ffmpeg) i et eget, privat repo.
 Fra 2.1.6 (eieren 26.10: «Fyrlys server dropper vi») logger appen inn med M3U-lenke eller Xtream Codes og henter
@@ -58,6 +60,21 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   msvcp140, vcruntime140 og vcruntime140_1. `zlib.dll` (ved behov) er et Debug-bygg som trenger ucrtbased.dll og
   vcruntime140d.dll (finnes bare med Visual Studio): ukjent hvilken pakke den kommer fra, og om appen noen gang laster
   den på Windows. `dartjni.dll` (ved behov) henter jvm.dll.
+- Samsung-TV (2.1.48): jobben `tizen` i workflowen (ubuntu-22.04, som flutter-tizen/plugins sin CI): Tizen SDK 10.0 på
+  kommandolinja (`web-cli_Tizen_SDK_10.0_ubuntu-64.bin` til `~/tizen-studio`, pakkene NativeToolchain-Gcc-9.2,
+  IOT-Headed-6.0/6.5-NativeAppDevelopment-CLI og TIZEN-10.0-NativeAppDevelopment-CLI (den tar med Gcc-14.2)), et
+  sertifikat laget for bygget (`tizen certificate` + `security-profiles add`, passordet tilfeldig, i
+  `dbus-run-session` med gnome-keyring), flutter-tizen på taggen `FLUTTER_TIZEN_TAG` (3.47.5-tizen.1.0.1) med Flutter
+  `FLUTTER_TAG` klonet grunt på forhånd (ellers kloner flutter-tizen hele Flutter-historikken). `tizen/` ligger i
+  repoet (C#-malen: `App.cs`, `Runner.csproj`, `tizen-manifest.xml` med `no.fyrlys.fyrlys`, profil tv, bare
+  internett-rettigheten, ikonet fra assets); bygget setter versjonen (bare på `<manifest`-linja: en sed som også traff
+  `<?xml version` ga «tz: error: invalid path» fra `tz set`) og `api-version` per pakke: 6.0 → `Fyrlys-tizen-2021.tpk`,
+  6.5 → `-2022-2025.tpk`, 10.0 → `-2026.tpk` (video_player_avplay har AVPlay-bibliotekene per versjon og nekter å
+  spille med feil pakke). TV-ene krever et Samsung-sertifikat med TV-ens DUID, så brukerne signerer pakken på nytt
+  (Apps2Samsung gjør det). Feiler TV-jobben, legges Windows og Android ut likevel (releasen `!cancelled()` og
+  `needs.tizen.result`). Tizen SDK kan installeres i Claude-økta (download.tizen.org er åpent; installeren nekter root,
+  så som en egen bruker), og `tz` kan prøves der; package-manager-cli får ikke kontakt (proxyen), og flutter-tizen
+  selv kan ikke kjøres (Googles nedlastinger).
 - Videoavspilling kan ikke testes her: si tydelig hva som bare er testet med tester, og hva eieren må
   prøve på Windows-PC-en sin.
 - Flutter- og media_kit-kildene kan hentes for å sjekke API-er (github.com er åpent for git):
@@ -120,6 +137,31 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
   castingen stopper. Innloggingen lagres ukryptert i appens egne innstillinger på Android (`NoSecretCodec`).
   Testet i `test/android_test.dart` (spillerne på høykant/tvers, livssyklus, casting i bakgrunnen) og
   `updater_test.dart`; ikke prøvd på en ekte telefon: Kotlin-delen, varselet, multicast, installeringen, mpv på Android.
+- Samsung-TV (2.1.48): `platform.dart`: `isTizen` (`--dart-define=FYRLYS_TIZEN=true` i TV-bygget, ellers
+  `TIZEN_API_VERSION` i miljøet; testene setter den), `isPc`, `canCast`, `alwaysFull`, `pausesInBackground`.
+  `ui/playback_tizen.dart`: `AvplayPlayback` (video_player_avplay 0.8.x): én `VideoPlayerController` per adresse, og
+  den forrige lukkes først (`_gate`, AVPlay finnes bare én gang); User-Agent/Cookie som `streamingProperty` (AVPlay
+  sender ikke andre hoder; `withHeadersInUrl` legger X-Plex-* i adressen); start = `seekTo` etter initialize
+  (`startPosition` i playerOptions tas bare som int64, og små tall kommer som int32); direktesending = vindu fra AVPlay
+  (start > 0) eller ingen lengde, posisjonen fra der du kom inn (`_origin`), lengden 0; `liveCache` er alltid null (ingen
+  pause/spoling i direktesendinger); spor fra `audioTracks`/`textTracks` (velges etter språkene, ikke undertekst på
+  språket lyden alt har); filens undertekster vises med `ClosedCaption`, undertekstfiler (Plex, .srt/.vtt) hentes og
+  vises av `parseSubtitleCues`/`cueAt`; bildet er et hull (`VideoPlayer`) der TV-en tegner, med `ObjectKey` per
+  avspiller (ellers får en ny avspiller aldri plassen sin), og bildeformatet som `DisplayMode` (letterBox, croppedFull,
+  fullScreen; 16:9/4:3 som en boks); `avplayError` sier hvilken pakke som passer når video_player_avplay nekter
+  (`tizenPackageFor`). `main.dart`: `playbackFactory = AvplayPlayback.new`, ingen MediaKit, window_manager, én-Fyrlys,
+  logg på disk eller mpv-buffer; `core/tizen_host.dart` (`tizenDevice`: «Tizen 8.0 · modell», `tvDevice` i rapporten,
+  aldri DUID). `Updater` på TV-en: `assetSuffix` «.tpk», `installElsewhere` (banneret og innstillingene sier at den
+  installeres fra PC-en/telefonen; ingen nedlasting). Ikke på TV-en: Chromecast, multiview (`canMultiview`),
+  minispiller, volum/lyd av (fjernkontrollen), «Fjern striper», «Jevn bevegelse», lydforsinkelse, «Lagre
+  feilrapport». Plex: `createPin(strong: false)` og koden vises (`plex-kode`) for plex.tv/link. Fjernkontrollen
+  (flutter-tizen: Tilbake = Escape, ellers popRoute; mange TV-taster som LogicalKeyboardKey): TV-spilleren
+  `info`/`colorF1Green` = knappene under bildet (`_barScope`, `_focusBar`, første knapp som ikke er tidslinja), rød
+  arkiv, blå se fra start, gul bildeformat, `listProgram` kanallista, `navigatePrevious` forrige kanal, `mediaStop`
+  lukk; filmspilleren ↑/↓ = knappene. Har en knapp i `_barScope` fokus (også PC med Tab), er piltastene og OK dens, og
+  Esc går tilbake til bildet; kontrollene skjules ikke imens. flutter-tizen gir TV-er pikseltetthet 1,6 (72/90 × 2),
+  altså 1200×675. Testet i `tizen_test.dart` (undertekstene, pakkenavnene, feilen, hodene, kodekene, spillerne og
+  banneret med isTizen); AVPlay, hullet, sporene, fjernkontrollen og installeringen er ikke prøvd på en ekte TV.
 - `core/source.dart` – `TvSource` (`kind` `xtream`/`m3u`, `hasVod`): kilde til kanaler, EPG, strømadresser og
   favoritter. `PlayTarget(urls, localShift:)`. Begge kildene spiller rett fra leverandøren (`localShift: true`).
   TV-arkivet (2.1.14): `archive(channel)` (programmene, `EpgEntry.inArchive`) og `archiveClip(channel, program)` →
@@ -730,6 +772,14 @@ kan ikke endres fra Claude-økta (proxyen stopper det); eieren gjør det under �
 - 5.11.2026: 2.1.41: rekkefølgen på bibliotekene i Plex-fanen (se Plex under Arkitektur). Testet med tester og den
   falske Plex-serveren (`homeVideos` gir et tredje bibliotek). Eieren tok den i bruk samme dag (bilde: TV-serier over
   Filmer), men ville ikke ha pilene i sidemenyen hele tiden; 2.1.42 har dem bare i valget av biblioteker.
+- 12.11.2026: 2.1.48: Samsung-TV (se Samsung-TV under Arbeidsmåte og Arkitektur). Eieren spurte «Kan man ha appen på
+  Tizen?», fikk svar om utviklermodus/Samsung-sertifikat og at butikken krever partneravtale utenfor USA, og svarte
+  «Kjør. kan andre installere appen?». Spurt hvilken Samsung-TV (og hvilket år) det skal prøves på; ikke svart ennå.
+  Prøvd på grenen `tizen` før main: tre kjøringer (testene: fokus til knappene måtte settes med en gang,
+  ikke bare etter neste bilde; bygget: sed-en traff `<?xml version`), så bygde alle tre pakkene (ca. 15 MB hver). Ikke
+  prøvd på en ekte TV: AVPlay-avspillingen, hullet i bildet, sporene, undertekstene, fjernkontrollen, Plex-koden,
+  pikseltettheten og installeringen med Apps2Samsung. Mulig senere: Fyrlys i Apps2Samsung sin katalog
+  (tizen-community-packages), så folk finner den der.
 - 9.11.2026: 2.1.47: land og ryddige navn (se `core/tidy.dart` under Arkitektur). Eieren spurte om jeg kunne se
   mappene og kanalene fra M3U-lenka; lista ble i stedet lest fra kanallista Fyrlys har lagret på PC-en hans
   (`%APPDATA%\Fyrlys\Fyrlys\lister`, uten innlogging). Den har land foran kategoriene («NO: …»), et merke og

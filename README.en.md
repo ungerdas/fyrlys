@@ -4,18 +4,20 @@
 
 <h1 align="center">Fyrlys</h1>
 
-<p align="center">IPTV player for Windows and Android phones: live TV, TV guide, catch-up, movies and series.</p>
+<p align="center">IPTV player for Windows, Android phones and Samsung TVs: live TV, TV guide, catch-up, movies and series.</p>
 
 <p align="center">
   <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-oppsett.exe"><b>Download for Windows</b></a>
   &nbsp;·&nbsp;
   <a href="https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-android.apk"><b>Android</b></a>
   &nbsp;·&nbsp;
+  <a href="#samsung-tv"><b>Samsung TV</b></a>
+  &nbsp;·&nbsp;
   <a href="README.md">Norsk</a>
 </p>
 
 Fyrlys plays your subscription from an IPTV provider, using an M3U link or Xtream Codes. It has no channels of its own.
-The app is in English or Norwegian (it follows Windows or the phone; change it under the gear → Appearance).
+The app is in English or Norwegian (it follows Windows, the phone or the TV; change it under the gear → Appearance).
 
 ## Features
 
@@ -55,6 +57,33 @@ Android 7 or newer, on phones (ARM) and in emulators such as BlueStacks (pick a 
 passes the stream on to the TV: a notification shows that Fyrlys is running, also with the screen off. Closing the app
 stops casting.
 
+### Samsung TV
+
+Samsung TVs from 2021 and newer (Tizen 6.0 to 10.0). Fyrlys is not in Samsung's app store, so you install it from a PC
+or phone, with the TV in developer mode:
+
+1. Download the package for the year your TV is from (on the back of the TV, or under *Settings → Support → About This
+   TV*): [2021](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-tizen-2021.tpk),
+   [2022–2025](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-tizen-2022-2025.tpk) or
+   [2026](https://github.com/ungerdas/fyrlys/releases/latest/download/Fyrlys-tizen-2026.tpk).
+   The TV's player is built for one Tizen version at a time, so the package has to match; if it doesn't, Fyrlys tells
+   you which one does when you start a channel.
+2. Turn on developer mode: open *Apps* on the TV, press 1 2 3 4 5 on the remote (or on the on-screen number pad), turn on
+   *Developer mode* and enter the IP address of the PC or phone you install from. Restart the TV (hold the power button
+   until it turns off and on again).
+3. Install the package with [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) (free, for Windows, Mac, Linux,
+   Android and iPhone; not part of Fyrlys): pick the TV, pick *your own `.tpk`* and press *Install*. The first time you
+   sign in with a Samsung account, and it makes a certificate for your TV (TVs only accept apps signed for them).
+4. Fyrlys is under *Apps*. Sign in as on the PC.
+
+New versions: Fyrlys tells you on the TV, and you install the new package the same way (from the same PC or phone, so
+your login and favorites stay).
+
+On the TV, the TV's own player plays everything, so the TV decides which formats work. Pausing and rewinding live TV,
+multiview, the mini player, audio delay and Chromecast are not available there. The remote: ↑/↓ change channel, OK
+shows the channel list, Back goes back, green or Info goes to the buttons below the picture (audio, subtitles, picture
+format), red is the TV archive, blue *Watch from start* and yellow the picture format.
+
 <details>
 <summary>Keys</summary>
 
@@ -84,5 +113,9 @@ Made with Flutter, [media_kit](https://github.com/media-kit/media-kit) and [mpv]
 flutter create --org no.fyrlys --project-name fyrlys --platforms=windows,android .
 flutter run
 ```
+
+The Samsung TV packages are built with [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen) and the TV's own
+player ([video_player_avplay](https://pub.dev/packages/video_player_avplay)): `flutter-tizen build tpk --dart-define=FYRLYS_TIZEN=true`
+(with the TV's `api-version` in `tizen/tizen-manifest.xml`, see the workflow).
 
 The player is [mpv](https://mpv.io) (libmpv, LGPL), from [mpv-winbuild](https://github.com/zhongfly/mpv-winbuild).

@@ -1,8 +1,9 @@
-# Analyse og tester ved hver endring, og bygg for Windows og Android (arm64, arm og x86_64), med versjon og byggnummer i appen.
+# Analyse og tester ved hver endring, og bygg for Windows, Android (arm64, arm og x86_64) og Samsung-TV (Tizen), med
+# versjon og byggnummer i appen.
 # Hver push til main legger ut versjonen i pubspec.yaml som en release «vX.Y.Z» (Fyrlys-oppsett.exe,
-# Fyrlys-windows.zip og Fyrlys-android.apk, faste navn; Windows-appen oppdaterer seg selv fra zip-fila, Android-appen
-# laster ned APK-en), som blir «Latest». Teksten er avsnittet for versjonen i CHANGELOG.md, og byggnummeret står
-# skjult i den (<!-- bygg N -->); appen ser etter nye versjoner der.
+# Fyrlys-windows.zip, Fyrlys-android.apk og Fyrlys-tizen-*.tpk, faste navn; Windows-appen oppdaterer seg selv fra
+# zip-fila, Android-appen laster ned APK-en, TV-en sier fra), som blir «Latest». Teksten er avsnittet for versjonen i
+# CHANGELOG.md, og byggnummeret står skjult i den (<!-- bygg N -->); appen ser etter nye versjoner der.
 # Er versjonen ikke endret, byttes filene i releasen den har fra før.
 # APK-en signeres med Fyrlys-nøkkelen (hemmelighetene ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD og
 # ANDROID_KEY_ALIAS), så nye versjoner kan installeres oppå de gamle. Uten nøkkelen bygges den, men legges ikke ut.
@@ -397,11 +398,120 @@ jobs:
             echo "::error title=$f::$msg"
           done
 
+  # Samsung-TV (Tizen 6.0 og nyere, TV-er fra 2021): flutter-tizen med Tizen SDK på kommandolinja, som byggene til
+  # flutter-tizen/plugins. TV-ens avspiller (video_player_avplay) er bygget for én Tizen-versjon av gangen, så det blir
+  # tre pakker: 2021 (Tizen 6.0), 2022–2025 (6.5–9.0) og 2026 (10.0). De signeres her med et sertifikat som lages for
+  # bygget; den som installerer, signerer dem på nytt med sitt eget Samsung-sertifikat (det må ha TV-ens DUID), f.eks.
+  # med Apps2Samsung. Feiler TV-bygget, legges Windows og Android ut likevel.
+  tizen:
+    name: Samsung-TV (Tizen)
+    needs: test
+    runs-on: ubuntu-22.04
+    env:
+      FLUTTER_TIZEN_TAG: 3.47.5-tizen.1.0.1
+      FLUTTER_TAG: 3.47.5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tizen SDK (kommandolinja)
+        run: |
+          sudo add-apt-repository -y ppa:deadsnakes/ppa > /dev/null
+          sudo apt-get update -q > /dev/null
+          sudo apt-get install -y -q libncurses5 python3.8 libpython3.8 gettext libkf5itemmodels5 libkf5kiowidgets5 \
+            libkchart2 dbus-x11 gnome-keyring > apt.log 2>&1 || { tail -n 40 apt.log; exit 1; }
+          curl -fsSL https://download.tizen.org/sdk/Installer/tizen-sdk_10.0/web-cli_Tizen_SDK_10.0_ubuntu-64.bin -o install.bin
+          chmod a+x install.bin
+          ./install.bin --accept-license "$HOME/tizen-studio" > sdk.log 2>&1 || { tail -n 40 sdk.log; exit 1; }
+          rm install.bin
+          pm="$HOME/tizen-studio/package-manager/package-manager-cli.bin"
+          "$pm" install NativeToolchain-Gcc-9.2 IOT-Headed-6.0-NativeAppDevelopment-CLI \
+            IOT-Headed-6.5-NativeAppDevelopment-CLI 2>&1 | tee packages.log | tail -n 20
+          # Tizen 10.0 (TV-er fra 2026): egen pakke; mangler den, bygges bare de to andre
+          "$pm" install TIZEN-10.0-NativeAppDevelopment-CLI 2>&1 | tee packages10.log | tail -n 20 \
+            || echo "::warning title=Tizen 10.0::Fant ikke pakken for Tizen 10.0 (TV-er fra 2026)"
+          ls "$HOME/tizen-studio/platforms" || true
+          ls "$HOME/tizen-studio/tools" "$HOME/tizen-studio/tools/tizen-core" 2>&1 | head -n 40 || true
+          dotnet --list-sdks
+      - name: Sertifikat for bygget
+        run: |
+          export PATH="$PATH:$HOME/tizen-studio/tools/ide/bin"
+          # bare til dette bygget (passordet lages her og vises ikke)
+          pass=$(openssl rand -hex 16)
+          echo "::add-mask::$pass"
+          dbus-run-session -- bash -c "
+            echo tizen | gnome-keyring-daemon --unlock > /dev/null &&
+            tizen certificate -a fyrlys -p $pass -f fyrlys &&
+            tizen security-profiles add -n fyrlys -a $HOME/tizen-studio-data/keystore/author/fyrlys.p12 -p $pass
+          " 2>&1 | tee cert.log
+      - name: flutter-tizen
+        run: |
+          git clone -q --depth 1 --branch "$FLUTTER_TIZEN_TAG" https://github.com/flutter-tizen/flutter-tizen.git "$HOME/flutter-tizen"
+          # Flutter-versjonen flutter-tizen vil ha, uten hele historikken (ellers henter den alt selv)
+          git clone -q --depth 1 --branch "$FLUTTER_TAG" https://github.com/flutter/flutter.git "$HOME/flutter-tizen/flutter"
+          [ "$(git -C "$HOME/flutter-tizen/flutter" rev-parse HEAD)" = "$(cat "$HOME/flutter-tizen/bin/internal/flutter.version")" ] \
+            || echo "::warning title=flutter-tizen::Flutter $FLUTTER_TAG er ikke versjonen flutter-tizen $FLUTTER_TIZEN_TAG vil ha; den henter riktig selv"
+          echo "$HOME/flutter-tizen/bin" >> "$GITHUB_PATH"
+          "$HOME/flutter-tizen/bin/flutter-tizen" --version 2>&1 | tee flutter.log | tail -n 5
+      - name: Bygg for TV-ene
+        run: |
+          version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+          defines="--dart-define=FYRLYS_TIZEN=true --dart-define=FYRLYS_VERSION=$version --dart-define=FYRLYS_BUILD=${{ github.run_number }} --dart-define=FYRLYS_COMMIT=${GITHUB_SHA::7} --dart-define=FYRLYS_REPO=${{ github.repository }}"
+          # versjonen i pakken: bare i <manifest> (ikke «<?xml version», og ikke «api-version=»)
+          sed -i "/<manifest /s/ version=\"[0-9.]*\"/ version=\"$version\"/" tizen/tizen-manifest.xml
+          python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse('tizen/tizen-manifest.xml')"
+          head -n 2 tizen/tizen-manifest.xml
+          mkdir -p out
+          # én pakke per Tizen-versjon; Tizen 10.0 (TV-er fra 2026) er nytt i Tizen SDK, så feiler den, kommer de andre
+          # likevel (med en advarsel og slutten av loggen)
+          cat > tv-build.sh <<'EOS'
+          set -eo pipefail
+          echo tizen | gnome-keyring-daemon --unlock > /dev/null
+          warn() {
+            msg=$(printf '%s\n\n%s' "$2" "$(tail -n 40 "$3" 2>/dev/null)" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::warning title=$1::$msg"
+          }
+          for target in 6.0:2021 6.5:2022-2025 10.0:2026; do
+            api=${target%%:*}
+            years=${target#*:}
+            if [ "$api" = 10.0 ] && [ ! -d "$HOME/tizen-studio/platforms/tizen-10.0" ]; then
+              warn "Tizen 10.0" "Pakken for Tizen 10.0 mangler, så Fyrlys-tizen-2026.tpk lages ikke" packages10.log
+              continue
+            fi
+            sed -i "s/api-version=\"[0-9.]*\"/api-version=\"$api\"/" tizen/tizen-manifest.xml
+            grep -o 'api-version="[0-9.]*"' tizen/tizen-manifest.xml
+            rm -rf build/tizen/tpk
+            if flutter-tizen build tpk --release --device-profile tv --security-profile fyrlys $DEFINES 2>&1 | tee "build-$api.log"; then
+              cp build/tizen/tpk/*.tpk "out/Fyrlys-tizen-$years.tpk"
+            elif [ "$api" = 10.0 ]; then
+              warn "Tizen 10.0" "Fyrlys-tizen-2026.tpk ble ikke bygget" "build-$api.log"
+            else
+              exit 1
+            fi
+          done
+          EOS
+          DEFINES="$defines" dbus-run-session -- bash tv-build.sh
+          ls -la out
+          for f in out/*.tpk; do echo "== $f"; unzip -l "$f" | grep -E 'lib/|Runner|tizen-manifest' | head -n 40; done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Fyrlys-tizen
+          path: out/*.tpk
+      - name: Vis feilen som merknad
+        if: failure()
+        run: |
+          for f in *.log; do
+            [ -f "$f" ] || continue
+            msg=$(tail -n 60 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=$f::$msg"
+          done
+
   release:
     name: Release
     # også når kjøringen startes for hånd på main (f.eks. for å få APK-en med etter at signeringsnøkkelen er lagt inn)
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    needs: [windows, android]
+    # Samsung-TV-pakkene kommer med når de ble bygget; feiler de, legges Windows og Android ut likevel
+    if: >-
+      !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main' && needs.windows.result == 'success' && needs.android.result == 'success'
+    needs: [windows, android, tizen]
     runs-on: ubuntu-latest
     # to pusher rett etter hverandre skal ikke oppdatere releasene samtidig
     concurrency:
@@ -425,6 +535,11 @@ jobs:
         with:
           name: Fyrlys-android
           path: dist/Fyrlys-android
+      - uses: actions/download-artifact@v8
+        if: needs.tizen.result == 'success'
+        with:
+          name: Fyrlys-tizen
+          path: dist/Fyrlys-tizen
       - name: Pakk filene og skriv teksten
         run: |
           version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
@@ -435,6 +550,8 @@ jobs:
           cp dist/Fyrlys-oppsett/Fyrlys-oppsett.exe out/
           # APK-en bare når den er signert med Fyrlys-nøkkelen (ellers kan den ikke oppdateres senere)
           if [ -f dist/Fyrlys-android/Fyrlys-android.apk ]; then cp dist/Fyrlys-android/Fyrlys-android.apk out/; fi
+          # Samsung-TV: én pakke per Tizen-versjon (Fyrlys-tizen-2021.tpk, -2022-2025.tpk, -2026.tpk)
+          if [ -d dist/Fyrlys-tizen ]; then cp dist/Fyrlys-tizen/*.tpk out/; fi
           ls -la out
           awk -v v="## v${version}" 'index($0, v) == 1 {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > changes.md || true
           [ -s changes.md ] || echo "Fyrlys ${version}" > changes.md
